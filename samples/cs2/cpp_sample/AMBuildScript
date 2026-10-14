@@ -36,6 +36,14 @@ Source2ModSdk = builder.Eval(os.path.join(source2mod_sdk_root, 'SdkPlugin.ambuil
 # --s2sdk-manifests or S2SDK_MANIFESTS_DIR points elsewhere.
 SdkHelpers = Source2ModSdk.LoadSdkHelpers(builder, builder.options.s2sdk_manifests)
 
+# The build settings, split the same way as the CMake side (makefiles/cmake/):
+# shared.ambuild <-> shared.cmake, linux.ambuild <-> linux.cmake,
+# windows.ambuild <-> windows.cmake, AMBuilder <-> CMakeBuilder.cmake,
+# package.ambuild <-> package.cmake.
+Shared = builder.Import('makefiles/ambuild/shared.ambuild')
+Linux = builder.Import('makefiles/ambuild/linux.ambuild')
+Windows = builder.Import('makefiles/ambuild/windows.ambuild')
+
 def LoadPluginMetadata():
   path = os.path.join(builder.sourcePath, 'plugin-metadata.json')
   with open(path, 'r', encoding='utf-8') as fp:
@@ -63,6 +71,7 @@ class MMSPluginConfig(object):
     self.version_header_deps = []
     self.all_targets = []
     self.target_archs = set()
+    self.source2mod_sdk = Source2ModSdk
 
     if builder.options.plugin_name is not None:
       self.plugin_name = builder.options.plugin_name
@@ -128,144 +137,22 @@ class MMSPluginConfig(object):
       self.configure_cxx(cxx)
 
   def configure_cxx(self, cxx):
-    # The SDK's defines (platform, stricmp=strcasecmp, ...) and libraries come
-    # from s2sdk-manifests, through SdkHelpers.configureCxx() in Source2ModLibrary().
-    if cxx.behavior == 'gcc':
-      cxx.defines += [
-        '_snprintf=snprintf',
-        'HAVE_STDINT_H',
-      ]
-      cxx.cflags += [
-        '-pipe',
-        '-fno-strict-aliasing',
-        '-Wall',
-        '-Werror',
-        '-Wno-uninitialized',
-        '-Wno-unused',
-        '-Wno-switch',
-        '-Wno-parentheses',
-        '-Wno-mismatched-tags',
-        '-Wno-deprecated-anon-enum-enum-conversion',
-        '-Wno-ordered-compare-function-pointers',
-        '-Wno-pragma-once-outside-header',
-        '-Wno-ambiguous-reversed-operator',
-        '-Wno-invalid-offsetof',
-        # Matches the CMake flags -- the SDK's own headers are compiled in
-        # here, and they are not -Werror clean under these two.
-        '-Wno-reorder',
-        '-Wno-reorder-ctor',
-        '-msse',
-        '-fPIC'
-      ]
+    # makefiles/ambuild/shared.ambuild, then linux.ambuild or windows.ambuild --
+    # the AMBuild twins of makefiles/cmake/shared.cmake, linux.cmake, windows.cmake.
+    Shared.ConfigureCxx(cxx, builder.options)
+    self.Platform(cxx).ConfigureCxx(cxx, builder.options)
 
-      cxx.cxxflags += ['-std=c++20']
-      if (cxx.version >= 'gcc-4.0') or cxx.family == 'clang':
-        cxx.cflags += ['-fvisibility=hidden']
-        cxx.cxxflags += ['-fvisibility-inlines-hidden']
-      cxx.cxxflags += [
-        '-frtti',
-        '-fno-threadsafe-statics',
-        '-Wno-non-virtual-dtor',
-        '-Wno-overloaded-virtual',
-        '-Wno-register',
-      ]
-      if (cxx.version >= 'gcc-4.7' or cxx.family == 'clang'):
-        cxx.cxxflags += ['-Wno-delete-non-virtual-dtor']
-      if cxx.family == 'gcc':
-        cxx.cflags += ['-mfpmath=sse']
-      if cxx.family == 'clang':
-        cxx.cxxflags += ['-Wno-implicit-exception-spec-mismatch']
-        if cxx.version >= 'clang-3.9':
-          cxx.cxxflags += ['-Wno-expansion-to-defined']
-        if cxx.version >= 'clang-3.6':
-          cxx.cxxflags += ['-Wno-inconsistent-missing-override']
-        if cxx.version >= 'clang-3.4':
-          cxx.cxxflags += ['-Wno-deprecated-register']
-        else:
-          cxx.cxxflags += ['-Wno-deprecated']
-      
-      # Work around SDK warnings.
-      if cxx.version >= 'clang-10.0':
-        cxx.cflags += [
-          '-Wno-implicit-int-float-conversion',
-          '-Wno-tautological-overlap-compare',
-        ]
-
-    elif cxx.like('msvc'):
-      if builder.options.debug == '1':
-        cxx.cflags += ['/MTd']
-        cxx.linkflags += ['/NODEFAULTLIB:libcmt']
-      else:
-        cxx.cflags += ['/MT']
-      cxx.defines += [
-        '_CRT_SECURE_NO_DEPRECATE',
-        '_CRT_SECURE_NO_WARNINGS',
-        '_CRT_NONSTDC_NO_DEPRECATE',
-      ]
-      cxx.cflags += [
-        '/W3',
-        '/Zi',
-        '/EHsc',
-        '/std:c++20',
-        '/bigobj',
-      ]
-      cxx.cxxflags += ['/TP']
-      
-      cxx.linkflags += [
-        '/SUBSYSTEM:WINDOWS',
-        'kernel32.lib',
-        'user32.lib',
-        'gdi32.lib',
-        'winspool.lib',
-        'comdlg32.lib',
-        'advapi32.lib',
-        'shell32.lib',
-        'ole32.lib',
-        'oleaut32.lib',
-        'uuid.lib',
-        'odbc32.lib',
-        'odbccp32.lib',
-      ]
-
-    # Optimization
-    if builder.options.opt == '1':
-      cxx.defines += ['NDEBUG']
-      if cxx.behavior == 'gcc':
-        cxx.cflags += ['-O3']
-      elif cxx.behavior == 'msvc':
-        cxx.cflags += ['/Ox', '/Zo']
-        cxx.linkflags += ['/OPT:ICF', '/OPT:REF']
-
-    # Debugging
-    if builder.options.debug == '1':
-      cxx.defines += ['DEBUG', '_DEBUG']
-      if cxx.behavior == 'gcc':
-        cxx.cflags += ['-g3']
-      elif cxx.behavior == 'msvc':
-        cxx.cflags += ['/Od', '/RTC1']
-
-    # Don't omit the frame pointer.
-    # This needs to be after our optimization flags which could otherwise disable it.
-    if cxx.behavior == 'gcc':
-      cxx.cflags += ['-fno-omit-frame-pointer']
-    elif cxx.behavior == 'msvc':
-      cxx.cflags += ['/Oy-']
-
-    # Platform-specifics
+  def Platform(self, cxx):
     if cxx.target.platform == 'linux':
-      cxx.defines += ['_FILE_OFFSET_BITS=64']
-      if cxx.family == 'gcc':
-        cxx.linkflags += ['-static-libgcc']
-      elif cxx.family == 'clang':
-        cxx.linkflags += ['-lgcc_eh']
-      cxx.linkflags += ['-static-libstdc++']
-    elif cxx.target.platform == 'windows':
-      cxx.defines += ['_WINDOWS']
+      return Linux
+    if cxx.target.platform == 'windows':
+      return Windows
+    raise Exception('Unsupported target platform: {0}'.format(cxx.target.platform))
 
   def Library(self, cxx, name):
     binary = cxx.Library(name)
     return binary
-  
+
   def generateVersioningHeader(self):
     builder.SetBuildFolder('/')
 
@@ -281,26 +168,10 @@ class MMSPluginConfig(object):
 
   def Source2ModLibrary(self, context, compiler, name, sdk):
     binary = self.Library(compiler, name)
-    cxx = binary.compiler
-
-    cxx.cxxincludes += [
-      os.path.join(context.currentSourcePath),
-    ]
-
-    for other_sdk in self.sdk_manifests:
-      cxx.defines += ['SE_{}={}'.format(other_sdk['define'], other_sdk['code'])]
-
-    # Includes, defines and the SDK's own sources -- including the s2sdk
-    # translation units it owns, which is why none are listed here. Its extra
-    # s2sdk include paths go ahead of s2sdk-manifests' ones, as in CMake.
-    Source2ModSdk.AddToBinary(binary, sdk)
-
+    Shared.ConfigureBinary(context, binary, sdk, self)
     # s2sdk's include paths, defines and libraries (the Steam API among them).
     SdkHelpers.configureCxx(context, binary, sdk)
-
-    cxx.cxxincludes += [os.path.join(builder.buildPath, 'versioning')]
-    cxx.sourcedeps += self.version_header_deps
-
+    self.Platform(binary.compiler).ConfigureBinary(context, binary, sdk, self)
     return binary
 
 MMSPlugin = MMSPluginConfig()
@@ -309,8 +180,8 @@ MMSPlugin.configure()
 MMSPlugin.generateVersioningHeader()
 
 BuildScripts = [
-  'AMBuilder',
-  'PackageScript'
+  'makefiles/ambuild/AMBuilder',
+  'makefiles/ambuild/package.ambuild'
 ]
 
 builder.Build(BuildScripts, { 'MMSPlugin': MMSPlugin, 'Source2ModSdk': Source2ModSdk })

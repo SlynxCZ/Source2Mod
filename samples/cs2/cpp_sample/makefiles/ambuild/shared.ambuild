@@ -1,0 +1,32 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+#
+# Settings every platform shares -- AMBuild twin of makefiles/cmake/shared.cmake.
+# The per-platform ones are in linux.ambuild / windows.ambuild.
+import os
+
+# Every compiler, before the platform file adds its own flags.
+def ConfigureCxx(cxx, options):
+  if options.opt == '1':
+    cxx.defines += ['NDEBUG']
+  if options.debug == '1':
+    cxx.defines += ['DEBUG', '_DEBUG']
+
+# The plugin binary, before SdkHelpers adds s2sdk's includes and libraries.
+def ConfigureBinary(context, binary, sdk, MMSPlugin):
+  cxx = binary.compiler
+
+  cxx.cxxincludes += [
+    os.path.join(context.currentSourcePath),
+  ]
+
+  for other_sdk in MMSPlugin.sdk_manifests:
+    cxx.defines += ['SE_{}={}'.format(other_sdk['define'], other_sdk['code'])]
+
+  # Includes, defines and the SDK's own sources -- including the s2sdk
+  # translation units it owns, which is why none are listed here. Its extra
+  # s2sdk include paths go ahead of s2sdk-manifests' ones, as in CMake.
+  MMSPlugin.source2mod_sdk.AddToBinary(binary, sdk)
+
+  # version_gen.h, generated from plugin-metadata.json.
+  cxx.cxxincludes += [os.path.join(builder.buildPath, 'versioning')]
+  cxx.sourcedeps += MMSPlugin.version_header_deps

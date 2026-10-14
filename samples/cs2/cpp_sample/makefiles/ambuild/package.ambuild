@@ -1,0 +1,37 @@
+# vim: set ts=2 sw=2 tw=99 noet ft=python:
+#
+# The install layout -- AMBuild twin of makefiles/cmake/package.cmake.
+import os
+
+builder.SetBuildFolder('package')
+
+# A source2mod plugin is not a metamod plugin: it drops into
+# addons/source2mod/plugins as a .smx and Source2Mod picks it up from there,
+# so there is no .vdf to generate. configs/, when the plugin has one, is
+# copied over the package root as it is.
+PLUGIN_FOLDER = os.path.join('addons', 'source2mod', 'plugins')
+
+
+def AddConfigs(sdk_name):
+	configs = os.path.join(builder.sourcePath, 'configs')
+	for root, _, files in os.walk(configs):
+		for f in files:
+			src = os.path.join(root, f)
+			dst = os.path.join(sdk_name, os.path.relpath(src, configs))
+			builder.AddFolder(os.path.dirname(dst))
+			builder.AddCopy(src, dst)
+
+
+for sdk_target in MMSPlugin.sdk_targets:
+	sdk = sdk_target.sdk
+
+	folder_path = os.path.join(sdk['name'], PLUGIN_FOLDER)
+	builder.AddFolder(folder_path)
+
+	for task in MMSPlugin.binaries:
+		builder.AddCopy(
+			task.binary,
+			os.path.join(folder_path, MMSPlugin.plugin_name + '.smx')
+		)
+
+	AddConfigs(sdk['name'])

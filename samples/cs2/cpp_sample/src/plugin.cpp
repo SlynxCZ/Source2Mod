@@ -1,7 +1,7 @@
 /**
  * vim: set ts=4 sw=4 tw=99 noet :
  * ======================================================
- * Source2Mod Sample Plugin
+ * Source2Mod C++ Sample Plugin
  * ======================================================
  *
  * This software is provided 'as-is', without any express or implied warranty.
@@ -39,7 +39,7 @@
 #include "source2mod/ISource2ModNatives.h"
 
 SamplePlugin g_Plugin;
-SOURCE2MOD_EXPOSE(cs2_sample, g_Plugin);
+SOURCE2MOD_EXPOSE(cpp_sample, g_Plugin);
 
 ISource2ModModule *g_pServerModule = nullptr;
 
@@ -1203,7 +1203,7 @@ void SamplePlugin::SetupTransmit()
  *       native Handle Sample_CreateCounter(int start);
  *       native int Sample_Increment(Handle counter);
  *
- *       if (LibraryExists("cs2_sample")) ...
+ *       if (LibraryExists("cpp_sample")) ...
  *
  *   All of it goes when this plugin unloads: the natives turn into errors,
  *   the library is removed, and every counter handle is closed.
@@ -1268,5 +1268,5 @@ void SamplePlugin::SetupScriptNatives()
     });
 
     g_pNatives->AddNatives(g_PluginID, g_SampleNatives);
-    g_pNatives->RegisterLibrary(g_PluginID, "cs2_sample");
+    g_pNatives->RegisterLibrary(g_PluginID, "cpp_sample");
 }

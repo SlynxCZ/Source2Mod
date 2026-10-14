@@ -1,0 +1,94 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+#
+# Linux (GCC / Clang) settings -- AMBuild twin of makefiles/cmake/linux.cmake.
+import os
+
+# The SDK's Linux defines (_LINUX, POSIX, stricmp=strcasecmp, ...) and libraries
+# come from s2sdk-manifests' linux.ambuild, through SdkHelpers.configureCxx.
+def ConfigureCxx(cxx, options):
+  cxx.defines += [
+    '_snprintf=snprintf',
+    'HAVE_STDINT_H',
+  ]
+  cxx.cflags += [
+    '-pipe',
+    '-fno-strict-aliasing',
+    '-Wall',
+    '-Werror',
+    '-Wno-uninitialized',
+    '-Wno-unused',
+    '-Wno-switch',
+    '-Wno-parentheses',
+    '-Wno-mismatched-tags',
+    '-Wno-deprecated-anon-enum-enum-conversion',
+    '-Wno-ordered-compare-function-pointers',
+    '-Wno-pragma-once-outside-header',
+    '-Wno-ambiguous-reversed-operator',
+    '-Wno-invalid-offsetof',
+    # Matches the CMake flags -- the SDK's own headers are compiled in
+    # here, and they are not -Werror clean under these two.
+    '-Wno-reorder',
+    '-Wno-reorder-ctor',
+    '-msse',
+    '-fPIC'
+  ]
+
+  cxx.cxxflags += ['-std=c++20']
+  if (cxx.version >= 'gcc-4.0') or cxx.family == 'clang':
+    cxx.cflags += ['-fvisibility=hidden']
+    cxx.cxxflags += ['-fvisibility-inlines-hidden']
+  cxx.cxxflags += [
+    '-frtti',
+    '-fno-threadsafe-statics',
+    '-Wno-non-virtual-dtor',
+    '-Wno-overloaded-virtual',
+    '-Wno-register',
+  ]
+  if (cxx.version >= 'gcc-4.7' or cxx.family == 'clang'):
+    cxx.cxxflags += ['-Wno-delete-non-virtual-dtor']
+  if cxx.family == 'gcc':
+    cxx.cflags += ['-mfpmath=sse']
+  if cxx.family == 'clang':
+    cxx.cxxflags += ['-Wno-implicit-exception-spec-mismatch']
+    if cxx.version >= 'clang-3.9':
+      cxx.cxxflags += ['-Wno-expansion-to-defined']
+    if cxx.version >= 'clang-3.6':
+      cxx.cxxflags += ['-Wno-inconsistent-missing-override']
+    if cxx.version >= 'clang-3.4':
+      cxx.cxxflags += ['-Wno-deprecated-register']
+    else:
+      cxx.cxxflags += ['-Wno-deprecated']
+
+  # Work around SDK warnings.
+  if cxx.version >= 'clang-10.0':
+    cxx.cflags += [
+      '-Wno-implicit-int-float-conversion',
+      '-Wno-tautological-overlap-compare',
+    ]
+
+  # Optimization
+  if options.opt == '1':
+    cxx.cflags += ['-O3']
+
+  # Debugging
+  if options.debug == '1':
+    cxx.cflags += ['-g3']
+
+  # Don't omit the frame pointer.
+  # This needs to be after our optimization flags which could otherwise disable it.
+  cxx.cflags += ['-fno-omit-frame-pointer']
+
+  cxx.defines += ['_FILE_OFFSET_BITS=64']
+  if cxx.family == 'gcc':
+    cxx.linkflags += ['-static-libgcc']
+  elif cxx.family == 'clang':
+    cxx.linkflags += ['-lgcc_eh']
+  cxx.linkflags += ['-static-libstdc++']
+
+# The plugin binary, after SdkHelpers added the SDK's libraries.
+def ConfigureBinary(context, binary, sdk, MMSPlugin):
+  # Export only CreateInterface -- Source2Mod finds the plugin through it, and
+  # nothing else should leak out of the binary.
+  binary.compiler.linkflags += [
+    '-Wl,--version-script=' + os.path.join(context.sourcePath, 'makefiles', 'ExportMap')
+  ]

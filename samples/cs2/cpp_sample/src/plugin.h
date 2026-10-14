@@ -1,7 +1,7 @@
 /**
  * vim: set ts=4 sw=4 tw=99 noet :
  * ======================================================
- * Source2Mod Sample Plugin
+ * Source2Mod C++ Sample Plugin
  * ======================================================
  *
  * One plugin that walks through Source2Mod, a section at a time. It started
@@ -22,6 +22,9 @@
  *  10. Timers           next frame, delayed, repeating
  *  11. Transmit         hiding players and entities per viewer, CheckTransmit hook
  *  12. Script natives   natives, a library and a handle type for .sp plugins
+ *
+ * ../sp_sample is the same plugin in SourcePawn: the same sections, numbered
+ * the same, doing the same things through the script API.
  *
  * plugin.cpp carries the same numbers in its section banners. Each section is
  * a SetupXxx() called from Load() followed by the handlers it registers, so a
