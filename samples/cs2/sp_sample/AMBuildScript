@@ -1,0 +1,81 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+import os, sys, json, importlib.util
+
+def ResolveScripting():
+  # The compiler and the include set of a Source2Mod build or install: its
+  # addons/source2mod/scripting -- the counterpart of cpp_sample's SOURCE2MOD_SDK.
+  path = builder.options.scripting or os.environ.get('SOURCE2MOD_SCRIPTING')
+  if not path or not os.path.isdir(path):
+    raise Exception('Pass --scripting or set SOURCE2MOD_SCRIPTING to a Source2Mod build\'s addons/source2mod/scripting')
+  return os.path.abspath(os.path.normpath(path))
+
+# The build settings, split the same way as the CMake side (makefiles/cmake/):
+# shared.ambuild <-> shared.cmake, linux.ambuild <-> linux.cmake,
+# windows.ambuild <-> windows.cmake, AMBuilder <-> CMakeBuilder.cmake,
+# package.ambuild <-> package.cmake.
+Shared = builder.Import('makefiles/ambuild/shared.ambuild')
+Linux = builder.Import('makefiles/ambuild/linux.ambuild')
+Windows = builder.Import('makefiles/ambuild/windows.ambuild')
+
+def LoadPluginMetadata():
+  path = os.path.join(builder.sourcePath, 'plugin-metadata.json')
+  with open(path, 'r', encoding='utf-8') as fp:
+    return json.load(fp)
+
+def LoadVersionGen():
+  # The same generator the CMake build runs, imported rather than shelled out to
+  # so the include's text can go through builder.AddOutputFile() and a metadata
+  # edit retriggers the compile.
+  path = os.path.join(builder.sourcePath, 'tools', 'version_gen.py')
+  spec = importlib.util.spec_from_file_location('version_gen', path)
+  module = importlib.util.module_from_spec(spec)
+  spec.loader.exec_module(module)
+  return module
+
+plugin_metadata = LoadPluginMetadata()
+version_gen = LoadVersionGen()
+
+class SPPluginConfig(object):
+  def __init__(self):
+    self.scripting = ResolveScripting()
+    self.binaries = []
+    self.version_header_deps = []
+
+    if builder.options.plugin_name is not None:
+      self.plugin_name = builder.options.plugin_name
+    else:
+      self.plugin_name = plugin_metadata['name']
+
+  def Platform(self):
+    if builder.host.platform == 'windows':
+      return Windows
+    return Linux
+
+  def generateVersioningHeader(self):
+    builder.SetBuildFolder('/')
+
+    # Metadata edits retrigger the compile through the command's inputs.
+    builder.AddConfigureFile(os.path.join(builder.sourcePath, 'plugin-metadata.json'))
+
+    shorthash = version_gen.git_shorthash(builder.sourcePath)
+    text = version_gen.render(plugin_metadata, shorthash)
+
+    self.version_header_deps += [
+      builder.AddOutputFile(os.path.join('versioning', 'version_gen.inc'), text.encode('utf-8'))
+    ]
+
+  def ScriptCommand(self, source, output):
+    spcomp = self.Platform().Spcomp(self)
+    argv = [spcomp, source] + ['-i' + path for path in Shared.IncludePaths(builder, self)]
+    argv += ['-o' + output]
+    return argv
+
+SPPlugin = SPPluginConfig()
+SPPlugin.generateVersioningHeader()
+
+BuildScripts = [
+  'makefiles/ambuild/AMBuilder',
+  'makefiles/ambuild/package.ambuild'
+]
+
+builder.Build(BuildScripts, { 'SPPlugin': SPPlugin })

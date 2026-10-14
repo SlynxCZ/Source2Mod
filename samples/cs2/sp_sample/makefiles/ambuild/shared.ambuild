@@ -1,0 +1,14 @@
+# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
+#
+# Settings every platform shares -- AMBuild twin of makefiles/cmake/shared.cmake.
+# The per-platform ones are in linux.ambuild / windows.ambuild.
+import os
+
+# Where the compiler looks: Source2Mod's include set, cpp_sample's .inc (its
+# section 12 natives), version_gen.inc.
+def IncludePaths(builder, SPPlugin):
+  return [
+    os.path.join(SPPlugin.scripting, 'include'),
+    os.path.join(builder.sourcePath, '..', 'cpp_sample', 'scripting', 'include'),
+    os.path.join(builder.buildPath, 'versioning'),
+  ]

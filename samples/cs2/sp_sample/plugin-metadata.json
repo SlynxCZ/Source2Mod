@@ -1,0 +1,11 @@
+{
+    "name": "sp_sample",
+    "alias": "sp_sample",
+    "display_name": "SourcePawn Sample",
+    "description": "Source2Mod's SourcePawn API, a section at a time (cpp_sample is the C++ twin)",
+    "author": "Slynx (˙·٠● S l y n x ●٠·˙)",
+    "url": "https://github.com/SlynxCZ/Source2Mod",
+    "log_tag": "SP_SAMPLE",
+    "license": "Public Domain",
+    "version": "1.0.0.{{git-shorthash}}"
+}
