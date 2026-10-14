@@ -12,11 +12,13 @@
  * Project: Source2Mod
  */
 #include "natives.h"
+#include "handles.h"
 #include "scriptplugin.h"
 
 #include "core/commands.h"
 #include "core/events.h"
 #include "core/pluginmanager.h"
+#include "core/scheduler.h"
 #include "core/shared.h"
 #include "utils/log.h"
 
@@ -138,34 +140,39 @@ namespace sourcepawn
 
         // ---- the event being dispatched (Event handles) ------------------------
 
+        // An Event handle points at one of these on the hook's stack; it is
+        // freed when the callback returns.
         struct EventFrame
         {
             IGameEvent* event;
             bool* dontBroadcast;
         };
-        std::vector<EventFrame> g_eventStack;
-
-        // Event handles carry this tag; the rest is the frame index. They are
-        // valid only inside the callback they were handed to.
-        constexpr cell_t kEventHandleTag = 0x7E000000;
 
         IGameEvent* EventOf(IPluginContext* ctx, cell_t handle, bool** dontBroadcast = nullptr)
         {
-            const cell_t index = handle - kEventHandleTag;
-            if ((handle & 0x7F000000) != kEventHandleTag || index < 0 || index >= static_cast<cell_t>(g_eventStack.size()))
-            {
-                ctx->ReportError("Invalid game event handle %x", handle);
+            auto* frame = static_cast<EventFrame*>(ReadHandle(ctx, handle, Types().event));
+            if (!frame)
                 return nullptr;
-            }
             if (dontBroadcast)
-                *dontBroadcast = g_eventStack[index].dontBroadcast;
-            return g_eventStack[index].event;
+                *dontBroadcast = frame->dontBroadcast;
+            return frame->event;
         }
 
         // UnhookEvent finds the hook HookEvent made by what it was made with.
-        std::map<std::tuple<ScriptPlugin*, std::string, funcid_t, bool>, Source2ModHookId> g_eventHooks;
+        std::map<std::tuple<PluginId, std::string, funcid_t, bool>, Source2ModHookId> g_eventHooks;
 
         const auto g_engineStart = std::chrono::steady_clock::now();
+    }
+
+    const char* LocalString(IPluginContext* ctx, cell_t addr)
+    {
+        return Str(ctx, addr);
+    }
+
+    void ForgetEventHooks(PluginId id)
+    {
+        // The hooks themselves went with eventManager.RemoveAllForPlugin().
+        std::erase_if(g_eventHooks, [id](const auto& entry) { return std::get<0>(entry.first) == id; });
     }
 
     // ---- format -------------------------------------------------------------------
@@ -436,7 +443,7 @@ namespace sourcepawn
                 if (!serverOnly)
                     args.PushCell(client);
                 args.PushCell(a.ArgC() > 0 ? a.ArgC() - 1 : 0);
-                fn->Invoke(args, nullptr);
+                Invoke(fn, args);
 
                 g_commandStack.pop_back();
             });
@@ -529,6 +536,63 @@ namespace sourcepawn
 
         // ---- timers -------------------------------------------------------------
 
+        // A timer is a scheduler timer plus its handle. Either side can end it:
+        // closing the handle kills the timer, and when the scheduler drops the
+        // timer -- fired once, stopped, gone at a map change, its plugin
+        // unloading -- the handle is freed. The state is shared so whichever
+        // goes second finds the other already gone.
+        constexpr int kTimerDataHndlClose = 1 << 9;
+
+        struct TimerState
+        {
+            Timer* timer = nullptr;
+            cell_t handle = 0;
+            PluginId owner = 0;
+            cell_t data = 0;
+            int flags = 0;
+        };
+
+        void CloseTimerData(TimerState& state)
+        {
+            if (state.flags & kTimerDataHndlClose)
+            {
+                state.flags &= ~kTimerDataHndlClose;
+                if (state.data)
+                    Handles().Free(state.data, state.owner);
+            }
+        }
+
+        struct TimerObject : HandleObject
+        {
+            std::shared_ptr<TimerState> state;
+
+            ~TimerObject() override
+            {
+                state->handle = 0;
+                CloseTimerData(*state);
+                if (Timer* timer = std::exchange(state->timer, nullptr))
+                    scheduler::schedulerManager.KillTimer(timer);
+            }
+        };
+
+        // Lives in the scheduler's callback, so it goes when the timer does.
+        struct TimerGuard
+        {
+            explicit TimerGuard(std::shared_ptr<TimerState> s) : state(std::move(s)) {}
+            TimerGuard(const TimerGuard&) = delete;
+            TimerGuard& operator=(const TimerGuard&) = delete;
+
+            std::shared_ptr<TimerState> state;
+
+            ~TimerGuard()
+            {
+                state->timer = nullptr;
+                CloseTimerData(*state);
+                if (const cell_t handle = std::exchange(state->handle, 0))
+                    Handles().Free(handle, state->owner, true);
+            }
+        };
+
         cell_t N_CreateTimer(IPluginContext* ctx, const cell_t* params)
         {
             ScriptPlugin* plugin = Plugin(ctx);
@@ -536,24 +600,118 @@ namespace sourcepawn
             if (!plugin || !fn)
                 return ctx->ThrowNativeError("Invalid function id (%X)", params[2]);
 
-            return plugin->AddTimer(sp_ctof(params[1]), fn, params[3], params[4]);
+            auto state = std::make_shared<TimerState>();
+            state->owner = plugin->Id();
+            state->data = params[3];
+            state->flags = params[4];
+
+            auto* object = new TimerObject();
+            object->state = state;
+            state->handle = Handles().Create(Types().timer, object, plugin->Id());
+            if (!state->handle)
+            {
+                delete object;
+                return ctx->ThrowNativeError("Handle limit reached");
+            }
+
+            // Action (Handle timer, any data); Plugin_Stop ends a repeating timer.
+            const bool repeat = (state->flags & TIMER_FLAG_REPEAT) != 0;
+            auto guard = std::make_shared<TimerGuard>(state);
+            TimerCallback callback([guard, fn, repeat]()
+            {
+                const std::shared_ptr<TimerState>& s = guard->state;
+                if (!s->handle)
+                    return;
+
+                sp::CallArgs args;
+                args.PushCell(s->handle);
+                args.PushCell(s->data);
+
+                cell_t res = kPluginContinue;
+                Invoke(fn, args, &res);
+
+                if (repeat && res == kPluginStop && s->handle)
+                    Handles().Free(s->handle, s->owner, true);
+            });
+
+            // The script's timer flags are SourceMod's and match the scheduler's
+            // bit for bit (TIMER_REPEAT, TIMER_FLAG_NO_MAPCHANGE).
+            state->timer = scheduler::schedulerManager.AddTimer(plugin->Id(), sp_ctof(params[1]), std::move(callback),
+                                                                state->flags & (TIMER_FLAG_REPEAT | TIMER_FLAG_NO_MAPCHANGE));
+            return state->handle;
         }
 
+        // KillTimer(Handle timer, bool autoClose=false)
         cell_t N_KillTimer(IPluginContext* ctx, const cell_t* params)
         {
-            ScriptPlugin* plugin = Plugin(ctx);
-            if (!plugin || !plugin->KillTimer(params[1]))
-                return ctx->ThrowNativeError("Invalid timer handle %x", params[1]);
+            auto* object = static_cast<TimerObject*>(ReadHandle(ctx, params[1], Types().timer));
+            if (!object)
+                return 0;
+            if (params[0] >= 2 && params[2])
+                object->state->flags |= kTimerDataHndlClose;
+
+            PluginId owner = 0;
+            Handles().OwnerOf(params[1], &owner);
+            Handles().Free(params[1], owner, true);
             return 0;
         }
 
-        // CloseHandle / delete: timers are the only Handles a script owns so far.
+        // ---- handles --------------------------------------------------------------
+
         cell_t N_CloseHandle(IPluginContext* ctx, const cell_t* params)
         {
-            if (params[1] == 0)
+            if (params[1] == kInvalidHandle)
                 return 0;
-            if (ScriptPlugin* plugin = Plugin(ctx))
-                plugin->KillTimer(params[1]);
+
+            ScriptPlugin* plugin = Plugin(ctx);
+            const HandleError err = Handles().Free(params[1], plugin ? plugin->Id() : 0);
+            if (err != HandleError::None)
+                return ReportHandleError(ctx, params[1], err);
+            return 0;
+        }
+
+        // CloneHandle(Handle hndl, Handle plugin=INVALID_HANDLE)
+        cell_t N_CloneHandle(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptPlugin* target = ScriptPlugin::FromHandle(ctx, params[0] >= 2 ? params[2] : 0);
+            if (!target)
+                return 0;
+
+            HandleError err;
+            const cell_t clone = Handles().Clone(params[1], target->Id(), &err);
+            if (!clone)
+                return ReportHandleError(ctx, params[1], err);
+            return clone;
+        }
+
+        cell_t N_GetMyHandle(IPluginContext* ctx, const cell_t*)
+        {
+            ScriptPlugin* plugin = Plugin(ctx);
+            return plugin ? plugin->Handle() : 0;
+        }
+
+        cell_t N_GetPluginFilename(IPluginContext* ctx, const cell_t* params)
+        {
+            if (ScriptPlugin* plugin = ScriptPlugin::FromHandle(ctx, params[1]))
+                ctx->StringToLocalUTF8(params[2], params[3], plugin->FileName().c_str(), nullptr);
+            return 0;
+        }
+
+        // RequestFrame(RequestFrameCallback func, any data=0)
+        cell_t N_RequestFrame(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptPlugin* plugin = Plugin(ctx);
+            IPluginFunction* fn = ctx->GetFunctionById(params[1]);
+            if (!plugin || !fn)
+                return ctx->ThrowNativeError("Invalid function id (%X)", params[1]);
+
+            const cell_t data = params[2];
+            scheduler::schedulerManager.NextFrame(plugin->Id(), [fn, data]()
+            {
+                sp::CallArgs args;
+                args.PushCell(data);
+                Invoke(fn, args);
+            });
             return 0;
         }
 
@@ -572,14 +730,11 @@ namespace sourcepawn
             const bool post = mode != 0;
             const bool noCopy = mode == 2;
 
-            GameEventHandler handler([fn, name, noCopy](IGameEvent* event, bool post, bool& dontBroadcast) -> Action
+            const PluginId owner = plugin->Id();
+            GameEventHandler handler([fn, name, noCopy, owner](IGameEvent* event, bool post, bool& dontBroadcast) -> Action
             {
-                cell_t handle = 0;
-                if (!noCopy)
-                {
-                    handle = kEventHandleTag + static_cast<cell_t>(g_eventStack.size());
-                    g_eventStack.push_back({ event, &dontBroadcast });
-                }
+                EventFrame frame{ event, &dontBroadcast };
+                const cell_t handle = noCopy ? kInvalidHandle : Handles().Create(Types().event, &frame, owner);
 
                 sp::CallArgs args;
                 args.PushCell(handle);
@@ -587,10 +742,10 @@ namespace sourcepawn
                 args.PushCell(dontBroadcast ? 1 : 0);
 
                 cell_t res = kPluginContinue;
-                fn->Invoke(args, &res);
+                Invoke(fn, args, &res);
 
-                if (!noCopy)
-                    g_eventStack.pop_back();
+                if (handle)
+                    Handles().Free(handle, owner, true);
 
                 // Handled in a pre hook keeps the event from being fired.
                 if (!post && res >= kPluginHandled)
@@ -602,14 +757,14 @@ namespace sourcepawn
             if (!id)
                 return ctx->ThrowNativeError("Game event \"%s\" does not exist", name.c_str());
 
-            g_eventHooks[{ plugin, name, params[2], post }] = id;
+            g_eventHooks[{ plugin->Id(), name, params[2], post }] = id;
             return 0;
         }
 
         cell_t N_UnhookEvent(IPluginContext* ctx, const cell_t* params)
         {
             ScriptPlugin* plugin = Plugin(ctx);
-            const auto key = std::make_tuple(plugin, std::string(Str(ctx, params[1])), static_cast<funcid_t>(params[2]), params[3] != 0);
+            const auto key = std::make_tuple(plugin ? plugin->Id() : 0, std::string(Str(ctx, params[1])), static_cast<funcid_t>(params[2]), params[3] != 0);
             auto it = g_eventHooks.find(key);
             if (it == g_eventHooks.end())
                 return ctx->ThrowNativeError("Game event \"%s\" has no active hook", Str(ctx, params[1]));
@@ -932,8 +1087,13 @@ namespace sourcepawn
             { "CreateTimer", N_CreateTimer },
             { "KillTimer", N_KillTimer },
             { "CloseHandle", N_CloseHandle },
+            { "CloneHandle", N_CloneHandle },
             { "Handle.~Handle", N_CloseHandle },
             { "Handle.Close", N_CloseHandle },
+            { "Handle.Clone", N_CloneHandle },
+            { "GetMyHandle", N_GetMyHandle },
+            { "GetPluginFilename", N_GetPluginFilename },
+            { "RequestFrame", N_RequestFrame },
             // events.inc
             { "HookEvent", N_HookEvent },
             { "UnhookEvent", N_UnhookEvent },
@@ -989,6 +1149,15 @@ namespace sourcepawn
 
     const sp_nativeinfo_t* GetCoreNatives()
     {
-        return g_natives;
+        static const std::vector<sp_nativeinfo_t> s_all = []
+        {
+            std::vector<sp_nativeinfo_t> all;
+            for (const sp_nativeinfo_t* table : { g_natives, GetAdtNatives(), GetConVarNatives(), GetPluginSysNatives() })
+                for (const sp_nativeinfo_t* n = table; n->name; ++n)
+                    all.push_back(*n);
+            all.push_back({ nullptr, nullptr });
+            return all;
+        }();
+        return s_all.data();
     }
 }

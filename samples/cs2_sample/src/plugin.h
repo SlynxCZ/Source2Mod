@@ -21,6 +21,7 @@
  *   9. Entities         schema fields, teleport, items, inputs
  *  10. Timers           next frame, delayed, repeating
  *  11. Transmit         hiding players and entities per viewer, CheckTransmit hook
+ *  12. Script natives   natives, a library and a handle type for .sp plugins
  *
  * plugin.cpp carries the same numbers in its section banners. Each section is
  * a SetupXxx() called from Load() followed by the handlers it registers, so a
@@ -131,6 +132,7 @@ private: // one per section of plugin.cpp, called from Load() in this order
 	void SetupEntityCommands();
 	void SetupTimers();
 	void SetupTransmit();
+	void SetupScriptNatives();
 
 private:
 	// Raw KHook hooks, for what Source2Mod has no callback for: two engine

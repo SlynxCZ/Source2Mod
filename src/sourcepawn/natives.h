@@ -11,12 +11,24 @@
  */
 #pragma once
 
+#include <source2mod/ISource2ModTypes.h>
+
 #include <sp_vm_api.h>
 
 #include <cstddef>
+#include <string>
+
+namespace sp
+{
+    class BaseRuntime;
+}
+
+class ISource2ModNatives;
 
 namespace sourcepawn
 {
+    class ScriptPlugin;
+
     /// What MaxClients holds for every script: CS2's slot count.
     constexpr cell_t kMaxClients = 64;
 
@@ -29,6 +41,11 @@ namespace sourcepawn
     /// Every native the core binds, terminated by { nullptr, nullptr }.
     const sp_nativeinfo_t* GetCoreNatives();
 
+    // The tables GetCoreNatives() is made of, one per area.
+    const sp_nativeinfo_t* GetAdtNatives();          // natives_adt.cpp
+    const sp_nativeinfo_t* GetConVarNatives();       // natives_convars.cpp
+    const sp_nativeinfo_t* GetPluginSysNatives();    // pluginsys.cpp
+
     /**
      * SourceMod's format: the string at params[fmtParam], its arguments right
      * after it (by reference, as `any ...` passes them). %d %i %u %b %f %x %X
@@ -36,4 +53,32 @@ namespace sourcepawn
      * and returns false on a bad format or a missing argument.
      */
     bool FormatParams(SourcePawn::IPluginContext* ctx, const cell_t* params, int fmtParam, char* out, size_t maxlen, size_t* written = nullptr);
+
+    /// A string argument; "" when the address is bad.
+    const char* LocalString(SourcePawn::IPluginContext* ctx, cell_t addr);
+
+    // Per-area cleanup when a plugin goes (RemoveAllForPlugin calls these).
+    void ForgetEventHooks(PluginId id);     // natives.cpp
+    void ForgetConVarHooks(PluginId id);    // natives_convars.cpp
+
+    /// ISource2ModNatives001, for native plugins (pluginsys.cpp).
+    ISource2ModNatives* NativesInterface();
+
+    /// The ConVar handle for an access index, made on first use.
+    cell_t ConVarHandle(uint16_t accessIndex);
+
+    namespace pluginsys
+    {
+        /// Binds the native at `index` if a plugin registered one by that name.
+        bool BindNative(sp::BaseRuntime* runtime, uint32_t index, const char* name);
+
+        /// A script that could not load for want of plugin natives: tried
+        /// again when some plugin registers natives.
+        void NoteWaiting(const std::string& path);
+
+        /// The plugin finished loading: its libraries are announced.
+        void OnPluginLoaded(PluginId id);
+
+        void RemoveAllForPlugin(PluginId id);
+    }
 }

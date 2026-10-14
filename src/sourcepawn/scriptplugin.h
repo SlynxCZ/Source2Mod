@@ -16,13 +16,15 @@
 
 #include <sp_vm_api.h>
 
+#include <filesystem>
 #include <memory>
 #include <string>
-#include <unordered_map>
+#include <vector>
 
 namespace sp
 {
     class PluginRuntime;
+    struct CallArgs;
 }
 
 class IGameEvent;
@@ -43,6 +45,19 @@ namespace sourcepawn
 
     /// The VM, created on the first script and torn down with the core.
     void Shutdown();
+
+    /// What a plugin leaves behind in the SourcePawn layer -- its handles,
+    /// the natives and libraries it registered, its functions in other
+    /// plugins' forwards -- goes with it. Called by the plugin manager for
+    /// every plugin, native ones included.
+    void RemoveAllForPlugin(PluginId id);
+
+    /**
+     * Calls into a script from the host: a timer, a hook, a forward. An error
+     * inside is reported (with its stack) and stops there instead of running
+     * on into whatever script code called the native that led here.
+     */
+    bool Invoke(SourcePawn::IPluginFunction* fn, const sp::CallArgs& args, cell_t* result = nullptr);
 
     class ScriptPlugin : public ISource2ModPlugin, public ISource2ModListener
     {
@@ -73,36 +88,64 @@ namespace sourcepawn
         const std::string& Path() const { return m_path; }
         const std::string& FileName() const { return m_file; }
         SourcePawn::IPluginContext* Context();
+        SourcePawn::IPluginRuntime* Runtime();
+
+        /// Between OnPluginStart and OnPluginEnd: what forwards and fake
+        /// natives may call into.
+        bool IsRunning() const { return m_running; }
+
+        /// The Plugin handle scripts see for this one (GetMyHandle, AskPluginLoad2).
+        cell_t Handle() const { return m_handle; }
 
         /// Runs a public by name with no arguments, if the plugin has it.
         void CallForward(const char* name);
         void CallForwardClient(const char* name, int client);
+        void CallForwardString(const char* name, const char* value);
 
-        // Handles. A Handle is a plugin-local number here; timers are the
-        // only kind that outlives a call, event handles live for one callback.
-        cell_t AddTimer(float interval, SourcePawn::IPluginFunction* fn, cell_t data, int flags);
-        bool KillTimer(cell_t handle);
+        /// Binds natives registered after this script loaded (CreateNative of
+        /// a plugin loaded later, a native plugin's AddNatives).
+        void BindDynamicNatives();
+
+        // AutoExecConfig: the ConVars this plugin made, what to write and run.
+        struct CreatedConVar
+        {
+            std::string name, defaultValue, description;
+            bool hasMin, hasMax;
+            float min, max;
+        };
+        void NoteConVar(CreatedConVar cvar);
+        void RequestAutoExecConfig(bool autoCreate, std::string name, std::string folder);
 
         /// The script a native was called from.
         static ScriptPlugin* FromContext(SourcePawn::IPluginContext* ctx);
+        /// The script behind a Plugin handle; 0 is the caller.
+        static ScriptPlugin* FromHandle(SourcePawn::IPluginContext* ctx, cell_t handle);
+        /// Every script that is running, in load order.
+        static std::vector<ScriptPlugin*> Running();
 
     private:
-        bool BindNatives(char* error, size_t maxlen);
+        void BindCoreNatives();
+        bool CheckNatives(char* error, size_t maxlen, bool& onlyPluginNatives);
         void ReadMyInfo();
+        void ExecAutoConfig();
+        void ApplyConfigFile(const std::filesystem::path& file);
+        void ConfigsExecutedSoon();
 
         std::unique_ptr<sp::PluginRuntime> m_runtime;
         std::string m_path;
         std::string m_file;
         PluginId m_id = 0;
+        cell_t m_handle = 0;
+        bool m_running = false;
 
         std::string m_name, m_description, m_author, m_version, m_url;
 
         SourcePawn::IPluginFunction* m_onGameFrame = nullptr;
 
-        cell_t m_nextHandle = 1;
-        // Shared with the timer callbacks, which drop their handle when the
-        // scheduler drops the timer -- possibly after this object is gone.
-        std::shared_ptr<std::unordered_map<cell_t, Timer*>> m_timers = std::make_shared<std::unordered_map<cell_t, Timer*>>();
+        bool m_autoExec = false;
+        bool m_autoCreate = true;
+        std::string m_autoName, m_autoFolder;
+        std::vector<CreatedConVar> m_createdConVars;
     };
 
     /// Loads a .smx script; nullptr and the reason when it is not one the VM takes.

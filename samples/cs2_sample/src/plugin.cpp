@@ -34,6 +34,10 @@
 #include "usermessages.pb.h"
 #include "netmessages.pb.h"
 
+// Section 12: not part of SOURCE2MOD_SAVEVARS(), asked for by name. Brings the
+// SourcePawn headers (sp_vm_api.h) with it.
+#include "source2mod/ISource2ModNatives.h"
+
 SamplePlugin g_Plugin;
 SOURCE2MOD_EXPOSE(cs2_sample, g_Plugin);
 
@@ -146,6 +150,7 @@ bool SamplePlugin::Load(PluginId id, ISource2ModAPI* api, char* error, size_t ma
     SetupEntityCommands();
     SetupTimers();
     SetupTransmit();
+    SetupScriptNatives();
 
     return true;
 }
@@ -1180,4 +1185,88 @@ void SamplePlugin::SetupTransmit()
             }
         }
     });
+}
+
+/* ============================================================================
+ *
+ *   12. Script natives
+ *
+ *   What a SourceMod extension does for its scripts: natives a .sp declares
+ *   and calls, a library it can test for, and a handle type of our own. A
+ *   native gets the calling script's context and its parameters exactly as
+ *   SourceMod's do; strings and references go through the context.
+ *
+ *   The script side:
+ *
+ *       native int Sample_Add(int a, int b);
+ *       native int Sample_Echo(char[] buffer, int maxlen, const char[] fmt, any ...);
+ *       native Handle Sample_CreateCounter(int start);
+ *       native int Sample_Increment(Handle counter);
+ *
+ *       if (LibraryExists("cs2_sample")) ...
+ *
+ *   All of it goes when this plugin unloads: the natives turn into errors,
+ *   the library is removed, and every counter handle is closed.
+ *
+ * ========================================================================== */
+
+static ISource2ModNatives *g_pNatives = nullptr;
+static Source2ModHandleType g_CounterType = 0;
+
+// Sample_Add(int a, int b): params[0] is the count, the arguments follow.
+static cell_t Native_Add(SourcePawn::IPluginContext *ctx, const cell_t *params)
+{
+    return params[1] + params[2];
+}
+
+// Sample_Echo(char[] buffer, int maxlen, const char[] fmt, any ...): the
+// core's formatter, then into the script's buffer.
+static cell_t Native_Echo(SourcePawn::IPluginContext *ctx, const cell_t *params)
+{
+    char szBuffer[256];
+    size_t written = 0;
+    if (!g_pNatives->FormatString(ctx, params, 3, szBuffer, sizeof(szBuffer), &written))
+        return 0;   // the error is reported to the script already
+
+    ctx->StringToLocalUTF8(params[1], params[2], szBuffer, &written);
+    return static_cast<cell_t>(written);
+}
+
+// Sample_CreateCounter(int start): a handle the script owns -- closed with
+// delete / CloseHandle, or when the script unloads.
+static cell_t Native_CreateCounter(SourcePawn::IPluginContext *ctx, const cell_t *params)
+{
+    return g_pNatives->CreateHandle(g_CounterType, new int(params[1]), ctx);
+}
+
+static cell_t Native_Increment(SourcePawn::IPluginContext *ctx, const cell_t *params)
+{
+    int *pCounter = static_cast<int *>(g_pNatives->ReadHandle(ctx, params[1], g_CounterType));
+    return pCounter ? ++*pCounter : 0;
+}
+
+static const sp_nativeinfo_t g_SampleNatives[] = {
+    { "Sample_Add", Native_Add },
+    { "Sample_Echo", Native_Echo },
+    { "Sample_CreateCounter", Native_CreateCounter },
+    { "Sample_Increment", Native_Increment },
+    { nullptr, nullptr },
+};
+
+void SamplePlugin::SetupScriptNatives()
+{
+    g_pNatives = (ISource2ModNatives *)g_Source2ModAPI->Source2ModFactory(SOURCE2MOD_NATIVES_INTERFACE, nullptr, nullptr);
+    if (!g_pNatives)
+    {
+        SOURCE2MOD_LOG(this, "No " SOURCE2MOD_NATIVES_INTERFACE " in this core, no script natives.\n");
+        return;
+    }
+
+    g_CounterType = g_pNatives->CreateHandleType(g_PluginID, "SampleCounter", [](void *object)
+    {
+        delete static_cast<int *>(object);
+    });
+
+    g_pNatives->AddNatives(g_PluginID, g_SampleNatives);
+    g_pNatives->RegisterLibrary(g_PluginID, "cs2_sample");
 }

@@ -58,6 +58,7 @@
 #include "scripts.h"
 #include "sounds.h"
 #include "transmit.h"
+#include "sourcepawn/natives.h"
 #include "utils/log.h"
 
 #include <source2mod/ISource2ModAddresses.h>
@@ -71,6 +72,7 @@
 #include <source2mod/ISource2ModHTTP.h>
 #include <source2mod/ISource2ModMenus.h>
 #include <source2mod/ISource2ModMySQL.h>
+#include <source2mod/ISource2ModNatives.h>
 #include <source2mod/ISource2ModNetworkMessages.h>
 #include <source2mod/ISource2ModPlugin.h>
 #include <source2mod/ISource2ModScheduler.h>
@@ -303,6 +305,7 @@ namespace
             { SOURCE2MOD_TRANSMIT_INTERFACE, &transmit::transmitManager },
             { SOURCE2MOD_PATHS_INTERFACE, &paths::pathsManager },
             { SOURCE2MOD_PERMISSIONS_INTERFACE, &permissions::permissionsManager },
+            { SOURCE2MOD_NATIVES_INTERFACE, sourcepawn::NativesInterface() },
         };
         count = sizeof(s_current) / sizeof(s_current[0]);
         return s_current;

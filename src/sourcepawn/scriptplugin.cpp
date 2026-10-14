@@ -12,20 +12,28 @@
  * Project: Source2Mod
  */
 #include "scriptplugin.h"
+#include "handles.h"
 #include "natives.h"
 
+#include "core/convars.h"
 #include "core/pluginmanager.h"
 #include "core/scheduler.h"
 #include "core/shared.h"
 #include "utils/log.h"
+#include "utils/paths.h"
 
+#include <base-runtime.h>
 #include <environment.h>
 #include <plugin-runtime.h>
 #include <sp_callable.h>
 
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
+#include <unordered_map>
 
 using namespace SourcePawn;
 
@@ -71,6 +79,8 @@ namespace sourcepawn
         sp::Environment* g_pEnv = nullptr;
 
         std::unordered_map<IPluginContext*, ScriptPlugin*> g_byContext;
+        // Load order, which is the order forwards run in.
+        std::vector<ScriptPlugin*> g_scripts;
 
         sp::Environment* Env()
         {
@@ -89,15 +99,6 @@ namespace sourcepawn
             return g_pEnv;
         }
 
-        bool Call(IPluginFunction* fn, const sp::CallArgs& args, cell_t* result = nullptr)
-        {
-            if (!fn)
-                return false;
-            // An error inside is reported (with its stack) to the debug
-            // listener; the false here only tells the caller it happened.
-            return fn->Invoke(args, result);
-        }
-
         // SteamID64 -> "STEAM_1:Y:Z", what SourceMod's OnClientAuthorized hands over.
         std::string Steam2(uint64 steamId)
         {
@@ -106,6 +107,18 @@ namespace sourcepawn
             snprintf(buf, sizeof(buf), "STEAM_1:%u:%u", account & 1u, account >> 1);
             return buf;
         }
+    }
+
+    bool Invoke(IPluginFunction* fn, const sp::CallArgs& args, cell_t* result)
+    {
+        if (!fn)
+            return false;
+
+        // The error has been reported to the debug listener by the time
+        // Invoke() returns; the handler only keeps it from unwinding the
+        // script whose native brought us here.
+        ExceptionHandler eh(fn->GetParentRuntime()->GetDefaultContext());
+        return fn->Invoke(args, result);
     }
 
     bool IsScriptFile(const char* path)
@@ -129,6 +142,20 @@ namespace sourcepawn
         g_pEnv->Shutdown();
         delete g_pEnv;
         g_pEnv = nullptr;
+    }
+
+    void RemoveAllForPlugin(PluginId id)
+    {
+        for (ScriptPlugin* script : g_scripts)
+        {
+            if (script->Id() == id && script->Handle())
+                Handles().Free(script->Handle(), 0, true);
+        }
+
+        pluginsys::RemoveAllForPlugin(id);
+        ForgetEventHooks(id);
+        ForgetConVarHooks(id);
+        Handles().RemoveAllForPlugin(id);
     }
 
     std::shared_ptr<ScriptPlugin> Open(const char* path, std::string& error)
@@ -158,17 +185,24 @@ namespace sourcepawn
     {
         m_file = std::filesystem::path(m_path).filename().string();
         g_byContext[Context()] = this;
+        g_scripts.push_back(this);
         ReadMyInfo();
         m_onGameFrame = m_runtime->GetFunctionByName("OnGameFrame");
     }
 
     ScriptPlugin::~ScriptPlugin()
     {
-        // RemoveAllForPlugin() took the timers down already.
+        // RemoveAllForPlugin() took the handles, timers and hooks down already.
         g_byContext.erase(Context());
+        std::erase(g_scripts, this);
     }
 
     IPluginContext* ScriptPlugin::Context()
+    {
+        return m_runtime.get();
+    }
+
+    IPluginRuntime* ScriptPlugin::Runtime()
     {
         return m_runtime.get();
     }
@@ -177,6 +211,22 @@ namespace sourcepawn
     {
         auto it = g_byContext.find(ctx);
         return it != g_byContext.end() ? it->second : nullptr;
+    }
+
+    ScriptPlugin* ScriptPlugin::FromHandle(IPluginContext* ctx, cell_t handle)
+    {
+        if (handle == kInvalidHandle)
+            return FromContext(ctx);
+        return static_cast<ScriptPlugin*>(ReadHandle(ctx, handle, Types().plugin));
+    }
+
+    std::vector<ScriptPlugin*> ScriptPlugin::Running()
+    {
+        std::vector<ScriptPlugin*> out;
+        for (ScriptPlugin* script : g_scripts)
+            if (script->m_running)
+                out.push_back(script);
+        return out;
     }
 
     void ScriptPlugin::ReadMyInfo()
@@ -210,7 +260,7 @@ namespace sourcepawn
         m_url = str(info[4]);
     }
 
-    bool ScriptPlugin::BindNatives(char* error, size_t maxlen)
+    void ScriptPlugin::BindCoreNatives()
     {
         m_runtime->InstallBuiltinNatives();
 
@@ -220,6 +270,9 @@ namespace sourcepawn
             if (m_runtime->FindNativeByName(n->name, &idx) == SP_ERROR_NONE)
                 m_runtime->UpdateNativeBinding(idx, n->func, 0, nullptr);
         }
+
+        // What other plugins registered so far.
+        BindDynamicNatives();
 
         // MaxClients is a public the host fills in.
         uint32_t idx;
@@ -243,10 +296,28 @@ namespace sourcepawn
             const std::string name = pub->name;
             const bool ext = name.rfind("__ext_", 0) == 0 || name.rfind("__pl_", 0) == 0;
             if (ext && name.size() > 15 && name.compare(name.size() - 15, 15, "_SetNTVOptional") == 0)
-                Call(m_runtime->GetFunctionByName(pub->name), sp::CallArgs());
+                Invoke(m_runtime->GetFunctionByName(pub->name), sp::CallArgs());
         }
+    }
 
-        std::string missing;
+    void ScriptPlugin::BindDynamicNatives()
+    {
+        const uint32_t natives = m_runtime->GetNativesNum();
+        for (uint32_t i = 0; i < natives; i++)
+        {
+            const sp_native_t* native = m_runtime->GetNative(i);
+            if (native && native->status != SP_NATIVE_BOUND)
+                pluginsys::BindNative(m_runtime.get(), i, native->name);
+        }
+    }
+
+    bool ScriptPlugin::CheckNatives(char* error, size_t maxlen, bool& missing)
+    {
+        // Natives a plugin made in its AskPluginLoad2 -- this one included --
+        // are there now.
+        BindDynamicNatives();
+
+        std::string list;
         const uint32_t natives = m_runtime->GetNativesNum();
         for (uint32_t i = 0; i < natives; i++)
         {
@@ -254,39 +325,42 @@ namespace sourcepawn
             if (!native || native->status == SP_NATIVE_BOUND || (native->flags & SP_NTVFLAG_OPTIONAL))
                 continue;
 
-            if (!missing.empty())
-                missing += ", ";
-            missing += native->name;
+            if (!list.empty())
+                list += ", ";
+            list += native->name;
         }
 
-        if (!missing.empty())
+        missing = !list.empty();
+        if (missing)
         {
-            snprintf(error, maxlen, "Native(s) not found: %s", missing.c_str());
+            snprintf(error, maxlen, "Native(s) not found: %s", list.c_str());
             return false;
         }
-
         return true;
     }
 
     bool ScriptPlugin::Load(PluginId id, ISource2ModAPI* api, char* error, size_t maxlen, bool late)
     {
         m_id = id;
+        m_handle = Handles().Create(Types().plugin, this, 0);
 
-        if (!BindNatives(error, maxlen))
-            return false;
+        // SourceMod's two passes in one: what exists now is bound before
+        // AskPluginLoad2, which may create natives (CreateNative) and
+        // libraries; only after it is a missing native an error.
+        BindCoreNatives();
 
         // APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
         if (IPluginFunction* ask = m_runtime->GetFunctionByName("AskPluginLoad2"))
         {
             char reason[256]{};
             sp::CallArgs args;
-            args.PushCell(0);
+            args.PushCell(m_handle);
             args.PushCell(late ? 1 : 0);
             args.PushString(reason, sizeof(reason), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY);
             args.PushCell(sizeof(reason));
 
             cell_t res = 0;
-            if (!Call(ask, args, &res))
+            if (!Invoke(ask, args, &res))
             {
                 snprintf(error, maxlen, "AskPluginLoad2 failed");
                 return false;
@@ -304,23 +378,41 @@ namespace sourcepawn
             }
         }
 
+        bool missing = false;
+        if (!CheckNatives(error, maxlen, missing))
+        {
+            // Maybe a plugin that loads later has them.
+            if (missing)
+                pluginsys::NoteWaiting(m_path);
+            return false;
+        }
+
+        m_running = true;
+
         if (IPluginFunction* start = m_runtime->GetFunctionByName("OnPluginStart"))
         {
-            if (!Call(start, sp::CallArgs()))
+            if (!Invoke(start, sp::CallArgs()))
             {
+                m_running = false;
                 snprintf(error, maxlen, "Error detected in plugin startup (see the error above)");
                 return false;
             }
         }
 
         pluginManager.AddListener(this, this);
+        pluginsys::OnPluginLoaded(m_id);
 
         // A plugin loaded into a running server gets what it missed, as in SourceMod.
         if (late)
         {
             CallForward("OnAllPluginsLoaded");
             if (shared::getGlobalVars())
+            {
                 CallForward("OnMapStart");
+                ExecAutoConfig();
+                CallForward("OnAutoConfigsBuffered");
+                ConfigsExecutedSoon();
+            }
         }
 
         return true;
@@ -328,14 +420,16 @@ namespace sourcepawn
 
     bool ScriptPlugin::Unload(char* error, size_t maxlen)
     {
-        CallForward("OnPluginEnd");
+        if (m_running)
+            CallForward("OnPluginEnd");
+        m_running = false;
         return true;
     }
 
     void ScriptPlugin::CallForward(const char* name)
     {
         if (IPluginFunction* fn = m_runtime->GetFunctionByName(name))
-            Call(fn, sp::CallArgs());
+            Invoke(fn, sp::CallArgs());
     }
 
     void ScriptPlugin::CallForwardClient(const char* name, int client)
@@ -344,7 +438,17 @@ namespace sourcepawn
         {
             sp::CallArgs args;
             args.PushCell(client);
-            Call(fn, args);
+            Invoke(fn, args);
+        }
+    }
+
+    void ScriptPlugin::CallForwardString(const char* name, const char* value)
+    {
+        if (IPluginFunction* fn = m_runtime->GetFunctionByName(name))
+        {
+            sp::CallArgs args;
+            args.PushString(value);
+            Invoke(fn, args);
         }
     }
 
@@ -356,6 +460,9 @@ namespace sourcepawn
     void ScriptPlugin::OnLevelInit(const char*, const char*, const char*, const char*, bool, bool)
     {
         CallForward("OnMapStart");
+        ExecAutoConfig();
+        CallForward("OnAutoConfigsBuffered");
+        ConfigsExecutedSoon();
     }
 
     void ScriptPlugin::OnLevelShutdown()
@@ -366,7 +473,7 @@ namespace sourcepawn
     void ScriptPlugin::OnGameFrame(bool, bool, bool)
     {
         if (m_onGameFrame)
-            Call(m_onGameFrame, sp::CallArgs());
+            Invoke(m_onGameFrame, sp::CallArgs());
     }
 
     void ScriptPlugin::OnClientPutInServer(CPlayerSlot slot, const char*, int, uint64)
@@ -388,66 +495,135 @@ namespace sourcepawn
             sp::CallArgs args;
             args.PushCell(slot.Get() + 1);
             args.PushString(auth.c_str());
-            Call(fn, args);
+            Invoke(fn, args);
         }
     }
 
-    // ---- timers ---------------------------------------------------------------
+    // ---- AutoExecConfig ---------------------------------------------------------
 
-    namespace
+    void ScriptPlugin::NoteConVar(CreatedConVar cvar)
     {
-        // Lives in the timer's callback: when the scheduler drops the timer --
-        // fired once, killed, gone at a map change, its plugin unloading --
-        // the handle goes with it, so a stale handle never reaches KillTimer.
-        struct TimerHandleGuard
+        for (const CreatedConVar& c : m_createdConVars)
+            if (c.name == cvar.name)
+                return;
+        m_createdConVars.push_back(std::move(cvar));
+    }
+
+    void ScriptPlugin::RequestAutoExecConfig(bool autoCreate, std::string name, std::string folder)
+    {
+        m_autoExec = true;
+        m_autoCreate = autoCreate;
+        m_autoName = std::move(name);
+        m_autoFolder = std::move(folder);
+    }
+
+    void ScriptPlugin::ExecAutoConfig()
+    {
+        if (!m_autoExec)
+            return;
+
+        // cfg/<folder>/<name>.cfg; "plugin.<file>" without a name, as SourceMod does.
+        const std::string folder = m_autoFolder.empty() ? "source2mod" : m_autoFolder;
+        const std::string name = m_autoName.empty() ? "plugin." + std::filesystem::path(m_path).stem().string() : m_autoName;
+        const std::filesystem::path dir = std::filesystem::path(paths::GameDirectory()) / "cfg" / folder;
+        const std::filesystem::path file = dir / (name + ".cfg");
+
+        std::error_code ec;
+        if (!std::filesystem::exists(file, ec) && m_autoCreate)
         {
-            cell_t handle;
-            std::weak_ptr<std::unordered_map<cell_t, Timer*>> timers;
-            ~TimerHandleGuard()
+            std::filesystem::create_directories(dir, ec);
+            std::ofstream out(file);
+            if (!out)
             {
-                if (auto list = timers.lock())
-                    list->erase(handle);
+                FP_ERROR("[{}] AutoExecConfig: cannot write {}", m_file, file.string());
+                return;
             }
-        };
+
+            out << "// This file was auto-generated by Source2Mod\n";
+            out << "// ConVars for plugin \"" << m_file << "\"\n\n";
+            for (const CreatedConVar& c : m_createdConVars)
+            {
+                out << "\n";
+                std::string desc = c.description;
+                size_t pos = 0;
+                while (pos <= desc.size())
+                {
+                    const size_t nl = desc.find('\n', pos);
+                    out << "// " << desc.substr(pos, nl == std::string::npos ? std::string::npos : nl - pos) << "\n";
+                    if (nl == std::string::npos)
+                        break;
+                    pos = nl + 1;
+                }
+                out << "// -\n";
+                out << "// Default: \"" << c.defaultValue << "\"\n";
+                char bound[64];
+                if (c.hasMin)
+                {
+                    snprintf(bound, sizeof(bound), "%f", c.min);
+                    out << "// Minimum: \"" << bound << "\"\n";
+                }
+                if (c.hasMax)
+                {
+                    snprintf(bound, sizeof(bound), "%f", c.max);
+                    out << "// Maximum: \"" << bound << "\"\n";
+                }
+                out << c.name << " \"" << c.defaultValue << "\"\n\n";
+            }
+            FP_INFO("[{}] AutoExecConfig: wrote {}", m_file, file.string());
+        }
+
+        ApplyConfigFile(file);
     }
 
-    cell_t ScriptPlugin::AddTimer(float interval, IPluginFunction* fn, cell_t data, int flags)
+    void ScriptPlugin::ApplyConfigFile(const std::filesystem::path& file)
     {
-        const cell_t handle = m_nextHandle++;
-        auto guard = std::make_shared<TimerHandleGuard>(TimerHandleGuard{ handle, m_timers });
+        // Not "exec": with a workshop addon mounted CS2 runs a cfg as a
+        // workshop config and refuses every ConVar that is not the game's own
+        // ("DISALLOWED WORKSHOP CONVAR"). ConVar lines are set here instead;
+        // anything else goes to the command buffer as exec would have put it.
+        std::ifstream in(file);
+        if (!in)
+            return;
 
-        // Action (Handle timer, any data); Plugin_Stop ends a repeating timer.
-        const bool repeat = (flags & TIMER_FLAG_REPEAT) != 0;
-        TimerCallback callback([this, guard, fn, data, handle, repeat]()
+        std::string line;
+        while (std::getline(in, line))
         {
-            sp::CallArgs args;
-            args.PushCell(handle);
-            args.PushCell(data);
+            if (const size_t comment = line.find("//"); comment != std::string::npos)
+                line.erase(comment);
+            while (!line.empty() && isspace(static_cast<unsigned char>(line.back())))
+                line.pop_back();
+            size_t start = 0;
+            while (start < line.size() && isspace(static_cast<unsigned char>(line[start])))
+                start++;
+            line.erase(0, start);
+            if (line.empty())
+                continue;
 
-            cell_t res = 0;
-            Call(fn, args, &res);
+            const size_t split = line.find_first_of(" \t");
+            const std::string cvar = line.substr(0, split);
+            std::string value = split == std::string::npos ? "" : line.substr(line.find_first_not_of(" \t", split));
+            if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
+                value = value.substr(1, value.size() - 2);
 
-            if (repeat && res == kPluginStop)
-                KillTimer(handle);
-        });
-
-        // The script's timer flags are SourceMod's and match the scheduler's
-        // bit for bit (TIMER_REPEAT, TIMER_FLAG_NO_MAPCHANGE).
-        Timer* timer = scheduler::schedulerManager.AddTimer(m_id, interval, std::move(callback),
-                                                            flags & (TIMER_FLAG_REPEAT | TIMER_FLAG_NO_MAPCHANGE));
-        (*m_timers)[handle] = timer;
-        return handle;
+            const uint16 index = convars::convarsManager.GetConvarAccessIndexByName(cvar.c_str());
+            if (index != SOURCE2MOD_INVALID_CONVAR_INDEX)
+                static_cast<ISource2ModConVars&>(convars::convarsManager).SetString(index, value.c_str());
+            else if (g_pEngineServer)
+                g_pEngineServer->ServerCommand((line + "\n").c_str());
+        }
     }
 
-    bool ScriptPlugin::KillTimer(cell_t handle)
+    void ScriptPlugin::ConfigsExecutedSoon()
     {
-        auto it = m_timers->find(handle);
-        if (it == m_timers->end())
-            return false;
-
-        Timer* timer = it->second;
-        m_timers->erase(it);
-        scheduler::schedulerManager.KillTimer(timer);
-        return true;
+        // server.cfg and what a config handed to the command buffer run at
+        // the start of a frame; two frames on, they have.
+        scheduler::schedulerManager.NextFrame(m_id, [this]()
+        {
+            scheduler::schedulerManager.NextFrame(m_id, [this]()
+            {
+                if (m_running)
+                    CallForward("OnConfigsExecuted");
+            });
+        });
     }
 }
