@@ -47,6 +47,7 @@ namespace sourcepawn
     const sp_nativeinfo_t* GetPluginSysNatives();    // pluginsys.cpp
     const sp_nativeinfo_t* GetEntityNatives();       // natives_entities.cpp
     const sp_nativeinfo_t* GetApiNatives();          // natives_api.cpp
+    const sp_nativeinfo_t* GetNetSoundNatives();     // natives_netsound.cpp
 
     /**
      * SourceMod's format: the string at params[fmtParam], its arguments right
