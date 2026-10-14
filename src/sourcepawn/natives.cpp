@@ -847,7 +847,11 @@ namespace sourcepawn
         {
             if (caseSensitive)
                 return n ? strncmp(a, b, n) : strcmp(a, b);
+#ifdef _WIN32
+            return n ? _strnicmp(a, b, n) : _stricmp(a, b);
+#else
             return n ? strncasecmp(a, b, n) : strcasecmp(a, b);
+#endif
         }
 
         cell_t N_strcmp(IPluginContext* ctx, const cell_t* params)

@@ -185,6 +185,12 @@ endif ()
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES} ${BREAKPAD_SOURCE_FILES})
 target_compile_definitions(source2mod-sdk PUBLIC SOURCE2MOD_CORE)
 
+if (MSVC)
+    # Windows.h reaches the core through the SDK and pluginmanager.h; without
+    # this its min/max macros break every std::min/std::max after it.
+    target_compile_definitions(${PROJECT_NAME} PRIVATE NOMINMAX)
+endif ()
+
 if (DEFINED ENV{GITHUB_SHA_SHORT} AND NOT "$ENV{GITHUB_SHA_SHORT}" STREQUAL "")
     add_definitions(-DGITHUB_SHA="$ENV{GITHUB_SHA_SHORT}")
 else ()
