@@ -1273,6 +1273,16 @@ namespace sourcepawn
         };
     }
 
+    cell_t NewCellList(const std::vector<cell_t>& items, PluginId owner)
+    {
+        auto* array = new CellArray(1);
+        array->data = items;
+        const cell_t h = Handles().Create(Types().arrayList, array, owner);
+        if (!h)
+            delete array;
+        return h;
+    }
+
     const sp_nativeinfo_t* GetAdtNatives()
     {
         return g_adtNatives;

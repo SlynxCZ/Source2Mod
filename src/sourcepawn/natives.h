@@ -17,6 +17,7 @@
 
 #include <cstddef>
 #include <string>
+#include <vector>
 
 namespace sp
 {
@@ -54,6 +55,7 @@ namespace sourcepawn
     const sp_nativeinfo_t* GetGameConfigNatives();   // natives_gameconfig.cpp
     const sp_nativeinfo_t* GetRawHookNatives();      // natives_rawhooks.cpp
     const sp_nativeinfo_t* GetWorldNatives();        // natives_world.cpp
+    const sp_nativeinfo_t* GetNetNatives();          // natives_net.cpp
 
     /**
      * SourceMod's format: the string at params[fmtParam], its arguments right
@@ -89,6 +91,9 @@ namespace sourcepawn
 
     /// The function behind a Source2ModAddress (addresses.inc); nullptr when not resolved, and a script error for a bad value.
     void* AddressOf(SourcePawn::IPluginContext* ctx, cell_t address);
+
+    /// A new ArrayList (block size 1) holding `items`, owned by `owner` (natives_adt.cpp).
+    cell_t NewCellList(const std::vector<cell_t>& items, PluginId owner);
 
     /// The ConVar handle for an access index, made on first use.
     cell_t ConVarHandle(uint16_t accessIndex);
