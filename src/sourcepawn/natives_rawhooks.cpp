@@ -247,13 +247,16 @@ namespace sourcepawn
             return value;
         }
 
+        // make-return and call-original are the FIRST hook's on the function,
+        // whichever plugin's that is, and KHook's context pointer is not that
+        // hook there: neither may read the RawHook. The original's value is
+        // always kept as eight bytes (harmless for a void function), and the
+        // value handed back is whatever is current.
         uint64_t MakeReturn()
         {
-            auto* hook = static_cast<RawHook*>(KHook::GetContextPtr());
             uint64_t value = 0;
-            if (hook->ret != T_Void)
-                if (void* current = KHook::GetCurrentValuePtr(true))
-                    value = *static_cast<uint64_t*>(current);
+            if (void* current = KHook::GetCurrentValuePtr(true))
+                value = *static_cast<uint64_t*>(current);
             KHook::DestroyReturnValue();
             return value;
         }
@@ -304,10 +307,9 @@ namespace sourcepawn
 
             static R CallOriginal(S2M_ARGS)
             {
-                auto* hook = static_cast<RawHook*>(KHook::GetContextPtr());
                 S2M_REGS;
                 uint64_t value = Invoke(KHook::GetOriginalFunction(), regs);
-                SaveReturn(Action::Ignore, &value, hook->ret != T_Void, true);
+                SaveReturn(Action::Ignore, &value, true, true);
                 return Out(value);
             }
         };
@@ -393,10 +395,9 @@ namespace sourcepawn
 
             static R CallOriginal(S2M_ARGS)
             {
-                auto* hook = static_cast<RawHook*>(KHook::GetContextPtr());
                 S2M_REGS;
                 uint64_t value = Invoke(KHook::GetOriginalFunction(), regs);
-                SaveReturn(Action::Ignore, &value, hook->ret != T_Void, true);
+                SaveReturn(Action::Ignore, &value, true, true);
                 return Out(value);
             }
         };

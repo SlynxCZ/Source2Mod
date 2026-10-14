@@ -50,6 +50,7 @@ typedef Source2ModHTTPCallback = function void (Source2ModHTTPResponse response,
 methodmap Source2ModHTTP
 {
 	public static native bool IsAvailable();
+	/** Requests made before Steam's HTTP client was up, still waiting for it. */
 	public static native int PendingCount();
 
 	public static native void Request(Source2ModHTTPMethod method, const char[] url, const char[] body, Source2ModHTTPCallback callback,

@@ -91,17 +91,19 @@ namespace sourcepawn
             return t;
         }
 
-        /// The value handles taken from one document or response.
+        /// The value handles taken from one document or response, by the JSON
+        /// node they wrap (the core makes a new wrapper on every Get/At).
         struct JsonValues
         {
             PluginId owner = 0;
-            std::unordered_map<const ISource2ModJSONValue*, cell_t> handles;
+            std::unordered_map<const void*, cell_t> handles;
 
             cell_t For(const ISource2ModJSONValue* value)
             {
                 if (!value)
                     return 0;
-                auto it = handles.find(value);
+                const void* key = static_cast<const json::CJSONValue*>(value)->Node();
+                auto it = handles.find(key);
                 if (it != handles.end())
                     return it->second;
                 auto* obj = new JsonVal();
@@ -113,7 +115,7 @@ namespace sourcepawn
                     delete obj;
                     return 0;
                 }
-                handles.emplace(value, h);
+                handles.emplace(key, h);
                 return h;
             }
 

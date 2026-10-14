@@ -89,6 +89,9 @@ namespace json
 
         const char* Dump(int nIndent = -1) const override;
 
+        /// The node this wraps; the same node is wrapped anew by every Get/At.
+        const nlohmann::json* Node() const { return m_pNode; }
+
     private:
         CJSONDocument* m_pDoc;
         const nlohmann::json* m_pNode;

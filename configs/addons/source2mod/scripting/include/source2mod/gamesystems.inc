@@ -17,6 +17,9 @@ methodmap Source2ModGameSystems
 	/** Whether the game system list could be found on the running game. */
 	public static native bool IsAvailable();
 
-	/** A game system by name ("GameRulesGameSystem"); a null SchemaObject when there is none. */
+	/**
+	 * A game system by its factory name ("SpawnGroupManagerGameSystem"); a null
+	 * SchemaObject when there is none or its factory has no static instance.
+	 */
 	public static native SchemaObject FindByName(const char[] name);
 }
