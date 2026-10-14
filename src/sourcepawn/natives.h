@@ -48,6 +48,7 @@ namespace sourcepawn
     const sp_nativeinfo_t* GetEntityNatives();       // natives_entities.cpp
     const sp_nativeinfo_t* GetApiNatives();          // natives_api.cpp
     const sp_nativeinfo_t* GetNetSoundNatives();     // natives_netsound.cpp
+    const sp_nativeinfo_t* GetGameHookNatives();     // natives_gamehooks.cpp
 
     /**
      * SourceMod's format: the string at params[fmtParam], its arguments right
@@ -64,6 +65,7 @@ namespace sourcepawn
     void ForgetEventHooks(PluginId id);     // natives.cpp
     void ForgetConVarHooks(PluginId id);    // natives_convars.cpp
     void ForgetEntityListeners(PluginId id); // natives_entities.cpp
+    void ForgetGameHooks(PluginId id);       // natives_gamehooks.cpp
 
     /// ISource2ModNatives001, for native plugins (pluginsys.cpp).
     ISource2ModNatives* NativesInterface();
