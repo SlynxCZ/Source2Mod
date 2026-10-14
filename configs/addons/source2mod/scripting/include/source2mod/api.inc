@@ -25,3 +25,14 @@
 #include <source2mod/hooks>
 #include <source2mod/scheduler>
 #include <source2mod/transmit>
+#include <source2mod/paths>
+#include <source2mod/permissions>
+#include <source2mod/trace>
+#include <source2mod/gamesystems>
+#include <source2mod/addresses>
+#include <source2mod/json>
+#include <source2mod/http>
+#include <source2mod/mysql>
+#include <source2mod/menus>
+#include <source2mod/customhud>
+#include <source2mod/scripts>

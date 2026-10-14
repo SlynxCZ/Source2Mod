@@ -14,6 +14,7 @@
 #define _source2mod_gameconfig_included
 
 #include <source2mod/types>
+#include <source2mod/addresses>
 
 /**
  * How a value crosses into a game function and back.
@@ -66,6 +67,9 @@ methodmap Source2ModFunction < Handle
 
 	/** A virtual function: called on the object passed as the first parameter, by vtable index. */
 	public static native Source2ModFunction FromVirtual(int vtableIndex, Source2ModType returnType);
+
+	/** A function at a core address (ISource2ModAddresses); null when it is not resolved. */
+	public static native Source2ModFunction FromAddress(Source2ModAddress address, Source2ModType returnType);
 
 	/** The next parameter; `this` of a member function is the first. */
 	public native void AddParam(Source2ModType type);

@@ -1,0 +1,83 @@
+/**
+ * Source2Mod SourcePawn API: the core's resolved game functions
+ * (ISource2ModAddresses, the ADDR_* getters), for Source2ModFunction and
+ * Source2ModHook.FromAddress. The list follows the C++ interface; the core
+ * resolves them from its own gamedata, so a script never needs a signature
+ * for these.
+ */
+
+#if defined _source2mod_addresses_included
+ #endinput
+#endif
+#define _source2mod_addresses_included
+
+enum Source2ModAddress
+{
+	Address_CBaseEntity_CreateEntityByName = 0,
+	Address_CBaseEntity_DispatchSpawn,
+	Address_CBaseEntity_TakeDamageOld,
+	Address_CBaseModelEntity_SetModel,
+	Address_CBasePlayerController_SetPawn,
+	Address_CBasePlayerPawn_SnapViewAngles,
+	Address_CCSGameRules_TerminateRound,
+	Address_CPlayer_WeaponServices_Destroy,
+	Address_LegacyGameEventListener,
+	Address_CCSPlayerController_SwitchTeam,
+	Address_CEntityInstance_AcceptInput,
+	Address_CEntityIOOutput_FireOutputInternal,
+	Address_CEntitySystem_AddEntityIOEvent,
+	Address_CGameEntitySystem_FindEntityByClassName,
+	Address_CGameEntitySystem_FindEntityByName,
+	Address_CTakeDamageInfo_CTakeDamageInfo,
+	Address_INetworkMessageProcessingPreFilter_FilterMessage,
+	Address_CEntityIdentity_AcceptInput,
+	Address_CCSPlayer_ItemServices_CanAcquire,
+	Address_CCSPlayerPawnBase_CanMove,
+	Address_CCSPlayerController_ProcessUserCmd,
+	Address_CBasePlayerController_OnSimulateUserCommands,
+	Address_CCSPlayer_MovementServices_AirAccelerate,
+	Address_CCSPlayer_MovementServices_AirMove,
+	Address_CCSPlayer_MovementServices_CanUnduck,
+	Address_CCSPlayer_MovementServices_CategorizePosition,
+	Address_CCSPlayer_MovementServices_CheckFalling,
+	Address_CCSPlayer_MovementServices_CheckParameters,
+	Address_CCSPlayer_MovementServices_CheckVelocity,
+	Address_CCSPlayer_MovementServices_CheckWater,
+	Address_CCSPlayer_MovementServices_Duck,
+	Address_CCSPlayer_MovementServices_Friction,
+	Address_CCSPlayer_MovementServices_FullWalkMove,
+	Address_CCSPlayer_MovementServices_GroundAccelerate,
+	Address_CCSPlayer_MovementServices_LadderMove,
+	Address_CCSPlayer_MovementServices_MoveInit,
+	Address_CCSPlayer_MovementServices_PlayerMove,
+	Address_CCSPlayer_MovementServices_ProcessMovement,
+	Address_CCSPlayer_MovementServices_SetupMove,
+	Address_CCSPlayer_MovementServices_TryPlayerMove,
+	Address_CCSPlayer_MovementServices_WalkMove,
+	Address_CCSPlayer_MovementServices_WaterMove,
+	Address_CCSPlayerLegacyJump_OnJump,
+	Address_CCSPlayerModernJump_OnJump,
+	Address_CCSPlayerLegacyJump_CheckJumpButton,
+	Address_CCSPlayerModernJump_CheckJumpButton,
+	Address_CAttributeList_SetOrAddAttributeValueByName,
+	Address_CDecoyProjectile_EmitGrenade,
+	Address_CFlashbangProjectile_EmitGrenade,
+	Address_CHEGrenadeProjectile_EmitGrenade,
+	Address_CMolotovProjectile_EmitGrenade,
+	Address_CSmokeGrenadeProjectile_EmitGrenade,
+	Address_CCSPlayerPawn_PostThink,
+	Address_UTIL_Remove,
+	Address_DispatchParticleEffect,
+	Address_GetWeaponCSDataFromKey,
+	Address_CSource2Server_GetNavMeshData,
+	Address_CLoggingSystem_LogDirect,
+	Address_Cmd_ExecuteCommand,
+	Address_CCSPlayer_ItemServices_GiveNamedItem,
+	Address_Count
+};
+
+methodmap Source2ModAddresses
+{
+	/** Whether the core resolved this function on the running game. */
+	public static native bool IsResolved(Source2ModAddress address);
+}

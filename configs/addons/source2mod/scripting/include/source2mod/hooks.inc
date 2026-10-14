@@ -80,6 +80,9 @@ methodmap Source2ModHook < Handle
 	 */
 	public static native Source2ModHook FromVirtual(const char[] module, const char[] vtableName, int vtableIndex, Source2ModType returnType);
 
+	/** A function at a core address (ISource2ModAddresses); null when it is not resolved. */
+	public static native Source2ModHook FromAddress(Source2ModAddress address, Source2ModType returnType);
+
 	/** The next parameter; `this` of a member function is the first. */
 	public native void AddParam(Source2ModType type);
 
