@@ -1,0 +1,167 @@
+# Checks the core gamedata against CS2's Linux and Windows binaries.
+#
+# Every 30 minutes the manifests of the server binary depots (2347773 Linux,
+# 2347771 Windows) are compared with the last validated ones on the
+# gamedata-status branch. When CS2 updated -- or gamedata / the validator
+# changed on main, or someone runs it by hand -- the libraries are downloaded
+# and tools/gamedata_validator/validate.py scans every signature, looks up
+# every symbol and checks every vtable offset against its class's vtable.
+#
+# Results: the job summary, a post in Discord (#gamedata-status) through the
+# GAMEDATA_WEBHOOK repository secret, and results.json on the gamedata-status
+# branch (latest/ plus one folder per validated build). Pull requests that touch
+# gamedata are validated too, without the post and the commit.
+#
+# Modelled on swiftly-solution/gamedata-validator.
+name: Gamedata validator
+
+on:
+  # Off while the repo is private (Actions minutes); uncomment to run every 30 minutes.
+  # schedule:
+  #   - cron: '*/30 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'configs/addons/source2mod/gamedata/**'
+      - 'tools/gamedata_validator/**'
+      - '.github/workflows/gamedata-validator.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'configs/addons/source2mod/gamedata/**'
+      - 'tools/gamedata_validator/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gamedata-validator-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: false
+
+env:
+  STATUS_BRANCH: gamedata-status
+  DEPOT_LINUX: '2347773'
+  DEPOT_WINDOWS: '2347771'
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch DepotDownloader
+        run: |
+          url=$(curl -fsSL https://api.github.com/repos/SteamRE/DepotDownloader/releases/latest \
+            | jq -r '.assets[] | select(.name == "DepotDownloader-linux-x64.zip") | .browser_download_url')
+          curl -fsSL -o dd.zip "$url"
+          mkdir -p "$RUNNER_TEMP/dd" && python3 -m zipfile -e dd.zip "$RUNNER_TEMP/dd"
+          chmod +x "$RUNNER_TEMP/dd/DepotDownloader"
+          rm dd.zip
+
+      - name: Read the current manifests
+        id: manifests
+        run: |
+          manifest() {
+            out=$("$RUNNER_TEMP/dd/DepotDownloader" -app 730 -depot "$1" -manifest-only -dir "$RUNNER_TEMP/manifest-$1")
+            grep -oP '^Manifest \K[0-9]+' <<< "$out" | head -1
+          }
+          linux=$(manifest "$DEPOT_LINUX")
+          windows=$(manifest "$DEPOT_WINDOWS")
+          [ -n "$linux" ] && [ -n "$windows" ] || { echo "No manifest id from DepotDownloader"; exit 1; }
+          buildid=$(curl -fsSL https://api.steamcmd.net/v1/info/730 | jq -r '.data["730"].depots.branches.public.buildid // empty' || true)
+          echo "linux=$linux" >> "$GITHUB_OUTPUT"
+          echo "windows=$windows" >> "$GITHUB_OUTPUT"
+          echo "buildid=$buildid" >> "$GITHUB_OUTPUT"
+          echo "CS2 build ${buildid:-?}: Linux $linux, Windows $windows"
+
+      - name: Load the last results
+        id: last
+        run: |
+          mkdir -p "$RUNNER_TEMP/status"
+          if git fetch -q origin "$STATUS_BRANCH" 2>/dev/null; then
+            git show "FETCH_HEAD:latest/results.json" > "$RUNNER_TEMP/status/previous.json" 2>/dev/null || true
+          fi
+          last=$(jq -r '"\(.build.linux_manifest) \(.build.windows_manifest)"' "$RUNNER_TEMP/status/previous.json" 2>/dev/null || true)
+          now="${{ steps.manifests.outputs.linux }} ${{ steps.manifests.outputs.windows }}"
+          echo "Last validated: ${last:-none}, now: $now"
+
+          run=true
+          context="Gamedata or the validator changed on main."
+          case "${{ github.event_name }}" in
+            schedule)
+              if [ "$last" = "$now" ]; then run=false; fi
+              context="CS2 updated (build ${{ steps.manifests.outputs.buildid }})." ;;
+            workflow_dispatch) context="Run by hand." ;;
+            pull_request) context="Pull request #${{ github.event.pull_request.number }}." ;;
+          esac
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          echo "context=$context" >> "$GITHUB_OUTPUT"
+
+      - name: Download the libraries
+        if: steps.last.outputs.run == 'true'
+        run: |
+          echo 'regex:^game/(csgo/)?bin/(linuxsteamrt64|win64)/(lib)?(server|engine2|tier0|soundsystem|networksystem|schemasystem|materialsystem2)\.(so|dll)$' > "$RUNNER_TEMP/files.txt"
+          for depot in "$DEPOT_LINUX" "$DEPOT_WINDOWS"; do
+            "$RUNNER_TEMP/dd/DepotDownloader" -app 730 -depot "$depot" -filelist "$RUNNER_TEMP/files.txt" \
+              -dir "$RUNNER_TEMP/game-$depot" -max-downloads 8 | tail -3
+          done
+          find "$RUNNER_TEMP"/game-* -type f \( -name '*.so' -o -name '*.dll' \) -printf '%P  %s\n'
+
+      - name: Validate
+        id: validate
+        if: steps.last.outputs.run == 'true'
+        env:
+          # Only posts from main -- a pull request from a fork has no secrets anyway.
+          GAMEDATA_WEBHOOK: ${{ github.event_name != 'pull_request' && secrets.GAMEDATA_WEBHOOK || '' }}
+        run: |
+          set +e
+          python3 tools/gamedata_validator/validate.py \
+            --binaries "$RUNNER_TEMP/game-$DEPOT_LINUX" "$RUNNER_TEMP/game-$DEPOT_WINDOWS" \
+            --previous "$RUNNER_TEMP/status/previous.json" \
+            --out "$RUNNER_TEMP/status/results.json" \
+            --markdown "$RUNNER_TEMP/status/report.md" \
+            --buildid "${{ steps.manifests.outputs.buildid }}" \
+            --linux-manifest "${{ steps.manifests.outputs.linux }}" \
+            --windows-manifest "${{ steps.manifests.outputs.windows }}" \
+            --context "${{ steps.last.outputs.context }}"
+          code=$?
+          cat "$RUNNER_TEMP/status/report.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Store the results on ${{ env.STATUS_BRANCH }}
+        if: steps.last.outputs.run == 'true' && github.event_name != 'pull_request'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          dir="$RUNNER_TEMP/status-branch"
+          if git fetch -q origin "$STATUS_BRANCH" 2>/dev/null; then
+            git worktree add -q "$dir" FETCH_HEAD
+            git -C "$dir" switch -q -C "$STATUS_BRANCH"
+          else
+            git worktree add -q --detach "$dir"
+            git -C "$dir" switch -q --orphan "$STATUS_BRANCH"
+            git -C "$dir" rm -rqf . 2>/dev/null || true
+            printf '# Gamedata status\n\nResults of the gamedata validator (.github/workflows/gamedata-validator.yml on main).\n`latest/` is the last run, the other folders one per validated CS2 build.\n' > "$dir/README.md"
+          fi
+          build="${{ steps.manifests.outputs.buildid }}"
+          folder="${build:-unknown}_${{ steps.manifests.outputs.linux }}"
+          for d in latest "$folder"; do
+            mkdir -p "$dir/$d"
+            cp "$RUNNER_TEMP/status/results.json" "$RUNNER_TEMP/status/report.md" "$dir/$d/"
+          done
+          git -C "$dir" add -A
+          if git -C "$dir" diff --cached --quiet; then
+            echo "Nothing new to store."
+          else
+            git -C "$dir" commit -q -m "Validate gamedata for CS2 build ${build:-?} (${{ github.event_name }})"
+            git -C "$dir" push -q origin "HEAD:$STATUS_BRANCH"
+          fi
+
+      - name: Fail on broken entries
+        if: steps.last.outputs.run == 'true' && steps.validate.outputs.code != '0'
+        run: |
+          echo "::error::Broken gamedata entries -- see the job summary."
+          exit 1

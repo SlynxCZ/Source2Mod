@@ -1,0 +1,12 @@
+[submodule "vendor/spdlog"]
+	path = vendor/spdlog
+	url = https://github.com/gabime/spdlog
+[submodule "vendor/dynlibutils"]
+	path = vendor/dynlibutils
+	url = https://github.com/SlynxCZ/DynLibUtils.git
+[submodule "vendor/breakpad"]
+	path = vendor/breakpad
+	url = https://github.com/SlynxCZ/breakpad.git
+[submodule "vendor/sourcepawn"]
+	path = vendor/sourcepawn
+	url = https://github.com/SlynxCZ/sourcepawn.git

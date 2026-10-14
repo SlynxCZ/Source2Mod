@@ -1,0 +1,44 @@
+SOURCE2MOD LICENSE INFORMATION
+VERSION: 2026-9-27
+-----------------------------
+
+Source2Mod is licensed under the GNU General Public License, version 3.
+
+As a special exception, Michal "Slynx" Prikryl gives you permission to link
+the code of this program (as well as its derivative works) to
+"Counter-Strike 2," the "Source 2 Engine," "Steam," and any Game MODs or server
+software that run on software by the Valve Corporation. You must obey the GNU
+General Public License in all respects for all other code used. Additionally,
+this exception is granted to all derivative works.
+
+As an additional special exception to the GNU General Public License 3.0,
+Michal "Slynx" Prikryl permits dual-licensing of DERIVATIVE WORKS ONLY (that is,
+Source2Mod plugins, or any software built from the Source2Mod SDK or its
+header files) under the GNU General Public License version 2 "or any higher
+version." As such, you may choose for your derivative work(s) to be compatible
+with the GNU General Public License version 2 as long as it is also compatible
+with the GNU General Public License version 3, via the "or any higher version"
+clause. This is intended for compatibility with other software.
+
+As an additional special exception to the GNU General Public License 3.0,
+Michal "Slynx" Prikryl permits DERIVATIVE WORKS ONLY (that is, Source2Mod
+plugins, or any software built from the Source2Mod SDK or its header
+files) to be licensed under the MIT License instead, or under any other terms
+of their author's choosing, including closed-source and commercial terms.
+Such derivative works do not have to be published or distributed with their
+source code. This exception does not extend to Source2Mod or the
+Source2Mod SDK themselves: those, and modified versions of them, remain
+under the GNU General Public License version 3.
+
+A copy of the GNU General Public License 3.0 is available in LICENSE.
+
+Source2Mod is Copyright (C) 2025-2026 Michal "Slynx" Prikryl.
+All rights reserved.
+Metamod:Source and HL2SDK are Copyright (C) AlliedModders LLC. SourceMod (whose
+include set ships, renamed, in addons/source2mod/scripting/include) and
+SourcePawn (vendor/sourcepawn) are Copyright (C) AlliedModders LLC and stay
+under their own license terms, which the exceptions above do not change. KHook is
+Copyright (C) Benoist "Kenzzer" André. Both are credited in ACKNOWLEDGEMENTS.md.
+Source and Source 2 are Copyright (C) Valve Corporation.
+All trademarks are property of their respective owners in the US and other
+countries.

@@ -1,0 +1,250 @@
+name: Continuous Integration
+
+# Two ways in:
+#
+#   * push a tag (v1.0.4, ...) -- builds and releases that tag, as before;
+#   * touch pushbuild.txt on main -- the `version` job below cuts the next
+#     v1.0.<n+1> tag itself and the same run releases it;
+#   * run it by hand (workflow_dispatch) -- builds both platforms as a check,
+#     releases nothing.
+#
+# Pushes to main that leave pushbuild.txt alone stop at `version`, which is a
+# few seconds on a fresh runner. Everything after it is gated on its outputs.
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+
+    outputs:
+      # Empty when this push is not something to build -- every job below is
+      # gated on it.
+      tag: ${{ steps.resolve.outputs.tag }}
+      build: ${{ steps.resolve.outputs.build }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Decide what this run is
+        id: resolve
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          # A tag push (or a manual run off a tag) releases exactly that tag.
+          case "$GITHUB_REF" in
+            refs/tags/*)
+              echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+              echo "build=true" >> "$GITHUB_OUTPUT"
+              echo "Releasing pushed tag ${GITHUB_REF#refs/tags/}."
+              exit 0
+              ;;
+          esac
+
+          # A manual run is a build check: both platforms, no tag, no release.
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "Manual run -- building without a release."
+            exit 0
+          fi
+
+          # Otherwise only a pushbuild.txt bump cuts a release.
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            # A first push to the branch, or one whose old head is gone after a
+            # force push, leaves nothing to diff against -- fall back to the tip
+            # commit's own file list.
+            if [ -n "${BEFORE:-}" ] && git rev-parse -q --verify "$BEFORE^{commit}" >/dev/null; then
+              changed="$(git diff --name-only "$BEFORE" "$GITHUB_SHA")"
+            else
+              changed="$(git show --pretty= --name-only "$GITHUB_SHA")"
+            fi
+
+            if ! printf '%s\n' "$changed" | grep -qx 'pushbuild.txt'; then
+              echo "pushbuild.txt untouched -- nothing to build."
+              exit 0
+            fi
+          fi
+
+          # v1.0.<highest + 1>, starting at v1.0.0 when the series is empty.
+          latest="$(git tag --list 'v1.0.*' --sort=-v:refname | head -n1)"
+          if [ -z "$latest" ]; then
+            next="v1.0.0"
+          else
+            next="v1.0.$(( ${latest##*.} + 1 ))"
+          fi
+
+          # Paranoia: never reuse a tag, however the series was edited by hand.
+          while git rev-parse -q --verify "refs/tags/$next" >/dev/null; do
+            next="v1.0.$(( ${next##*.} + 1 ))"
+          done
+
+          echo "tag=$next" >> "$GITHUB_OUTPUT"
+          echo "build=true" >> "$GITHUB_OUTPUT"
+          echo "Cutting $next."
+
+      - name: Create the tag
+        # Only for the pushbuild.txt path -- a tag push already has one.
+        if: steps.resolve.outputs.tag != '' && !startsWith(github.ref, 'refs/tags/')
+        env:
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "refs/tags/$TAG"
+          # No CI loop: this push carries GITHUB_TOKEN, and GitHub does not start
+          # workflow runs from events an Actions token created. The tag is built
+          # and released by *this* run, not by a second one.
+
+
+  build-linux:
+    name: Build on Linux (clang-18)
+    needs: version
+    if: needs.version.outputs.build == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build inside Docker
+        env:
+          # The version job resolved this, and on the pushbuild.txt path
+          # created the tag itself, before this job started. Handing it over is
+          # what keeps the build from stamping itself "Local": the checkout
+          # above is shallow and tagless, so a git describe inside the
+          # container would find nothing.
+          SEMVER: ${{ needs.version.outputs.tag }}
+        run: |
+          docker compose -f docker/docker-compose.yml up --build --abort-on-container-exit
+
+      # Only addons/ ships. Staged into its own directory so the artifact keeps
+      # the addons/ prefix -- uploading build/addons directly would root the
+      # artifact at its contents and the release tarball would unpack wrong.
+      - name: Stage package
+        run: |
+          mkdir -p package
+          cp -r build/addons package/
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: source2mod-linux
+          path: package
+          if-no-files-found: error
+
+
+  build-windows:
+    name: Build on Windows (MSVC)
+    needs: version
+    if: needs.version.outputs.build == 'true'
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository (with submodules)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Run Windows setup & build
+        shell: pwsh
+        env:
+          # Same as the Linux job: the tag is the version job's, not this
+          # checkout's, which has no tags to describe from.
+          SEMVER: ${{ needs.version.outputs.tag }}
+        run: .\scripts\windows-entrypoint.ps1
+
+      - name: Stage package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force package | Out-Null
+          Copy-Item -Recurse -Force build\addons package\
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: source2mod-windows
+          path: package
+          if-no-files-found: error
+
+
+  release:
+    name: Release
+    if: needs.version.outputs.tag != ''
+    needs:
+      - version
+      - build-linux
+      - build-windows
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout (for the release notes)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: false
+
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: source2mod-linux
+          path: ./artifacts/linux
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: source2mod-windows
+          path: ./artifacts/windows
+
+      - name: Create archives
+        env:
+          VERSION: ${{ needs.version.outputs.tag }}
+        run: |
+          tar -czf source2mod_${VERSION}-linux.tar.gz \
+            -C artifacts/linux .
+
+          tar -czf source2mod_${VERSION}-windows.tar.gz \
+            -C artifacts/windows .
+
+      - name: Upload release archives
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: source2mod_*.tar.gz
+          tag: ${{ needs.version.outputs.tag }}
+          file_glob: true
+          overwrite: true
+          release_name: "${{ needs.version.outputs.tag }}"
+
+      - name: Release notes (GitHub release + Discord)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_WEBHOOK: ${{ secrets.RELEASE_WEBHOOK }}
+        run: python3 .github/scripts/release_notes.py "${{ needs.version.outputs.tag }}" --project "Source2Mod" --update-release

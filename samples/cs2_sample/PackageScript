@@ -1,0 +1,21 @@
+# vim: set ts=2 sw=2 tw=99 noet ft=python:
+import os
+
+builder.SetBuildFolder('package')
+
+# A source2mod plugin is not a metamod plugin: it drops into
+# addons/source2mod/plugins and Source2Mod picks it up from there, so there
+# is no .vdf to generate.
+PLUGIN_FOLDER = os.path.join('addons', 'source2mod', 'plugins')
+
+for sdk_target in MMSPlugin.sdk_targets:
+	sdk = sdk_target.sdk
+
+	folder_path = os.path.join(sdk['name'], PLUGIN_FOLDER)
+	builder.AddFolder(folder_path)
+
+	for task in MMSPlugin.binaries:
+		builder.AddCopy(
+			task.binary,
+			os.path.join(folder_path, MMSPlugin.plugin_name + '.smx')
+		)

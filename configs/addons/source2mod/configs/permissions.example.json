@@ -1,0 +1,38 @@
+// Admins, groups and command permissions. Comments are allowed.
+//
+// A permission is a dotted name a plugin makes up ("funplay.admin.kick").
+// "name.*" holds "name" and everything below it; "*" holds everything.
+// The group "default" applies to every player.
+//
+// Plugins can grant the same things at runtime; "s2m admins reload"
+// re-reads this file and leaves what plugins granted alone.
+{
+  "Groups": {
+    "default": {
+      "Permissions": []
+    },
+    "vip": {
+      "Permissions": [ "vip.*" ]
+    },
+    "admin": {
+      "Permissions": [ "admin.*" ],
+      "Inherits": [ "vip" ],
+      "Immunity": 50
+    },
+    "root": {
+      "Permissions": [ "*" ],
+      "Immunity": 100
+    }
+  },
+
+  // Keyed by SteamID64, STEAM_X:Y:Z or [U:1:N].
+  "Admins": {
+    // "76561197960265728": { "Groups": [ "root" ], "Permissions": [], "Immunity": 100 }
+  },
+
+  // Re-assign what a command needs, whoever registered it: "command": "permission".
+  // "" lets everybody run it.
+  "Overrides": {
+    // "kick": "admin.kick"
+  }
+}
