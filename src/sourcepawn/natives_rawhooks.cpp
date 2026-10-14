@@ -30,13 +30,17 @@
 #include "core/shared.h"
 #include "utils/log.h"
 
+#include <source2mod/ISource2ModCommands.h>
 #include <source2mod/schema/entity/classes/CBaseEntity.h>
+
+#include <tier0/buffer_string.h>
 
 #include <khook.hpp>
 #include <sp_callable.h>
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -64,6 +68,8 @@ namespace sourcepawn
             T_Vector,
             T_VectorValue,
             T_Pointer,
+            T_BufferString,
+            T_Command,
         };
 
         bool IsSse(Type t)
@@ -141,6 +147,9 @@ namespace sourcepawn
             uint64_t ret;
             bool retSet;
             bool changed;
+            // Command parameters lent as Source2ModCommandArgs, freed after the handler.
+            std::vector<std::unique_ptr<Source2ModCommandArgs>> commands;
+            std::vector<cell_t> commandHandles;
         };
 
         HandleType HookType()
@@ -204,7 +213,7 @@ namespace sourcepawn
             const bool hasValue = hook->ret != T_Void;
             IPluginFunction* fn = post ? hook->post : hook->pre;
 
-            Frame frame{ hook, regs, post, 0, false, false };
+            Frame frame{ hook, regs, post, 0, false, false, {}, {} };
             if (post && hasValue)
                 if (void* original = KHook::GetOriginalValuePtr())
                     frame.ret = *static_cast<uint64_t*>(original);
@@ -221,6 +230,8 @@ namespace sourcepawn
                 Invoke(fn, args, &res);
                 Handles().Free(params, 0, true);
                 Handles().Free(ret, 0, true);
+                for (cell_t h : frame.commandHandles)
+                    Handles().Free(h, 0, true);
             }
 
             Action action = static_cast<Action>(std::clamp<cell_t>(res, 0, 2));
@@ -448,12 +459,12 @@ namespace sourcepawn
 
         bool ValidType(cell_t t)
         {
-            return t >= T_Void && t <= T_Pointer && t != T_VectorValue;
+            return t >= T_Void && t <= T_Command && t != T_VectorValue;
         }
 
         cell_t NewHook(IPluginContext* ctx, void* address, void** vtable, int index, cell_t returnType)
         {
-            if (!ValidType(returnType) || returnType == T_String || returnType == T_Vector)
+            if (!ValidType(returnType) || returnType == T_String || returnType == T_Vector || returnType == T_BufferString || returnType == T_Command)
                 return ctx->ThrowNativeError("Unsupported return type %d", returnType);
             auto* hook = new RawHook();
             hook->owner = CallerId(ctx);
@@ -637,9 +648,30 @@ namespace sourcepawn
             Frame* f = ParamFrame(ctx, params, &slot, &t);
             if (!f)
                 return 0;
-            const char* s = reinterpret_cast<const char*>(f->regs.s[slot]);
+            std::string text;
+            const uint64_t bits = f->regs.s[slot];
+            switch (t)
+            {
+            case T_Int64:
+                text = std::to_string(static_cast<int64_t>(bits));
+                break;
+            case T_BufferString:
+                if (const auto* b = reinterpret_cast<const CBufferString*>(bits))
+                    text = b->Get();
+                break;
+            case T_Command:
+                if (const auto* c = reinterpret_cast<const CCommand*>(bits))
+                    text = c->GetCommandString() ? c->GetCommandString() : "";
+                break;
+            case T_String:
+                if (const char* s = reinterpret_cast<const char*>(bits))
+                    text = s;
+                break;
+            default:
+                return ctx->ThrowNativeError("Parameter %d is not a string", params[2]);
+            }
             size_t written = 0;
-            ctx->StringToLocalUTF8(params[3], params[4], s ? s : "", &written);
+            ctx->StringToLocalUTF8(params[3], params[4], text.c_str(), &written);
             return static_cast<cell_t>(written);
         }
 
@@ -713,6 +745,43 @@ namespace sourcepawn
                 *v = Vector(sp_ctof(in[0]), sp_ctof(in[1]), sp_ctof(in[2]));
             }
             return 0;
+        }
+
+        // SetBufferString(int num, const char[] value)
+        cell_t N_PSetBufferString(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            Frame* f = ParamFrame(ctx, params, &slot, &t);
+            if (!f)
+                return 0;
+            if (t != T_BufferString)
+                return ctx->ThrowNativeError("Parameter %d is not a BufferString", params[2]);
+            auto* b = reinterpret_cast<CBufferString*>(f->regs.s[slot]);
+            if (!b)
+                return ctx->ThrowNativeError("The BufferString parameter is null");
+            b->Clear();
+            b->Insert(0, LocalString(ctx, params[3]));
+            return 0;
+        }
+
+        // GetCommandArgs(int num)
+        cell_t N_PGetCommandArgs(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            Frame* f = ParamFrame(ctx, params, &slot, &t);
+            if (!f)
+                return 0;
+            if (t != T_Command)
+                return ctx->ThrowNativeError("Parameter %d is not a Command", params[2]);
+            const auto* c = reinterpret_cast<const CCommand*>(f->regs.s[slot]);
+            if (!c)
+                return 0;
+            f->commands.push_back(std::make_unique<Source2ModCommandArgs>(c->ArgC(), c->ArgV(), c->ArgS(), c->GetCommandString()));
+            const cell_t h = LendCommandArgs(f->commands.back().get(), f->hook->owner);
+            f->commandHandles.push_back(h);
+            return h;
         }
 
         Frame* RetFrame(IPluginContext* ctx, cell_t handle)
@@ -794,6 +863,8 @@ namespace sourcepawn
             { "Source2ModHookParams.SetBool", N_PSetInt },
             { "Source2ModHookParams.SetEntity", N_PSetEntity },
             { "Source2ModHookParams.SetVector", N_PSetVector },
+            { "Source2ModHookParams.SetBufferString", N_PSetBufferString },
+            { "Source2ModHookParams.GetCommandArgs", N_PGetCommandArgs },
             { "Source2ModHookReturn.GetInt", N_RGetInt },
             { "Source2ModHookReturn.GetFloat", N_RGetFloat },
             { "Source2ModHookReturn.GetBool", N_RGetInt },

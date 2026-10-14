@@ -33,7 +33,9 @@ enum Source2ModType
 	Source2ModType_String,          /**< const char* */
 	Source2ModType_Vector,          /**< Vector* / const Vector&: float[3] */
 	Source2ModType_VectorValue,     /**< Vector by value: float[3] */
-	Source2ModType_Pointer          /**< any other pointer: an opaque SchemaObject */
+	Source2ModType_Pointer,         /**< any other pointer: an opaque SchemaObject */
+	Source2ModType_BufferString,    /**< CBufferString*: text (a hook can set it with SetBufferString) */
+	Source2ModType_Command          /**< const CCommand&: in a hook, GetCommandArgs; not callable */
 };
 
 methodmap Source2ModGameConfig

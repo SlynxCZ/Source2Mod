@@ -368,6 +368,11 @@ namespace sourcepawn
         };
     }
 
+    cell_t LendCommandArgs(const Source2ModCommandArgs* args, PluginId owner)
+    {
+        return Handles().Create(ArgsType(), const_cast<Source2ModCommandArgs*>(args), owner);
+    }
+
     const sp_nativeinfo_t* GetApiNatives()
     {
         return g_apiNatives;

@@ -28,9 +28,12 @@
 
 #include <source2mod/schema/entity/classes/CBaseEntity.h>
 
+#include <tier0/buffer_string.h>
+
 #include <sp_callable.h>
 
 #include <cstring>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -58,6 +61,8 @@ namespace sourcepawn
             T_Vector,
             T_VectorValue,
             T_Pointer,
+            T_BufferString,
+            T_Command,
         };
 
         PluginId CallerId(IPluginContext* ctx)
@@ -124,12 +129,12 @@ namespace sourcepawn
 
         bool ValidType(cell_t t)
         {
-            return t >= T_Void && t <= T_Pointer;
+            return t >= T_Void && t <= T_BufferString;
         }
 
         cell_t NewFunction(IPluginContext* ctx, void* address, int vtableIndex, cell_t returnType)
         {
-            if (!ValidType(returnType) || returnType == T_String || returnType == T_Vector || returnType == T_VectorValue)
+            if (!ValidType(returnType) || returnType == T_String || returnType == T_Vector || returnType == T_VectorValue || returnType == T_BufferString)
                 return ctx->ThrowNativeError("Unsupported return type %d", returnType);
             auto* fn = new Function();
             fn->address = address;
@@ -317,6 +322,7 @@ namespace sourcepawn
             std::vector<Arg> args;
             std::vector<std::string> strings;
             std::vector<Vector> vectors(fn->params.size());
+            std::vector<std::unique_ptr<CBufferString>> buffers;
             std::vector<std::pair<size_t, cell_t>> copyback;     // vector parameter -> script array
             strings.reserve(fn->params.size());
 
@@ -368,6 +374,10 @@ namespace sourcepawn
                 case T_String:
                     strings.emplace_back(LocalString(ctx, params[2 + p]));
                     a.bits = reinterpret_cast<uintptr_t>(strings.back().c_str());
+                    break;
+                case T_BufferString:
+                    buffers.push_back(std::make_unique<CBufferString>(LocalString(ctx, params[2 + p])));
+                    a.bits = reinterpret_cast<uintptr_t>(buffers.back().get());
                     break;
                 case T_Vector:
                     vectors[p] = Vector(sp_ctof(addr[0]), sp_ctof(addr[1]), sp_ctof(addr[2]));

@@ -16,6 +16,7 @@
 
 #include <source2mod/types>
 #include <source2mod/gameconfig>
+#include <source2mod/commands>
 
 /** The arguments of the hooked call. Numbered from 1; `this` is 1 for a member function. */
 methodmap Source2ModHookParams
@@ -25,6 +26,10 @@ methodmap Source2ModHookParams
 	public native bool GetBool(int num);
 	public native CEntityInstance GetEntity(int num);
 	public native SchemaObject GetObject(int num);
+	/**
+	 * Text of a String, BufferString or Int64 (decimal) parameter, or the
+	 * whole command line of a Command parameter.
+	 */
 	public native int GetString(int num, char[] buffer, int maxlen);
 	public native void GetVector(int num, float vec[3]);
 
@@ -34,6 +39,12 @@ methodmap Source2ModHookParams
 	public native void SetBool(int num, bool value);
 	public native void SetEntity(int num, CEntityInstance entity);
 	public native void SetVector(int num, const float vec[3]);
+
+	/** A BufferString parameter: replaces its text in place (no Action needed). */
+	public native void SetBufferString(int num, const char[] value);
+
+	/** A Command parameter as command arguments, Arg(0) the command; valid inside the handler. */
+	public native Source2ModCommandArgs GetCommandArgs(int num);
 }
 
 /** The return value: what the original returned (post), what the caller gets when overridden. */

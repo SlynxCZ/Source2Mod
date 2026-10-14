@@ -24,6 +24,7 @@ namespace sp
 }
 
 class ISource2ModNatives;
+class Source2ModCommandArgs;
 
 namespace sourcepawn
 {
@@ -76,6 +77,9 @@ namespace sourcepawn
     void* SchemaObjectPointer(SourcePawn::IPluginContext* ctx, cell_t handle);
     /// A SchemaObject for a raw pointer; 0 for nullptr.
     cell_t SchemaObjectForPointer(void* ptr);
+
+    /// A Source2ModCommandArgs handle for `args`; the caller frees it (Handles().Free) before args goes.
+    cell_t LendCommandArgs(const ::Source2ModCommandArgs* args, PluginId owner);
 
     /// The ConVar handle for an access index, made on first use.
     cell_t ConVarHandle(uint16_t accessIndex);
