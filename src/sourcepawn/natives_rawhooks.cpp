@@ -109,6 +109,7 @@ namespace sourcepawn
             KHook::HookID_t id = KHook::INVALID_HOOK;
             bool removing = false;          // RemoveHook asked, KHook not done yet
             bool zombie = false;            // its handle is gone: delete once removed
+            uint64_t (*invoke)(void* fn, const Regs& regs) = nullptr;   // a call in this hook's register shape
         };
 
         // KHook is done with a hook it was asked to remove.
@@ -129,14 +130,6 @@ namespace sourcepawn
             hook->removing = true;
             KHook::RemoveHook(id, true, OnRemoved, hook);
         }
-
-        // Arguments a pre handler changed, for the call to the original that follows.
-        struct Pending
-        {
-            RawHook* hook;
-            Regs regs;
-        };
-        thread_local std::vector<Pending> t_pending;
 
         // What the script's handlers are handed.
         struct Frame
@@ -235,15 +228,21 @@ namespace sourcepawn
             }
 
             Action action = static_cast<Action>(std::clamp<cell_t>(res, 0, 2));
-            if (!post)
-            {
-                if (frame.changed && action != Action::Ignore)
-                    t_pending.push_back({ hook, frame.regs });
-            }
-            else if (!t_pending.empty() && t_pending.back().hook == hook)
-                t_pending.pop_back();
-
             uint64_t value = frame.ret;
+
+            // Changed arguments go on the way KHook::Recall sends them: the
+            // detour is entered again with the new registers and carries on
+            // from the next hook, so every later hook and the original get
+            // them -- whichever hook's call-original callback KHook uses.
+            if (!post && frame.changed && action != Action::Ignore && hook->invoke)
+            {
+                void* again = hasValue
+                    ? KHook::DoRecall(action, &value, sizeof(value), reinterpret_cast<void*>(KHook::init_operator<uint64_t>),
+                                      reinterpret_cast<void*>(KHook::deinit_operator<uint64_t>))
+                    : KHook::DoRecall(action, nullptr, 0, nullptr, nullptr);
+                hook->invoke(again, frame.regs);
+            }
+
             SaveReturn(action, &value, hasValue, false);
             return value;
         }
@@ -295,22 +294,21 @@ namespace sourcepawn
             static R Post(S2M_ARGS) { S2M_REGS; return Out(Handle(regs, true)); }
             static R Return(S2M_ARGS) { return Out(MakeReturn()); }
 
+            static uint64_t Invoke(void* fn, const Regs& regs)
+            {
+                using Fn = R (*)(Pos<F0>, Pos<F1>, Pos<F2>, Pos<F3>, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
+                const uint64_t* s = regs.s;
+                return ToBits(reinterpret_cast<Fn>(fn)(Unbits<F0>(s[0]), Unbits<F1>(s[1]), Unbits<F2>(s[2]), Unbits<F3>(s[3]),
+                                                        s[4], s[5], s[6], s[7], s[8], s[9], s[10], s[11], s[12], s[13]));
+            }
+
             static R CallOriginal(S2M_ARGS)
             {
                 auto* hook = static_cast<RawHook*>(KHook::GetContextPtr());
                 S2M_REGS;
-                if (!t_pending.empty() && t_pending.back().hook == hook)
-                {
-                    regs = t_pending.back().regs;
-                    t_pending.pop_back();
-                }
-                using Fn = R (*)(Pos<F0>, Pos<F1>, Pos<F2>, Pos<F3>, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-                auto original = reinterpret_cast<Fn>(KHook::GetOriginalFunction());
-                const uint64_t* s = regs.s;
-                const R r = original(Unbits<F0>(s[0]), Unbits<F1>(s[1]), Unbits<F2>(s[2]), Unbits<F3>(s[3]), s[4], s[5], s[6], s[7], s[8], s[9], s[10], s[11], s[12], s[13]);
-                uint64_t value = ToBits(r);
+                uint64_t value = Invoke(KHook::GetOriginalFunction(), regs);
                 SaveReturn(Action::Ignore, &value, hook->ret != T_Void, true);
-                return r;
+                return Out(value);
             }
         };
 #undef S2M_ARGS
@@ -322,13 +320,15 @@ namespace sourcepawn
             void* post;
             void* ret;
             void* original;
+            uint64_t (*invoke)(void*, const Regs&);
         };
 
         template <typename R, int M>
         CallbackSet SetFor()
         {
             using C = Callbacks<R, (M & 1) != 0, (M & 2) != 0, (M & 4) != 0, (M & 8) != 0>;
-            return { reinterpret_cast<void*>(&C::Pre), reinterpret_cast<void*>(&C::Post), reinterpret_cast<void*>(&C::Return), reinterpret_cast<void*>(&C::CallOriginal) };
+            return { reinterpret_cast<void*>(&C::Pre), reinterpret_cast<void*>(&C::Post), reinterpret_cast<void*>(&C::Return),
+                     reinterpret_cast<void*>(&C::CallOriginal), &C::Invoke };
         }
 
         template <typename R>
@@ -382,23 +382,22 @@ namespace sourcepawn
             static R Post(S2M_ARGS) { S2M_REGS; return Out(Handle(regs, true)); }
             static R Return(S2M_ARGS) { return Out(MakeReturn()); }
 
+            static uint64_t Invoke(void* fn, const Regs& regs)
+            {
+                using Fn = R (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, double, double, double, double, double, double, double, double);
+                const uint64_t* s = regs.s;
+                return ToBits(reinterpret_cast<Fn>(fn)(s[0], s[1], s[2], s[3], s[4], s[5], FromBits<double>(s[6]), FromBits<double>(s[7]),
+                                                        FromBits<double>(s[8]), FromBits<double>(s[9]), FromBits<double>(s[10]),
+                                                        FromBits<double>(s[11]), FromBits<double>(s[12]), FromBits<double>(s[13])));
+            }
+
             static R CallOriginal(S2M_ARGS)
             {
                 auto* hook = static_cast<RawHook*>(KHook::GetContextPtr());
                 S2M_REGS;
-                if (!t_pending.empty() && t_pending.back().hook == hook)
-                {
-                    regs = t_pending.back().regs;
-                    t_pending.pop_back();
-                }
-                using Fn = R (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, double, double, double, double, double, double, double, double);
-                auto original = reinterpret_cast<Fn>(KHook::GetOriginalFunction());
-                const uint64_t* s = regs.s;
-                const R r = original(s[0], s[1], s[2], s[3], s[4], s[5], FromBits<double>(s[6]), FromBits<double>(s[7]), FromBits<double>(s[8]),
-                                     FromBits<double>(s[9]), FromBits<double>(s[10]), FromBits<double>(s[11]), FromBits<double>(s[12]), FromBits<double>(s[13]));
-                uint64_t value = ToBits(r);
+                uint64_t value = Invoke(KHook::GetOriginalFunction(), regs);
                 SaveReturn(Action::Ignore, &value, hook->ret != T_Void, true);
-                return r;
+                return Out(value);
             }
         };
 #undef S2M_ARGS
@@ -410,13 +409,15 @@ namespace sourcepawn
             void* post;
             void* ret;
             void* original;
+            uint64_t (*invoke)(void*, const Regs&);
         };
 
         template <typename R>
         CallbackSet Pick(int)
         {
             using C = Callbacks<R>;
-            return { reinterpret_cast<void*>(&C::Pre), reinterpret_cast<void*>(&C::Post), reinterpret_cast<void*>(&C::Return), reinterpret_cast<void*>(&C::CallOriginal) };
+            return { reinterpret_cast<void*>(&C::Pre), reinterpret_cast<void*>(&C::Post), reinterpret_cast<void*>(&C::Return),
+                     reinterpret_cast<void*>(&C::CallOriginal), &C::Invoke };
         }
 
         // By class: integer parameters take s[0..5] in order, SSE ones s[6..13].
@@ -547,6 +548,7 @@ namespace sourcepawn
                 return ctx->ThrowNativeError("Source2ModHook: %s", error.c_str());
 
             const CallbackSet cb = (hook->ret == T_Float || hook->ret == T_Double) ? Pick<double>(mask) : Pick<uint64_t>(mask);
+            hook->invoke = cb.invoke;
             if (hook->vtable)
                 hook->id = KHook::SetupVirtualHook(hook->vtable, hook->index, hook, nullptr, cb.pre, cb.post, cb.ret, cb.original, StackSize(hook), true);
             else
