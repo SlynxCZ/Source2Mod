@@ -1140,6 +1140,33 @@ namespace sourcepawn
             return static_cast<cell_t>(written);
         }
 
+        // VFormat(char[] buffer, int maxlength, const char[] format, int varpos):
+        // the arguments are those of the script function that called it,
+        // from its parameter varpos on (SourceMod's sm_vformat).
+        cell_t N_VFormat(IPluginContext* ctx, const cell_t* params)
+        {
+            auto* runtime = static_cast<sp::BaseRuntime*>(ctx->GetRuntime());
+            const cell_t* local = runtime->GetLocalParams();
+            const cell_t varpos = params[4];
+            if (!local || varpos < 1 || varpos > local[0] + 1)
+                return ctx->ThrowNativeError("Argument index is invalid: %d", varpos);
+
+            // A parameter list FormatParams reads: the format, then the arguments.
+            std::vector<cell_t> list;
+            list.push_back(0);
+            list.push_back(params[3]);
+            for (cell_t i = varpos; i <= local[0]; i++)
+                list.push_back(local[i]);
+            list[0] = static_cast<cell_t>(list.size() - 1);
+
+            std::string out(static_cast<size_t>(std::max(params[2], 1)), '\0');
+            size_t written = 0;
+            if (!FormatParams(ctx, list.data(), 1, out.data(), out.size(), &written))
+                return 0;
+            ctx->StringToLocalUTF8(params[1], params[2], out.c_str(), &written);
+            return static_cast<cell_t>(written);
+        }
+
         cell_t N_strlen(IPluginContext* ctx, const cell_t* params)
         {
             return static_cast<cell_t>(strlen(Str(ctx, params[1])));
@@ -1304,6 +1331,7 @@ namespace sourcepawn
             { "PrintCenterText", N_PrintCenterText },
             // string.inc
             { "Format", N_Format },
+            { "VFormat", N_VFormat },
             { "strlen", N_strlen },
             { "strcopy", N_strcopy },
             { "strcmp", N_strcmp },
