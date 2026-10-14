@@ -303,6 +303,8 @@ namespace sourcepawn
             t.dataPack = hs.CreateType("DataPack", owned);
             t.conVar = hs.CreateType("ConVar", nullptr, 0, false);
             t.forward = hs.CreateType("Forward", owned);
+            // Kept by the core and handed out again for the same object.
+            t.schemaObject = hs.CreateType("SchemaObject", owned, 0, false);
             return t;
         }();
         return s_types;

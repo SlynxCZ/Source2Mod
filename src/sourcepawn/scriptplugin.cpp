@@ -155,6 +155,7 @@ namespace sourcepawn
         pluginsys::RemoveAllForPlugin(id);
         ForgetEventHooks(id);
         ForgetConVarHooks(id);
+        ForgetEntityListeners(id);
         Handles().RemoveAllForPlugin(id);
     }
 

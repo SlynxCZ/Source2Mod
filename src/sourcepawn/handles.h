@@ -147,6 +147,7 @@ namespace sourcepawn
         HandleType dataPack;
         HandleType conVar;
         HandleType forward;
+        HandleType schemaObject;
     };
     const CoreHandleTypes& Types();
 }

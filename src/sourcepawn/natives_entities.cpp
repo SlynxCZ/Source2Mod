@@ -4,19 +4,16 @@
  * Source2Mod
  * =============================================================================
  *
- * Entity natives: entity.inc (entity props, entity data, refs) and the
- * entity half of sdktools (CreateEntityByName, DispatchKeyValue/Spawn,
- * AcceptEntityInput + SetVariant*, TeleportEntity, FindEntityByClassname)
- * on Source2Mod's schema access. SourceMod's smn_entities.cpp and the
- * SDKTools extension (AlliedModders LLC) are the reference for behaviour.
+ * The schema and entity part of the SourcePawn API (source2mod/schema.inc,
+ * source2mod/entities.inc): Source2ModSchema's generic field access behind
+ * the generated class methodmaps, the C++ helper methods of the schema
+ * classes, and Source2ModEntities.
  *
- * Entity indices are CS2's; a client index is its controller's entity index
- * (slot + 1), which is SourceMod's rule too. Props are found in the running
- * game's schema by name, on the entity's class and its bases -- Prop_Send and
- * Prop_Data are the same thing here -- and a path "a.b" follows embedded
- * classes and pointers ("m_pGameSceneNode.m_vecAbsOrigin",
- * "m_pWeaponServices.m_hActiveWeapon"). A networked field written through
- * SetEntProp* is marked changed for the owning entity.
+ * An entity is its index. Anything else the schema reaches -- services,
+ * the scene node, the game rules -- is a SchemaObject: a handle the core
+ * keeps, which remembers how it was reached (an entity and the fields from
+ * it, or the game rules) and finds the object again on every use, so a
+ * stale one reads as gone instead of reading freed memory.
  *
  * Project: Source2Mod
  */
@@ -24,21 +21,30 @@
 #include "handles.h"
 #include "scriptplugin.h"
 
+#include "core/entities.h"
 #include "utils/log.h"
 
 #include <source2mod/schema/schema.h>
 #include <source2mod/schema/entity/classes/CBaseEntity.h>
 #include <source2mod/schema/entity/classes/CBaseModelEntity.h>
 #include <source2mod/schema/entity/classes/CBasePlayerWeapon.h>
+#include <source2mod/schema/entity/classes/CCSGameRules.h>
 #include <source2mod/schema/entity/classes/CCSPlayerController.h>
 #include <source2mod/schema/entity/classes/CCSPlayerPawn.h>
-#include <source2mod/schema/entity/classes/CCSPlayer_ItemServices.h>
+#include <source2mod/schema/entity/classes/CCSObserverPawn.h>
+#include <source2mod/schema/entity/classes/CPlayer_ItemServices.h>
+#include <source2mod/schema/entity/classes/CPlayer_WeaponServices.h>
+#include <source2mod/utils/plat.h>
 
-#include <entity2/entitykeyvalues.h>
 #include <schemalib/schemaclassinfo.h>
 #include <schemalib/schematype.h>
+#include <schemasystem/schemasystem.h>
+#include <sp_callable.h>
 
+#include <algorithm>
 #include <cstring>
+#include <map>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -49,7 +55,6 @@ namespace sourcepawn
 {
     namespace
     {
-        // CS2's entity list: 15 bits of index.
         constexpr cell_t kMaxEntities = 32768;
         constexpr uint32_t kRefFlag = 1u << 31;
 
@@ -60,40 +65,13 @@ namespace sourcepawn
             return CBaseEntity::FromIndex<CEntityInstance>(index);
         }
 
-        // An index or a reference (EntIndexToEntRef) to the entity, or nullptr.
-        CEntityInstance* Resolve(cell_t entity)
-        {
-            const uint32_t raw = static_cast<uint32_t>(entity);
-            if (raw & kRefFlag)
-            {
-                const cell_t index = static_cast<cell_t>(raw & 0x7FFF);
-                CEntityInstance* inst = InstanceAt(index);
-                if (!inst)
-                    return nullptr;
-                const uint32_t serial = (raw >> 15) & 0xFFFF;
-                return (static_cast<uint32_t>(inst->GetRefEHandle().GetSerialNumber()) & 0xFFFF) == serial ? inst : nullptr;
-            }
-            return InstanceAt(entity);
-        }
-
-        CEntityInstance* CheckEntity(IPluginContext* ctx, cell_t entity)
-        {
-            CEntityInstance* inst = Resolve(entity);
-            if (!inst)
-            {
-                if (static_cast<uint32_t>(entity) & kRefFlag)
-                    ctx->ThrowNativeError("Entity %d (%d) is invalid", static_cast<int>(static_cast<uint32_t>(entity) & 0x7FFF), entity);
-                else
-                    ctx->ThrowNativeError("Entity %d (%d) is invalid", entity, entity);
-            }
-            return inst;
-        }
-
         cell_t IndexOf(CEntityInstance* inst)
         {
             return inst ? static_cast<cell_t>(inst->GetEntityIndex().Get()) : -1;
         }
 
+        // GetRefEHandle(): index, 16 bits of serial, and the top bit so a
+        // reference is never mistaken for an index.
         cell_t RefOf(CEntityInstance* inst)
         {
             if (!inst)
@@ -103,256 +81,361 @@ namespace sourcepawn
                                        | (static_cast<uint32_t>(h.GetEntryIndex()) & 0x7FFF));
         }
 
-        // ---- props --------------------------------------------------------------
+        CEntityInstance* FromRef(cell_t ref)
+        {
+            const uint32_t raw = static_cast<uint32_t>(ref);
+            if (!(raw & kRefFlag))
+                return nullptr;
+            CEntityInstance* inst = InstanceAt(static_cast<cell_t>(raw & 0x7FFF));
+            if (!inst || (static_cast<uint32_t>(inst->GetRefEHandle().GetSerialNumber()) & 0xFFFF) != ((raw >> 15) & 0xFFFF))
+                return nullptr;
+            return inst;
+        }
 
-        enum class PropKind
+        CEntityInstance* CheckEntity(IPluginContext* ctx, cell_t entity)
+        {
+            CEntityInstance* inst = InstanceAt(entity);
+            if (!inst)
+                ctx->ThrowNativeError("Entity %d is invalid", entity);
+            return inst;
+        }
+
+        // An entity argument that may be NULL_ENTITY (-1).
+        CEntityInstance* OptionalEntity(IPluginContext* ctx, cell_t entity, bool* ok)
+        {
+            *ok = true;
+            if (entity == -1)
+                return nullptr;
+            CEntityInstance* inst = CheckEntity(ctx, entity);
+            *ok = inst != nullptr;
+            return inst;
+        }
+
+        template <typename T>
+        T* As(IPluginContext* ctx, cell_t entity)
+        {
+            return static_cast<T*>(CheckEntity(ctx, entity));
+        }
+
+        // ---- schema fields --------------------------------------------------------
+
+        enum class Kind
         {
             Int,
             Float,
             Bool,
             Handle,
-            Vector,     // Vector, QAngle: three floats
+            Vector,
+            Color,
             CharArray,
-            Symbol,     // CUtlSymbolLarge: a const char* at the field
-            UtlString,  // CUtlString: a char* at the field
+            StringPtr,      // CUtlSymbolLarge, CUtlString, CGlobalSymbol: a char* at the field
+            Pointer,        // to a schema class
+            Embedded,       // a schema class in place
             Other,
         };
 
-        struct Prop
+        struct Field
         {
-            uint8_t* base = nullptr;    // the object the field is in
-            const char* declClass = nullptr;
-            const char* field = nullptr;
-            int offset = 0;             // within base
-            PropKind kind = PropKind::Other;
-            int size = 0;               // of one element
+            bool found = false;
+            std::string declClass;
+            std::string name;
+            int offset = 0;
+            int size = 0;
             bool isSigned = true;
-            int count = 1;              // fixed array: elements
+            Kind kind = Kind::Other;
             std::string typeName;
         };
 
-        SchemaClassFieldData_t* FindField(CSchemaClassInfo* cls, const char* name, CSchemaClassInfo** declared)
+        CSchemaClassInfo* FindClass(const char* name)
         {
-            for (CSchemaClassInfo* c = cls; c; c = c->m_nBaseClassCount ? c->m_pBaseClasses[0].m_pClass : nullptr)
-            {
-                for (uint16 i = 0; i < c->m_nFieldCount; i++)
-                {
-                    if (strcmp(c->m_pFields[i].m_pszName, name) == 0)
-                    {
-                        *declared = c;
-                        return &c->m_pFields[i];
-                    }
-                }
-            }
-            return nullptr;
+            CSchemaSystem* system = GetSchemaSystem();
+            CSchemaSystemTypeScope* scope = system ? system->FindTypeScopeForModule(MODULE_PREFIX "server" MODULE_EXT) : nullptr;
+            return scope ? scope->FindDeclaredClass(name).Get() : nullptr;
         }
 
-        void Classify(CSchemaType* type, Prop& p)
+        void Classify(CSchemaType* type, Field& f)
         {
-            p.typeName = type->m_sTypeName.Get();
+            f.typeName = type->m_sTypeName.Get();
             int size = 0;
             uint8 align = 0;
             type->GetSizeAndAlignment(size, align);
-            p.size = size;
+            f.size = size;
 
             switch (type->m_eTypeCategory)
             {
             case SCHEMA_TYPE_BUILTIN:
-            {
-                const auto builtin = static_cast<CSchemaType_Builtin*>(type)->m_eBuiltinType;
-                switch (builtin)
+                switch (static_cast<CSchemaType_Builtin*>(type)->m_eBuiltinType)
                 {
                 case SCHEMA_BUILTIN_TYPE_FLOAT32:
                 case SCHEMA_BUILTIN_TYPE_FLOAT64:
-                    p.kind = PropKind::Float;
-                    break;
+                    f.kind = Kind::Float;
+                    return;
                 case SCHEMA_BUILTIN_TYPE_BOOL:
-                    p.kind = PropKind::Bool;
-                    break;
+                    f.kind = Kind::Bool;
+                    return;
                 case SCHEMA_BUILTIN_TYPE_UINT8:
                 case SCHEMA_BUILTIN_TYPE_UINT16:
                 case SCHEMA_BUILTIN_TYPE_UINT32:
                 case SCHEMA_BUILTIN_TYPE_UINT64:
-                    p.kind = PropKind::Int;
-                    p.isSigned = false;
-                    break;
+                    f.isSigned = false;
+                    f.kind = Kind::Int;
+                    return;
                 default:
-                    p.kind = PropKind::Int;
-                    break;
+                    f.kind = Kind::Int;
+                    return;
                 }
-                return;
-            }
             case SCHEMA_TYPE_DECLARED_ENUM:
-                p.kind = PropKind::Int;
+                f.kind = Kind::Int;
                 return;
             case SCHEMA_TYPE_FIXED_ARRAY:
             {
                 auto* arr = static_cast<CSchemaType_FixedArray*>(type);
-                Prop elem;
-                Classify(arr->m_pElementType, elem);
-                if (elem.typeName == "char")
-                {
-                    p.kind = PropKind::CharArray;
-                    return;
-                }
-                p.kind = elem.kind;
-                p.isSigned = elem.isSigned;
-                p.size = arr->m_nElementSize;
-                p.count = arr->m_nElementCount;
+                if (arr->m_pElementType && strcmp(arr->m_pElementType->m_sTypeName.Get(), "char") == 0)
+                    f.kind = Kind::CharArray;
                 return;
             }
+            case SCHEMA_TYPE_POINTER:
+                f.kind = Kind::Pointer;
+                return;
+            case SCHEMA_TYPE_DECLARED_CLASS:
+                f.kind = Kind::Embedded;
+                break;
             default:
                 break;
             }
 
-            const std::string& n = p.typeName;
+            const std::string& n = f.typeName;
             if (n.rfind("CHandle<", 0) == 0 || n == "CEntityHandle")
-                p.kind = PropKind::Handle;
+                f.kind = Kind::Handle;
             else if (n == "Vector" || n == "QAngle" || n == "VectorWS")
-                p.kind = PropKind::Vector;
-            else if (n == "CUtlSymbolLarge")
-                p.kind = PropKind::Symbol;
-            else if (n == "CUtlString")
-                p.kind = PropKind::UtlString;
+                f.kind = Kind::Vector;
+            else if (n == "Color")
+                f.kind = Kind::Color;
+            else if (n == "CUtlSymbolLarge" || n == "CUtlString" || n == "CGlobalSymbol")
+                f.kind = Kind::StringPtr;
             else if (n == "GameTime_t")
             {
-                p.kind = PropKind::Float;
-                p.size = 4;
+                f.kind = Kind::Float;
+                f.size = 4;
             }
             else if (n == "GameTick_t" || n == "CEntityIndex" || n == "CPlayerSlot" || n == "CUtlStringToken")
             {
-                p.kind = PropKind::Int;
-                p.size = 4;
+                f.kind = Kind::Int;
+                f.size = 4;
             }
         }
 
-        // SourceMod names that are not CS2 fields.
-        const char* Alias(const char* name)
+        // By class and field name, through the class's bases; cached.
+        const Field& FindField(const char* className, const char* fieldName)
         {
-            static const std::pair<const char*, const char*> kAliases[] = {
-                { "m_vecOrigin", "m_pGameSceneNode.m_vecAbsOrigin" },
-                { "m_vecAbsOrigin", "m_pGameSceneNode.m_vecAbsOrigin" },
-                { "m_angRotation", "m_pGameSceneNode.m_angAbsRotation" },
-                { "m_angAbsRotation", "m_pGameSceneNode.m_angAbsRotation" },
-                { "m_hOwner", "m_hOwnerEntity" },
-            };
-            for (const auto& [from, to] : kAliases)
-                if (strcmp(name, from) == 0)
-                    return to;
-            return name;
-        }
+            static std::unordered_map<std::string, Field> s_cache;
+            std::string key = std::string(className) + "::" + fieldName;
+            auto it = s_cache.find(key);
+            if (it != s_cache.end())
+                return it->second;
 
-        bool ResolveProp(CEntityInstance* ent, const char* path, Prop& out)
-        {
-            CSchemaClassInfo* cls = ent->Schema_DynamicBinding().Get();
-            uint8_t* base = reinterpret_cast<uint8_t*>(ent);
-            int offset = 0;
-
-            std::string rest = Alias(path);
-            while (cls)
+            Field f;
+            f.name = fieldName;
+            for (CSchemaClassInfo* c = FindClass(className); c && !f.found; c = c->m_nBaseClassCount ? c->m_pBaseClasses[0].m_pClass : nullptr)
             {
-                const size_t dot = rest.find('.');
-                const std::string name = rest.substr(0, dot);
-
-                CSchemaClassInfo* declared = nullptr;
-                SchemaClassFieldData_t* field = FindField(cls, name.c_str(), &declared);
-                if (!field)
-                    return false;
-
-                if (dot == std::string::npos)
+                for (uint16 i = 0; i < c->m_nFieldCount; i++)
                 {
-                    out.base = base;
-                    out.declClass = declared->m_pszName;
-                    out.field = field->m_pszName;
-                    out.offset = offset + field->m_nSingleInheritanceOffset;
-                    Classify(field->m_pType, out);
-                    return true;
+                    if (strcmp(c->m_pFields[i].m_pszName, fieldName) == 0)
+                    {
+                        f.found = true;
+                        f.declClass = c->m_pszName;
+                        f.offset = c->m_pFields[i].m_nSingleInheritanceOffset;
+                        Classify(c->m_pFields[i].m_pType, f);
+                        break;
+                    }
                 }
-
-                rest = rest.substr(dot + 1);
-                CSchemaType* type = field->m_pType;
-                if (type->m_eTypeCategory == SCHEMA_TYPE_DECLARED_CLASS)
-                {
-                    // Embedded: the next field is in the same object, further in.
-                    offset += field->m_nSingleInheritanceOffset;
-                    base += offset;
-                    offset = 0;
-                    cls = static_cast<CSchemaType_DeclaredClass*>(type)->m_pClassInfo;
-                }
-                else if (type->m_eTypeCategory == SCHEMA_TYPE_POINTER)
-                {
-                    CSchemaType* pointee = static_cast<CSchemaType_Ptr*>(type)->m_pObjectType;
-                    if (!pointee || pointee->m_eTypeCategory != SCHEMA_TYPE_DECLARED_CLASS)
-                        return false;
-                    base = *reinterpret_cast<uint8_t**>(base + offset + field->m_nSingleInheritanceOffset);
-                    if (!base)
-                        return false;
-                    offset = 0;
-                    cls = static_cast<CSchemaType_DeclaredClass*>(pointee)->m_pClassInfo;
-                }
-                else
-                    return false;
             }
-            return false;
+            return s_cache.emplace(std::move(key), std::move(f)).first->second;
         }
 
-        // A client index is the controller, but CS2 keeps health, armor,
-        // movement and the rest on the pawn: a prop the controller does not
-        // have is looked up on the pawn it drives.
-        CEntityInstance* PawnOf(CEntityInstance* ent)
+        // ---- SchemaObject ---------------------------------------------------------
+
+        enum class Root
         {
-            if (!ent || strcmp(ent->GetClassname(), "cs_player_controller") != 0)
+            Entity,
+            GameRules,
+            Raw,
+        };
+
+        struct SchemaRef : HandleObject
+        {
+            Root root = Root::Entity;
+            CEntityHandle entity;
+            void* raw = nullptr;
+            std::vector<std::pair<std::string, std::string>> chain;   // (class, field) from the root
+        };
+
+        std::unordered_map<std::string, cell_t> g_refsByKey;
+
+        void* FollowStep(void* base, const std::string& cls, const std::string& field)
+        {
+            if (!base)
                 return nullptr;
-            return static_cast<CCSPlayerController*>(ent)->GetPlayerPawn();
+            const Field& f = FindField(cls.c_str(), field.c_str());
+            if (!f.found)
+                return nullptr;
+            uint8_t* addr = static_cast<uint8_t*>(base) + f.offset;
+            if (f.kind == Kind::Pointer)
+                return *reinterpret_cast<void**>(addr);
+            if (f.kind == Kind::Embedded)
+                return addr;
+            return nullptr;
         }
 
-        bool FindProp(IPluginContext* ctx, CEntityInstance* ent, const char* path, Prop& out)
+        void* ResolveRef(const SchemaRef& ref)
         {
-            CEntityInstance* pawn = PawnOf(ent);
-            if (ResolveProp(ent, path, out))
+            void* base = nullptr;
+            switch (ref.root)
             {
-                // Declared on CBaseEntity and the like, the controller has
-                // the field too, but the live value is the pawn one.
-                Prop onPawn;
-                if (pawn && !strstr(out.declClass, "Controller") && ResolveProp(pawn, path, onPawn))
-                    out = onPawn;
-                return true;
+            case Root::Entity:
+                base = ref.entity.IsValid() ? GetEntitySystem()->GetEntityInstance(ref.entity) : nullptr;
+                break;
+            case Root::GameRules:
+                base = entities::entitiesManager.GetGameRules();
+                break;
+            case Root::Raw:
+                base = ref.raw;
+                break;
             }
-            if (pawn && ResolveProp(pawn, path, out))
-                return true;
-            ctx->ThrowNativeError("Property \"%s\" not found (entity %d/%s)", path, IndexOf(ent), ent->GetClassname());
-            return false;
+            for (const auto& [cls, field] : ref.chain)
+                base = FollowStep(base, cls, field);
+            return base;
         }
 
-        bool CheckElement(IPluginContext* ctx, const Prop& p, cell_t element)
+        // The handle for this way of reaching an object, made once.
+        cell_t RefFor(Root root, CEntityHandle entity, void* raw, std::vector<std::pair<std::string, std::string>> chain)
         {
-            if (element < 0 || element >= p.count)
+            std::string key = std::to_string(static_cast<int>(root)) + ":" + std::to_string(entity.ToInt()) + ":"
+                + std::to_string(reinterpret_cast<uintptr_t>(raw));
+            for (const auto& [cls, field] : chain)
+                key += "/" + cls + "::" + field;
+
+            auto it = g_refsByKey.find(key);
+            if (it != g_refsByKey.end() && Handles().Read(it->second, Types().schemaObject))
+                return it->second;
+
+            // Entities come and go; drop the references whose entity is gone
+            // before the table grows on.
+            if (g_refsByKey.size() > 4096)
             {
-                ctx->ThrowNativeError("Element %d is out of bounds (Prop %s has %d elements).", element, p.field, p.count);
+                for (auto i = g_refsByKey.begin(); i != g_refsByKey.end();)
+                {
+                    auto* r = static_cast<SchemaRef*>(Handles().Read(i->second, Types().schemaObject));
+                    if (!r || (r->root == Root::Entity && !GetEntitySystem()->GetEntityInstance(r->entity)))
+                    {
+                        if (r)
+                            Handles().Free(i->second, 0, true);
+                        i = g_refsByKey.erase(i);
+                    }
+                    else
+                        ++i;
+                }
+            }
+
+            auto* ref = new SchemaRef();
+            ref->root = root;
+            ref->entity = entity;
+            ref->raw = raw;
+            ref->chain = std::move(chain);
+            const cell_t handle = Handles().Create(Types().schemaObject, ref, 0);
+            if (handle)
+                g_refsByKey[key] = handle;
+            else
+                delete ref;
+            return handle;
+        }
+
+        // What an `instance` argument points at: an entity by index, or a SchemaObject.
+        void* Base(IPluginContext* ctx, cell_t instance, const SchemaRef** ref = nullptr)
+        {
+            if (ref)
+                *ref = nullptr;
+            if (instance >= 0 && instance < kMaxEntities)
+                return CheckEntity(ctx, instance);
+            if (instance == -1)
+            {
+                ctx->ThrowNativeError("Null schema object");
+                return nullptr;
+            }
+            auto* r = static_cast<SchemaRef*>(ReadHandle(ctx, instance, Types().schemaObject));
+            if (!r)
+                return nullptr;
+            if (ref)
+                *ref = r;
+            void* base = ResolveRef(*r);
+            if (!base)
+                ctx->ThrowNativeError("Schema object %x no longer exists", instance);
+            return base;
+        }
+
+        // The object behind a SchemaObject `this` (services, game rules).
+        template <typename T>
+        T* ObjectOf(IPluginContext* ctx, cell_t instance)
+        {
+            if (instance == 0)
+            {
+                ctx->ThrowNativeError("Null schema object");
+                return nullptr;
+            }
+            return static_cast<T*>(Base(ctx, instance));
+        }
+
+        struct Access
+        {
+            uint8_t* base = nullptr;
+            uint8_t* addr = nullptr;
+            const Field* field = nullptr;
+        };
+
+        bool Lookup(IPluginContext* ctx, const cell_t* params, Access& a, Kind want, const char* what)
+        {
+            const char* cls = LocalString(ctx, params[2]);
+            const char* name = LocalString(ctx, params[3]);
+            const Field& f = FindField(cls, name);
+            if (!f.found)
+            {
+                ctx->ThrowNativeError("No field %s::%s in the running game's schema", cls, name);
                 return false;
             }
+            const bool ok = f.kind == want || (want == Kind::Int && f.kind == Kind::Bool) || (want == Kind::StringPtr && f.kind == Kind::CharArray);
+            if (!ok)
+            {
+                ctx->ThrowNativeError("Field %s::%s is %s, not %s", cls, name, f.typeName.c_str(), what);
+                return false;
+            }
+            if (params[1] == 0)
+            {
+                ctx->ThrowNativeError("Null schema object");
+                return false;
+            }
+            void* base = Base(ctx, params[1]);
+            if (!base)
+                return false;
+            a.base = static_cast<uint8_t*>(base);
+            a.addr = a.base + f.offset;
+            a.field = &f;
             return true;
         }
 
-        uint8_t* Addr(const Prop& p, cell_t element)
+        // A networked field changed: tell the owner, through the class's
+        // chainer when it has one -- what SCHEMA_FIELD's setter does.
+        void Changed(const Access& a)
         {
-            return p.base + p.offset + element * p.size;
-        }
-
-        // A networked field changed: tell the owning entity, through the
-        // class's chainer when it has one (services, scene node, embedded
-        // properties) -- what SCHEMA_FIELD's setter does.
-        void Changed(const Prop& p, cell_t element)
-        {
-            const SchemaKey key = schema::GetOffset(p.declClass, hash_32_fnv1a_const(p.declClass), p.field, hash_32_fnv1a_const(p.field));
+            const char* cls = a.field->declClass.c_str();
+            const char* name = a.field->name.c_str();
+            const SchemaKey key = schema::GetOffset(cls, hash_32_fnv1a_const(cls), name, hash_32_fnv1a_const(name));
             if (!key.valid || !key.networked)
                 return;
-            const int extra = element * p.size;
-            const int16_t chain = schema::FindChainOffset(p.declClass);
+            const int16_t chain = schema::FindChainOffset(cls);
             if (chain != 0)
-                ChainNetworkStateChanged(reinterpret_cast<uintptr_t>(p.base) + chain, key.offset + extra);
+                ChainNetworkStateChanged(reinterpret_cast<uintptr_t>(a.base) + chain, key.offset);
             else
-                EntityNetworkStateChanged(reinterpret_cast<uintptr_t>(p.base), key.offset + extra);
+                EntityNetworkStateChanged(reinterpret_cast<uintptr_t>(a.base), key.offset);
         }
 
         cell_t ReadInt(const uint8_t* addr, int size, bool isSigned)
@@ -389,755 +472,256 @@ namespace sourcepawn
             }
         }
 
-        cell_t HandleToIndex(const uint8_t* addr)
+        // Source2ModSchema.GetInt(any instance, const char[] className, const char[] field)
+        cell_t N_GetInt(IPluginContext* ctx, const cell_t* params)
         {
-            const CEntityHandle h = *reinterpret_cast<const CEntityHandle*>(addr);
-            CEntityInstance* inst = h.IsValid() ? GetEntitySystem()->GetEntityInstance(h) : nullptr;
-            return IndexOf(inst);
+            Access a;
+            return Lookup(ctx, params, a, Kind::Int, "an integer") ? ReadInt(a.addr, a.field->size, a.field->isSigned) : 0;
         }
 
-        // GetEntProp(entity, PropType type, const char[] prop, int size=4, int element=0)
-        cell_t N_GetEntProp(IPluginContext* ctx, const cell_t* params)
+        cell_t N_SetInt(IPluginContext* ctx, const cell_t* params)
         {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            Prop p;
-            if (!ent || !FindProp(ctx, ent, LocalString(ctx, params[3]), p))
-                return 0;
-            const cell_t element = params[0] >= 5 ? params[5] : 0;
-            if (!CheckElement(ctx, p, element))
-                return 0;
-            switch (p.kind)
+            Access a;
+            if (Lookup(ctx, params, a, Kind::Int, "an integer"))
             {
-            case PropKind::Int:
-            case PropKind::Bool:
-                return ReadInt(Addr(p, element), p.size, p.isSigned);
-            case PropKind::Handle:
-                return *reinterpret_cast<const int32_t*>(Addr(p, element));
-            default:
-                return ctx->ThrowNativeError("Property \"%s\" is not an integer (%s)", p.field, p.typeName.c_str());
+                WriteInt(a.addr, a.field->size, a.field->kind == Kind::Bool ? (params[4] != 0) : params[4]);
+                Changed(a);
             }
-        }
-
-        // SetEntProp(entity, PropType type, const char[] prop, any value, int size=4, int element=0)
-        cell_t N_SetEntProp(IPluginContext* ctx, const cell_t* params)
-        {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            Prop p;
-            if (!ent || !FindProp(ctx, ent, LocalString(ctx, params[3]), p))
-                return 0;
-            const cell_t element = params[0] >= 6 ? params[6] : 0;
-            if (!CheckElement(ctx, p, element))
-                return 0;
-            if (p.kind != PropKind::Int && p.kind != PropKind::Bool)
-                return ctx->ThrowNativeError("Property \"%s\" is not an integer (%s)", p.field, p.typeName.c_str());
-            WriteInt(Addr(p, element), p.size, p.kind == PropKind::Bool ? (params[4] != 0) : params[4]);
-            Changed(p, element);
             return 0;
         }
 
-        cell_t N_GetEntPropFloat(IPluginContext* ctx, const cell_t* params)
+        cell_t N_GetBool(IPluginContext* ctx, const cell_t* params)
         {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            Prop p;
-            if (!ent || !FindProp(ctx, ent, LocalString(ctx, params[3]), p))
-                return 0;
-            const cell_t element = params[0] >= 4 ? params[4] : 0;
-            if (!CheckElement(ctx, p, element))
-                return 0;
-            if (p.kind != PropKind::Float)
-                return ctx->ThrowNativeError("Property \"%s\" is not a float (%s)", p.field, p.typeName.c_str());
-            const uint8_t* addr = Addr(p, element);
-            const float value = p.size == 8 ? static_cast<float>(*reinterpret_cast<const double*>(addr)) : *reinterpret_cast<const float*>(addr);
-            return sp_ftoc(value);
+            Access a;
+            return Lookup(ctx, params, a, Kind::Bool, "a bool") && *a.addr != 0;
         }
 
-        cell_t N_SetEntPropFloat(IPluginContext* ctx, const cell_t* params)
+        cell_t N_SetBool(IPluginContext* ctx, const cell_t* params)
         {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            Prop p;
-            if (!ent || !FindProp(ctx, ent, LocalString(ctx, params[3]), p))
+            Access a;
+            if (Lookup(ctx, params, a, Kind::Bool, "a bool"))
+            {
+                *a.addr = params[4] ? 1 : 0;
+                Changed(a);
+            }
+            return 0;
+        }
+
+        cell_t N_GetFloat(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            if (!Lookup(ctx, params, a, Kind::Float, "a float"))
                 return 0;
-            const cell_t element = params[0] >= 5 ? params[5] : 0;
-            if (!CheckElement(ctx, p, element))
+            const float v = a.field->size == 8 ? static_cast<float>(*reinterpret_cast<double*>(a.addr)) : *reinterpret_cast<float*>(a.addr);
+            return sp_ftoc(v);
+        }
+
+        cell_t N_SetFloat(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            if (!Lookup(ctx, params, a, Kind::Float, "a float"))
                 return 0;
-            if (p.kind != PropKind::Float)
-                return ctx->ThrowNativeError("Property \"%s\" is not a float (%s)", p.field, p.typeName.c_str());
-            uint8_t* addr = Addr(p, element);
-            if (p.size == 8)
-                *reinterpret_cast<double*>(addr) = sp_ctof(params[4]);
+            if (a.field->size == 8)
+                *reinterpret_cast<double*>(a.addr) = sp_ctof(params[4]);
             else
-                *reinterpret_cast<float*>(addr) = sp_ctof(params[4]);
-            Changed(p, element);
+                *reinterpret_cast<float*>(a.addr) = sp_ctof(params[4]);
+            Changed(a);
             return 0;
         }
 
-        cell_t N_GetEntPropEnt(IPluginContext* ctx, const cell_t* params)
+        cell_t N_GetHandle(IPluginContext* ctx, const cell_t* params)
         {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            Prop p;
-            if (!ent || !FindProp(ctx, ent, LocalString(ctx, params[3]), p))
+            Access a;
+            if (!Lookup(ctx, params, a, Kind::Handle, "an entity handle"))
                 return -1;
-            const cell_t element = params[0] >= 4 ? params[4] : 0;
-            if (!CheckElement(ctx, p, element))
-                return -1;
-            if (p.kind != PropKind::Handle)
-                return ctx->ThrowNativeError("Property \"%s\" is not an entity handle (%s)", p.field, p.typeName.c_str());
-            return HandleToIndex(Addr(p, element));
+            const CEntityHandle h = *reinterpret_cast<CEntityHandle*>(a.addr);
+            return IndexOf(h.IsValid() ? GetEntitySystem()->GetEntityInstance(h) : nullptr);
         }
 
-        cell_t N_SetEntPropEnt(IPluginContext* ctx, const cell_t* params)
+        cell_t N_SetHandle(IPluginContext* ctx, const cell_t* params)
         {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            Prop p;
-            if (!ent || !FindProp(ctx, ent, LocalString(ctx, params[3]), p))
+            Access a;
+            if (!Lookup(ctx, params, a, Kind::Handle, "an entity handle"))
                 return 0;
-            const cell_t element = params[0] >= 5 ? params[5] : 0;
-            if (!CheckElement(ctx, p, element))
+            bool ok;
+            CEntityInstance* other = OptionalEntity(ctx, params[4], &ok);
+            if (!ok)
                 return 0;
-            if (p.kind != PropKind::Handle)
-                return ctx->ThrowNativeError("Property \"%s\" is not an entity handle (%s)", p.field, p.typeName.c_str());
-            CEntityHandle h;
-            if (params[4] != -1)
-            {
-                CEntityInstance* other = CheckEntity(ctx, params[4]);
-                if (!other)
-                    return 0;
-                h = other->GetRefEHandle();
-            }
-            *reinterpret_cast<CEntityHandle*>(Addr(p, element)) = h;
-            Changed(p, element);
+            *reinterpret_cast<CEntityHandle*>(a.addr) = other ? other->GetRefEHandle() : CEntityHandle();
+            Changed(a);
             return 0;
         }
 
-        cell_t N_GetEntPropVector(IPluginContext* ctx, const cell_t* params)
+        cell_t N_GetEntityPointer(IPluginContext* ctx, const cell_t* params)
         {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            Prop p;
-            if (!ent || !FindProp(ctx, ent, LocalString(ctx, params[3]), p))
+            Access a;
+            if (!Lookup(ctx, params, a, Kind::Pointer, "a pointer"))
+                return -1;
+            return IndexOf(*reinterpret_cast<CEntityInstance**>(a.addr));
+        }
+
+        // Source2ModSchema.GetObject: a pointer to, or an embedded, schema object.
+        cell_t N_GetObject(IPluginContext* ctx, const cell_t* params)
+        {
+            const char* cls = LocalString(ctx, params[2]);
+            const char* name = LocalString(ctx, params[3]);
+            const Field& f = FindField(cls, name);
+            if (!f.found || (f.kind != Kind::Pointer && f.kind != Kind::Embedded))
+                return ctx->ThrowNativeError("Field %s::%s is not a schema object", cls, name);
+            if (params[1] == 0)
+                return ctx->ThrowNativeError("Null schema object");
+
+            const SchemaRef* parent = nullptr;
+            void* base = Base(ctx, params[1], &parent);
+            if (!base || !FollowStep(base, cls, name))
                 return 0;
-            const cell_t element = params[0] >= 5 ? params[5] : 0;
-            if (!CheckElement(ctx, p, element))
+
+            std::vector<std::pair<std::string, std::string>> chain;
+            if (parent)
+                chain = parent->chain;
+            chain.emplace_back(cls, name);
+
+            if (parent)
+                return RefFor(parent->root, parent->entity, parent->raw, std::move(chain));
+            CEntityInstance* ent = static_cast<CEntityInstance*>(base);
+            return RefFor(Root::Entity, ent->GetRefEHandle(), nullptr, std::move(chain));
+        }
+
+        cell_t N_GetVector(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            if (!Lookup(ctx, params, a, Kind::Vector, "a vector"))
                 return 0;
-            if (p.kind != PropKind::Vector)
-                return ctx->ThrowNativeError("Property \"%s\" is not a vector (%s)", p.field, p.typeName.c_str());
-            const float* v = reinterpret_cast<const float*>(Addr(p, element));
             cell_t* out;
             ctx->LocalToPhysAddr(params[4], &out);
             for (int i = 0; i < 3; i++)
-                out[i] = sp_ftoc(v[i]);
+                out[i] = sp_ftoc(reinterpret_cast<float*>(a.addr)[i]);
             return 0;
         }
 
-        cell_t N_SetEntPropVector(IPluginContext* ctx, const cell_t* params)
+        cell_t N_SetVector(IPluginContext* ctx, const cell_t* params)
         {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            const char* path = LocalString(ctx, params[3]);
+            Access a;
+            if (!Lookup(ctx, params, a, Kind::Vector, "a vector"))
+                return 0;
             cell_t* in;
             ctx->LocalToPhysAddr(params[4], &in);
-            const Vector v(sp_ctof(in[0]), sp_ctof(in[1]), sp_ctof(in[2]));
-
-            // The scene node's transform is not set by writing it: teleport.
-            if (ent)
-            {
-                const char* alias = Alias(path);
-                if (strcmp(alias, "m_pGameSceneNode.m_vecAbsOrigin") == 0)
-                {
-                    static_cast<CBaseEntity*>(ent)->Teleport(&v, nullptr, nullptr);
-                    return 0;
-                }
-                if (strcmp(alias, "m_pGameSceneNode.m_angAbsRotation") == 0)
-                {
-                    const QAngle a(v.x, v.y, v.z);
-                    static_cast<CBaseEntity*>(ent)->Teleport(nullptr, &a, nullptr);
-                    return 0;
-                }
-            }
-
-            Prop p;
-            if (!ent || !FindProp(ctx, ent, path, p))
-                return 0;
-            const cell_t element = params[0] >= 5 ? params[5] : 0;
-            if (!CheckElement(ctx, p, element))
-                return 0;
-            if (p.kind != PropKind::Vector)
-                return ctx->ThrowNativeError("Property \"%s\" is not a vector (%s)", p.field, p.typeName.c_str());
-            float* dest = reinterpret_cast<float*>(Addr(p, element));
-            dest[0] = v.x;
-            dest[1] = v.y;
-            dest[2] = v.z;
-            Changed(p, element);
-            return 0;
-        }
-
-        // GetEntPropString(entity, type, prop, char[] buffer, int maxlen, int element=0)
-        cell_t N_GetEntPropString(IPluginContext* ctx, const cell_t* params)
-        {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            if (!ent)
-                return 0;
-            const char* path = LocalString(ctx, params[3]);
-            size_t written = 0;
-
-            // Source 1's names for what CS2 keeps in the entity identity.
-            if (strcmp(path, "m_iClassname") == 0 || strcmp(path, "m_designerName") == 0)
-            {
-                ctx->StringToLocalUTF8(params[4], params[5], ent->GetClassname(), &written);
-                return static_cast<cell_t>(written);
-            }
-            if (strcmp(path, "m_iName") == 0)
-            {
-                const char* name = ent->m_pEntity->m_name.String();
-                ctx->StringToLocalUTF8(params[4], params[5], name ? name : "", &written);
-                return static_cast<cell_t>(written);
-            }
-
-            Prop p;
-            if (!FindProp(ctx, ent, path, p))
-                return 0;
-            const uint8_t* addr = p.base + p.offset;
-            const char* str = nullptr;
-            std::string tmp;
-            switch (p.kind)
-            {
-            case PropKind::CharArray:
-                tmp.assign(reinterpret_cast<const char*>(addr), strnlen(reinterpret_cast<const char*>(addr), static_cast<size_t>(p.size)));
-                str = tmp.c_str();
-                break;
-            case PropKind::Symbol:
-            case PropKind::UtlString:
-                str = *reinterpret_cast<const char* const*>(addr);
-                break;
-            default:
-                return ctx->ThrowNativeError("Property \"%s\" is not a string (%s)", p.field, p.typeName.c_str());
-            }
-            ctx->StringToLocalUTF8(params[4], params[5], str ? str : "", &written);
-            return static_cast<cell_t>(written);
-        }
-
-        // SetEntPropString(entity, type, prop, const char[] buffer, int element=0): char arrays.
-        cell_t N_SetEntPropString(IPluginContext* ctx, const cell_t* params)
-        {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            Prop p;
-            if (!ent || !FindProp(ctx, ent, LocalString(ctx, params[3]), p))
-                return 0;
-            if (p.kind != PropKind::CharArray)
-                return ctx->ThrowNativeError("Property \"%s\" is not a writable string (%s; only char arrays are)", p.field, p.typeName.c_str());
-            const char* src = LocalString(ctx, params[4]);
-            const size_t len = std::min(strlen(src), static_cast<size_t>(p.size) - 1);
-            char* dest = reinterpret_cast<char*>(p.base + p.offset);
-            memcpy(dest, src, len);
-            dest[len] = '\0';
-            Changed(p, 0);
-            return static_cast<cell_t>(len);
-        }
-
-        cell_t N_GetEntPropArraySize(IPluginContext* ctx, const cell_t* params)
-        {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            Prop p;
-            if (!ent || !FindProp(ctx, ent, LocalString(ctx, params[3]), p))
-                return 0;
-            return p.count > 1 ? p.count : 0;
-        }
-
-        // HasEntProp is a stock over FindDataMapInfo / FindSendPropInfo in
-        // entity.inc; these give the offset or -1.
-        // FindDataMapInfo(entity, prop, &type, &num_bits, &local_offset)
-        cell_t N_FindDataMapInfo(IPluginContext* ctx, const cell_t* params)
-        {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            Prop p;
-            if (!ent || !ResolveProp(ent, LocalString(ctx, params[2]), p))
-                return -1;
-            if (p.base != reinterpret_cast<uint8_t*>(ent))
-                return -1;      // behind a pointer: no offset from the entity
-            const cell_t offset = p.offset;
-            cell_t* out;
-            if (params[0] >= 5 && ctx->LocalToPhysAddr(params[5], &out) == SP_ERROR_NONE)
-                *out = offset;
-            return offset;
-        }
-
-        // FindSendPropInfo(cls, prop, &type, &num_bits, &local_offset, &array_size)
-        cell_t N_FindSendPropInfo(IPluginContext* ctx, const cell_t* params)
-        {
-            const char* cls = LocalString(ctx, params[1]);
-            const char* prop = LocalString(ctx, params[2]);
-            const SchemaKey key = schema::GetOffset(cls, hash_32_fnv1a_const(cls), prop, hash_32_fnv1a_const(prop));
-            if (!key.valid)
-                return -1;
-            cell_t* out;
-            if (params[0] >= 5 && ctx->LocalToPhysAddr(params[5], &out) == SP_ERROR_NONE)
-                *out = key.offset;
-            return key.offset;
-        }
-
-        // ---- entity data by offset ----------------------------------------------
-
-        uint8_t* DataAt(IPluginContext* ctx, cell_t entity, cell_t offset, cell_t size, CEntityInstance** out = nullptr)
-        {
-            CEntityInstance* ent = CheckEntity(ctx, entity);
-            if (!ent)
-                return nullptr;
-            if (offset <= 0 || offset > 65535)
-            {
-                ctx->ThrowNativeError("Offset %d is invalid", offset);
-                return nullptr;
-            }
-            if (out)
-                *out = ent;
-            return reinterpret_cast<uint8_t*>(ent) + offset;
-        }
-
-        void DataChanged(CEntityInstance* ent, cell_t offset, bool change)
-        {
-            if (change)
-                EntityNetworkStateChanged(reinterpret_cast<uintptr_t>(ent), offset);
-        }
-
-        cell_t N_GetEntData(IPluginContext* ctx, const cell_t* params)
-        {
-            const cell_t size = params[0] >= 3 ? params[3] : 4;
-            uint8_t* addr = DataAt(ctx, params[1], params[2], size);
-            return addr ? ReadInt(addr, size, true) : 0;
-        }
-
-        cell_t N_SetEntData(IPluginContext* ctx, const cell_t* params)
-        {
-            CEntityInstance* ent;
-            const cell_t size = params[0] >= 4 ? params[4] : 4;
-            uint8_t* addr = DataAt(ctx, params[1], params[2], size, &ent);
-            if (addr)
-            {
-                WriteInt(addr, size, params[3]);
-                DataChanged(ent, params[2], params[0] >= 5 && params[5]);
-            }
-            return 0;
-        }
-
-        cell_t N_GetEntDataFloat(IPluginContext* ctx, const cell_t* params)
-        {
-            uint8_t* addr = DataAt(ctx, params[1], params[2], 4);
-            return addr ? sp_ftoc(*reinterpret_cast<float*>(addr)) : 0;
-        }
-
-        cell_t N_SetEntDataFloat(IPluginContext* ctx, const cell_t* params)
-        {
-            CEntityInstance* ent;
-            uint8_t* addr = DataAt(ctx, params[1], params[2], 4, &ent);
-            if (addr)
-            {
-                *reinterpret_cast<float*>(addr) = sp_ctof(params[3]);
-                DataChanged(ent, params[2], params[0] >= 4 && params[4]);
-            }
-            return 0;
-        }
-
-        cell_t N_GetEntDataEnt2(IPluginContext* ctx, const cell_t* params)
-        {
-            uint8_t* addr = DataAt(ctx, params[1], params[2], 4);
-            return addr ? HandleToIndex(addr) : -1;
-        }
-
-        cell_t N_SetEntDataEnt2(IPluginContext* ctx, const cell_t* params)
-        {
-            CEntityInstance* ent;
-            uint8_t* addr = DataAt(ctx, params[1], params[2], 4, &ent);
-            if (!addr)
-                return 0;
-            CEntityHandle h;
-            if (params[3] != -1)
-            {
-                CEntityInstance* other = CheckEntity(ctx, params[3]);
-                if (!other)
-                    return 0;
-                h = other->GetRefEHandle();
-            }
-            *reinterpret_cast<CEntityHandle*>(addr) = h;
-            DataChanged(ent, params[2], params[0] >= 4 && params[4]);
-            return 0;
-        }
-
-        cell_t N_GetEntDataVector(IPluginContext* ctx, const cell_t* params)
-        {
-            uint8_t* addr = DataAt(ctx, params[1], params[2], 12);
-            if (!addr)
-                return 0;
-            cell_t* out;
-            ctx->LocalToPhysAddr(params[3], &out);
             for (int i = 0; i < 3; i++)
-                out[i] = sp_ftoc(reinterpret_cast<float*>(addr)[i]);
+                reinterpret_cast<float*>(a.addr)[i] = sp_ctof(in[i]);
+            Changed(a);
             return 0;
         }
 
-        cell_t N_SetEntDataVector(IPluginContext* ctx, const cell_t* params)
+        cell_t N_GetColor(IPluginContext* ctx, const cell_t* params)
         {
-            CEntityInstance* ent;
-            uint8_t* addr = DataAt(ctx, params[1], params[2], 12, &ent);
-            if (!addr)
+            Access a;
+            if (!Lookup(ctx, params, a, Kind::Color, "a color"))
+                return 0;
+            cell_t* out;
+            ctx->LocalToPhysAddr(params[4], &out);
+            for (int i = 0; i < 4; i++)
+                out[i] = a.addr[i];
+            return 0;
+        }
+
+        cell_t N_SetColor(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            if (!Lookup(ctx, params, a, Kind::Color, "a color"))
                 return 0;
             cell_t* in;
-            ctx->LocalToPhysAddr(params[3], &in);
-            for (int i = 0; i < 3; i++)
-                reinterpret_cast<float*>(addr)[i] = sp_ctof(in[i]);
-            DataChanged(ent, params[2], params[0] >= 4 && params[4]);
+            ctx->LocalToPhysAddr(params[4], &in);
+            for (int i = 0; i < 4; i++)
+                a.addr[i] = static_cast<uint8_t>(in[i]);
+            Changed(a);
             return 0;
         }
 
-        cell_t N_GetEntDataString(IPluginContext* ctx, const cell_t* params)
+        cell_t N_GetString(IPluginContext* ctx, const cell_t* params)
         {
-            uint8_t* addr = DataAt(ctx, params[1], params[2], 1);
-            if (!addr)
+            Access a;
+            if (!Lookup(ctx, params, a, Kind::StringPtr, "a string"))
                 return 0;
+            std::string value;
+            if (a.field->kind == Kind::CharArray)
+                value.assign(reinterpret_cast<const char*>(a.addr), strnlen(reinterpret_cast<const char*>(a.addr), static_cast<size_t>(a.field->size)));
+            else if (const char* s = *reinterpret_cast<const char* const*>(a.addr))
+                value = s;
             size_t written = 0;
-            const std::string str(reinterpret_cast<const char*>(addr), strnlen(reinterpret_cast<const char*>(addr), static_cast<size_t>(std::max(params[4], 1))));
-            ctx->StringToLocalUTF8(params[3], params[4], str.c_str(), &written);
+            ctx->StringToLocalUTF8(params[4], params[5], value.c_str(), &written);
             return static_cast<cell_t>(written);
         }
 
-        cell_t N_SetEntDataString(IPluginContext* ctx, const cell_t* params)
+        cell_t N_SetString(IPluginContext* ctx, const cell_t* params)
         {
-            CEntityInstance* ent;
-            uint8_t* addr = DataAt(ctx, params[1], params[2], 1, &ent);
-            if (!addr || params[4] < 1)
+            Access a;
+            if (!Lookup(ctx, params, a, Kind::StringPtr, "a string"))
                 return 0;
-            const char* src = LocalString(ctx, params[3]);
-            const size_t len = std::min(strlen(src), static_cast<size_t>(params[4] - 1));
-            memcpy(addr, src, len);
-            addr[len] = '\0';
-            DataChanged(ent, params[2], params[0] >= 5 && params[5]);
-            return static_cast<cell_t>(len);
+            if (a.field->kind != Kind::CharArray)
+                return ctx->ThrowNativeError("Field %s::%s (%s) cannot be set from a script; only char arrays can",
+                                             a.field->declClass.c_str(), a.field->name.c_str(), a.field->typeName.c_str());
+            const char* src = LocalString(ctx, params[4]);
+            const size_t len = std::min(strlen(src), static_cast<size_t>(a.field->size) - 1);
+            memcpy(a.addr, src, len);
+            a.addr[len] = '\0';
+            Changed(a);
+            return 0;
         }
 
-        cell_t N_ChangeEdictState(IPluginContext* ctx, const cell_t* params)
+        cell_t N_GetOffset(IPluginContext* ctx, const cell_t* params)
+        {
+            const Field& f = FindField(LocalString(ctx, params[1]), LocalString(ctx, params[2]));
+            return f.found ? f.offset : -1;
+        }
+
+        // ---- CEntityInstance -----------------------------------------------------
+
+        cell_t N_EntIsValid(IPluginContext*, const cell_t* params)
+        {
+            return InstanceAt(params[1]) != nullptr;
+        }
+
+        cell_t N_EntGetClassname(IPluginContext* ctx, const cell_t* params)
         {
             CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            if (ent && params[0] >= 2 && params[2] > 0)
-                EntityNetworkStateChanged(reinterpret_cast<uintptr_t>(ent), params[2]);
-            return 0;
+            size_t written = 0;
+            if (ent)
+                ctx->StringToLocalUTF8(params[2], params[3], ent->GetClassname(), &written);
+            return static_cast<cell_t>(written);
         }
 
-        // ---- entities -----------------------------------------------------------
-
-        cell_t N_GetMaxEntities(IPluginContext*, const cell_t*)
-        {
-            return kMaxEntities;
-        }
-
-        cell_t N_GetEntityCount(IPluginContext*, const cell_t*)
-        {
-            cell_t count = 0;
-            for (cell_t i = 0; i < kMaxEntities; i++)
-                if (InstanceAt(i))
-                    count++;
-            return count;
-        }
-
-        cell_t N_IsValidEntity(IPluginContext*, const cell_t* params)
-        {
-            return Resolve(params[1]) != nullptr;
-        }
-
-        cell_t N_IsEntNetworkable(IPluginContext*, const cell_t* params)
-        {
-            CEntityInstance* ent = Resolve(params[1]);
-            return ent && IndexOf(ent) < 16384;
-        }
-
-        cell_t N_RemoveEntity(IPluginContext* ctx, const cell_t* params)
-        {
-            if (CEntityInstance* ent = CheckEntity(ctx, params[1]))
-                static_cast<CBaseEntity*>(ent)->Remove();
-            return 0;
-        }
-
-        cell_t N_GetEdictClassname(IPluginContext* ctx, const cell_t* params)
-        {
-            CEntityInstance* ent = Resolve(params[1]);
-            if (!ent)
-                return 0;
-            ctx->StringToLocalUTF8(params[2], params[3], ent->GetClassname(), nullptr);
-            return 1;
-        }
-
-        // The schema class, what Source 1 called the server class.
-        cell_t N_GetEntityNetClass(IPluginContext* ctx, const cell_t* params)
-        {
-            CEntityInstance* ent = Resolve(params[1]);
-            CSchemaClassInfo* cls = ent ? ent->Schema_DynamicBinding().Get() : nullptr;
-            if (!cls)
-                return 0;
-            ctx->StringToLocalUTF8(params[2], params[3], cls->m_pszName, nullptr);
-            return 1;
-        }
-
-        cell_t N_EntIndexToEntRef(IPluginContext*, const cell_t* params)
-        {
-            return RefOf(Resolve(params[1]));
-        }
-
-        cell_t N_EntRefToEntIndex(IPluginContext*, const cell_t* params)
-        {
-            if (!(static_cast<uint32_t>(params[1]) & kRefFlag))
-                return InstanceAt(params[1]) ? params[1] : -1;
-            return IndexOf(Resolve(params[1]));
-        }
-
-        cell_t N_MakeCompatEntRef(IPluginContext*, const cell_t* params)
-        {
-            return (static_cast<uint32_t>(params[1]) & kRefFlag) ? params[1] : RefOf(Resolve(params[1]));
-        }
-
-        // ---- sdktools: creating and driving entities ------------------------------
-
-        // DispatchKeyValue before DispatchSpawn: CS2 takes key values with the spawn.
-        std::unordered_map<cell_t, std::vector<std::pair<std::string, std::string>>> g_pendingKeyValues;
-
-        cell_t N_CreateEntityByName(IPluginContext* ctx, const cell_t* params)
-        {
-            CBaseEntity* ent = CBaseEntity::CreateEntityByName(LocalString(ctx, params[1]));
-            const cell_t index = IndexOf(ent);
-            if (index >= 0)
-                g_pendingKeyValues.erase(index);
-            return index;
-        }
-
-        cell_t DispatchKV(IPluginContext* ctx, cell_t entity, const char* key, std::string value)
-        {
-            CEntityInstance* ent = CheckEntity(ctx, entity);
-            if (!ent)
-                return 0;
-            g_pendingKeyValues[IndexOf(ent)].emplace_back(key, std::move(value));
-            return 1;
-        }
-
-        cell_t N_DispatchKeyValue(IPluginContext* ctx, const cell_t* params)
-        {
-            return DispatchKV(ctx, params[1], LocalString(ctx, params[2]), LocalString(ctx, params[3]));
-        }
-
-        cell_t N_DispatchKeyValueInt(IPluginContext* ctx, const cell_t* params)
-        {
-            return DispatchKV(ctx, params[1], LocalString(ctx, params[2]), std::to_string(params[3]));
-        }
-
-        cell_t N_DispatchKeyValueFloat(IPluginContext* ctx, const cell_t* params)
-        {
-            char buf[64];
-            snprintf(buf, sizeof(buf), "%f", static_cast<double>(sp_ctof(params[3])));
-            return DispatchKV(ctx, params[1], LocalString(ctx, params[2]), buf);
-        }
-
-        cell_t N_DispatchKeyValueVector(IPluginContext* ctx, const cell_t* params)
-        {
-            cell_t* v;
-            ctx->LocalToPhysAddr(params[3], &v);
-            char buf[128];
-            snprintf(buf, sizeof(buf), "%f %f %f", static_cast<double>(sp_ctof(v[0])), static_cast<double>(sp_ctof(v[1])), static_cast<double>(sp_ctof(v[2])));
-            return DispatchKV(ctx, params[1], LocalString(ctx, params[2]), buf);
-        }
-
-        cell_t N_DispatchSpawn(IPluginContext* ctx, const cell_t* params)
+        cell_t N_EntGetName(IPluginContext* ctx, const cell_t* params)
         {
             CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            if (!ent)
-                return 0;
-
-            CEntityKeyValues* kv = nullptr;
-            auto it = g_pendingKeyValues.find(IndexOf(ent));
-            if (it != g_pendingKeyValues.end())
-            {
-                kv = new CEntityKeyValues();
-                for (const auto& [key, value] : it->second)
-                    kv->SetString(key.c_str(), value.c_str());
-                g_pendingKeyValues.erase(it);
-            }
-            static_cast<CBaseEntity*>(ent)->DispatchSpawn(kv);
-            return 1;
-        }
-
-        // SetVariant* fill what the next AcceptEntityInput passes; CS2's
-        // inputs take their value as text.
-        std::string g_variant;
-
-        cell_t N_SetVariantString(IPluginContext* ctx, const cell_t* params)
-        {
-            g_variant = LocalString(ctx, params[1]);
-            return 0;
-        }
-
-        cell_t N_SetVariantInt(IPluginContext*, const cell_t* params)
-        {
-            g_variant = std::to_string(params[1]);
-            return 0;
-        }
-
-        cell_t N_SetVariantBool(IPluginContext*, const cell_t* params)
-        {
-            g_variant = params[1] ? "1" : "0";
-            return 0;
-        }
-
-        cell_t N_SetVariantFloat(IPluginContext*, const cell_t* params)
-        {
-            char buf[64];
-            snprintf(buf, sizeof(buf), "%f", static_cast<double>(sp_ctof(params[1])));
-            g_variant = buf;
-            return 0;
-        }
-
-        cell_t N_SetVariantVector3D(IPluginContext* ctx, const cell_t* params)
-        {
-            cell_t* v;
-            ctx->LocalToPhysAddr(params[1], &v);
-            char buf[128];
-            snprintf(buf, sizeof(buf), "%f %f %f", static_cast<double>(sp_ctof(v[0])), static_cast<double>(sp_ctof(v[1])), static_cast<double>(sp_ctof(v[2])));
-            g_variant = buf;
-            return 0;
-        }
-
-        cell_t N_SetVariantColor(IPluginContext* ctx, const cell_t* params)
-        {
-            cell_t* c;
-            ctx->LocalToPhysAddr(params[1], &c);
-            char buf[64];
-            snprintf(buf, sizeof(buf), "%d %d %d %d", c[0], c[1], c[2], c[3]);
-            g_variant = buf;
-            return 0;
-        }
-
-        cell_t N_SetVariantEntity(IPluginContext* ctx, const cell_t* params)
-        {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
+            size_t written = 0;
             if (ent)
             {
                 const char* name = ent->m_pEntity->m_name.String();
-                g_variant = name && *name ? name : "!activator";
+                ctx->StringToLocalUTF8(params[2], params[3], name ? name : "", &written);
             }
-            return 0;
+            return static_cast<cell_t>(written);
         }
 
-        // AcceptEntityInput(dest, const char[] input, activator=-1, caller=-1, outputid=0)
-        cell_t N_AcceptEntityInput(IPluginContext* ctx, const cell_t* params)
+        cell_t N_EntGetRefEHandle(IPluginContext* ctx, const cell_t* params)
         {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            if (!ent)
-                return 0;
-            CEntityInstance* activator = params[0] >= 3 && params[3] != -1 ? CheckEntity(ctx, params[3]) : nullptr;
-            CEntityInstance* caller = params[0] >= 4 && params[4] != -1 ? CheckEntity(ctx, params[4]) : nullptr;
-            const std::string value = std::move(g_variant);
-            g_variant.clear();
-            static_cast<CBaseEntity*>(ent)->AcceptInput(LocalString(ctx, params[2]), activator, caller, value.c_str());
-            return 1;
+            return RefOf(CheckEntity(ctx, params[1]));
         }
 
-        // TeleportEntity(entity, origin=NULL_VECTOR, angles=NULL_VECTOR, velocity=NULL_VECTOR)
-        cell_t N_TeleportEntity(IPluginContext* ctx, const cell_t* params)
+        cell_t N_EntFromRefEHandle(IPluginContext*, const cell_t* params)
         {
-            CEntityInstance* ent = CheckEntity(ctx, params[1]);
-            if (!ent)
-                return 0;
-            auto read = [ctx, params](int param, float out[3]) -> bool
-            {
-                if (params[0] < param)
-                    return false;
-                cell_t* addr;
-                ctx->LocalToPhysAddr(params[param], &addr);
-                if (addr == ctx->GetNullRef(SP_NULL_VECTOR))
-                    return false;
-                for (int i = 0; i < 3; i++)
-                    out[i] = sp_ctof(addr[i]);
-                return true;
-            };
-            float o[3], a[3], v[3];
-            const bool hasOrigin = read(2, o), hasAngles = read(3, a), hasVelocity = read(4, v);
-            const Vector origin(o[0], o[1], o[2]), velocity(v[0], v[1], v[2]);
-            const QAngle angles(a[0], a[1], a[2]);
-            static_cast<CBaseEntity*>(ent)->Teleport(hasOrigin ? &origin : nullptr, hasAngles ? &angles : nullptr, hasVelocity ? &velocity : nullptr);
-            return 0;
+            return IndexOf(FromRef(params[1]));
         }
 
-        // FindEntityByClassname(int startEnt, const char[] classname): -1 starts at the beginning.
-        cell_t N_FindEntityByClassname(IPluginContext* ctx, const cell_t* params)
-        {
-            CEntityInstance* start = params[1] == -1 ? nullptr : Resolve(params[1]);
-            if (params[1] != -1 && !start)
-                return ctx->ThrowNativeError("Entity %d (%d) is invalid", params[1], params[1]);
-            const char* cls = LocalString(ctx, params[2]);
-            for (cell_t i = start ? IndexOf(start) + 1 : 0; i < kMaxEntities; i++)
-            {
-                CEntityInstance* ent = InstanceAt(i);
-                if (ent && strcmp(ent->GetClassname(), cls) == 0)
-                    return i;
-            }
-            return -1;
-        }
+        // ---- CBaseEntity and below ----------------------------------------------
 
-        // ---- clients: what lives on the controller and the pawn -------------------
-
-        CCSPlayerController* InGameClient(IPluginContext* ctx, cell_t client)
+        bool ReadVector(IPluginContext* ctx, cell_t addr, Vector& out)
         {
-            CCSPlayerController* player = (client >= 1 && client <= kMaxClients) ? CCSPlayerController::FromSlot(client - 1) : nullptr;
-            if (!player || player->m_iConnected() != PlayerConnectedState::Connected)
-            {
-                ctx->ThrowNativeError("Client %d is not in game", client);
-                return nullptr;
-            }
-            return player;
-        }
-
-        CCSPlayerPawn* PawnOrError(IPluginContext* ctx, cell_t client)
-        {
-            CCSPlayerController* player = InGameClient(ctx, client);
-            if (!player)
-                return nullptr;
-            CCSPlayerPawn* pawn = player->GetPlayerPawn();
-            if (!pawn)
-                ctx->ThrowNativeError("Client %d has no pawn", client);
-            return pawn;
-        }
-
-        // A value by path on the client (falling through to the pawn).
-        cell_t ClientInt(IPluginContext* ctx, cell_t client, const char* path)
-        {
-            CCSPlayerController* player = InGameClient(ctx, client);
-            Prop p;
-            if (!player || !FindProp(ctx, player, path, p))
-                return 0;
-            return ReadInt(Addr(p, 0), p.size, p.isSigned);
-        }
-
-        cell_t N_GetClientHealth(IPluginContext* ctx, const cell_t* params)
-        {
-            return ClientInt(ctx, params[1], "m_iHealth");
-        }
-
-        cell_t N_GetClientArmor(IPluginContext* ctx, const cell_t* params)
-        {
-            return ClientInt(ctx, params[1], "m_ArmorValue");
-        }
-
-        cell_t N_GetClientTeam(IPluginContext* ctx, const cell_t* params)
-        {
-            CCSPlayerController* player = InGameClient(ctx, params[1]);
-            return player ? player->m_iTeamNum() : 0;
-        }
-
-        cell_t N_IsPlayerAlive(IPluginContext* ctx, const cell_t* params)
-        {
-            CCSPlayerController* player = InGameClient(ctx, params[1]);
-            return player && player->m_bPawnIsAlive();
-        }
-
-        cell_t N_GetClientFrags(IPluginContext* ctx, const cell_t* params)
-        {
-            return ClientInt(ctx, params[1], "m_pActionTrackingServices.m_matchStats.m_iKills");
-        }
-
-        cell_t N_GetClientDeaths(IPluginContext* ctx, const cell_t* params)
-        {
-            return ClientInt(ctx, params[1], "m_pActionTrackingServices.m_matchStats.m_iDeaths");
+            cell_t* v;
+            ctx->LocalToPhysAddr(addr, &v);
+            if (v == ctx->GetNullRef(SP_NULL_VECTOR))
+                return false;
+            out = Vector(sp_ctof(v[0]), sp_ctof(v[1]), sp_ctof(v[2]));
+            return true;
         }
 
         void WriteVector(IPluginContext* ctx, cell_t addr, float x, float y, float z)
@@ -1149,162 +733,632 @@ namespace sourcepawn
             out[2] = sp_ftoc(z);
         }
 
-        cell_t N_GetClientAbsOrigin(IPluginContext* ctx, const cell_t* params)
+        cell_t N_BaseFromIndex(IPluginContext*, const cell_t* params)
         {
-            if (CCSPlayerPawn* pawn = PawnOrError(ctx, params[1]))
+            return InstanceAt(params[1]) ? params[1] : -1;
+        }
+
+        cell_t N_BaseCreateEntityByName(IPluginContext* ctx, const cell_t* params)
+        {
+            return IndexOf(CBaseEntity::CreateEntityByName(LocalString(ctx, params[1])));
+        }
+
+        // AcceptInput(input, activator = NULL_ENTITY, caller = NULL_ENTITY, value = "")
+        cell_t N_BaseAcceptInput(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            bool ok1, ok2;
+            CEntityInstance* activator = OptionalEntity(ctx, params[3], &ok1);
+            CEntityInstance* caller = OptionalEntity(ctx, params[4], &ok2);
+            if (ent && ok1 && ok2)
+                ent->AcceptInput(LocalString(ctx, params[2]), activator, caller, LocalString(ctx, params[5]));
+            return 0;
+        }
+
+        cell_t N_BaseGetAbsOrigin(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]))
             {
-                const Vector v = pawn->GetAbsOrigin();
+                const Vector v = ent->GetAbsOrigin();
                 WriteVector(ctx, params[2], v.x, v.y, v.z);
             }
             return 0;
         }
 
-        cell_t N_GetClientAbsAngles(IPluginContext* ctx, const cell_t* params)
+        cell_t N_BaseDispatchSpawn(IPluginContext* ctx, const cell_t* params)
         {
-            CCSPlayerPawn* pawn = PawnOrError(ctx, params[1]);
-            Prop p;
-            if (pawn && FindProp(ctx, pawn, "m_pGameSceneNode.m_angAbsRotation", p))
-            {
-                const float* a = reinterpret_cast<const float*>(Addr(p, 0));
-                WriteVector(ctx, params[2], a[0], a[1], a[2]);
-            }
+            if (CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]))
+                ent->DispatchSpawn();
             return 0;
         }
 
-        cell_t N_GetClientEyePosition(IPluginContext* ctx, const cell_t* params)
+        // Teleport(position = NULL_VECTOR, angles = NULL_VECTOR, velocity = NULL_VECTOR)
+        cell_t N_BaseTeleport(IPluginContext* ctx, const cell_t* params)
         {
-            if (CCSPlayerPawn* pawn = PawnOrError(ctx, params[1]))
-            {
-                const Vector v = pawn->GetEyePosition();
-                WriteVector(ctx, params[2], v.x, v.y, v.z);
-            }
-            return 0;
-        }
-
-        cell_t N_GetClientEyeAngles(IPluginContext* ctx, const cell_t* params)
-        {
-            CCSPlayerPawn* pawn = PawnOrError(ctx, params[1]);
-            if (!pawn)
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            if (!ent)
                 return 0;
-            const QAngle a = pawn->GetEyeAngles();
-            WriteVector(ctx, params[2], a.x, a.y, a.z);
+            Vector pos, ang, vel;
+            const bool hasPos = ReadVector(ctx, params[2], pos);
+            const bool hasAng = ReadVector(ctx, params[3], ang);
+            const bool hasVel = ReadVector(ctx, params[4], vel);
+            const QAngle angles(ang.x, ang.y, ang.z);
+            ent->Teleport(hasPos ? &pos : nullptr, hasAng ? &angles : nullptr, hasVel ? &vel : nullptr);
+            return 0;
+        }
+
+        cell_t N_BaseRemove(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]))
+                ent->Remove();
+            return 0;
+        }
+
+        cell_t N_BaseGetIndex(IPluginContext*, const cell_t* params)
+        {
+            return params[1];
+        }
+
+        cell_t N_ModelGetModelName(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseModelEntity* ent = As<CBaseModelEntity>(ctx, params[1]);
+            size_t written = 0;
+            if (ent)
+            {
+                const char* model = ent->GetModelName().String();
+                ctx->StringToLocalUTF8(params[2], params[3], model ? model : "", &written);
+            }
+            return static_cast<cell_t>(written);
+        }
+
+        cell_t N_ModelGetEyePosition(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBaseModelEntity* ent = As<CBaseModelEntity>(ctx, params[1]))
+            {
+                const Vector v = ent->GetEyePosition();
+                WriteVector(ctx, params[2], v.x, v.y, v.z);
+            }
+            return 0;
+        }
+
+        cell_t N_ModelSetModel(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBaseModelEntity* ent = As<CBaseModelEntity>(ctx, params[1]))
+                ent->SetModel(LocalString(ctx, params[2]));
+            return 0;
+        }
+
+        cell_t N_ModelSetBodyGroup(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBaseModelEntity* ent = As<CBaseModelEntity>(ctx, params[1]))
+                ent->SetBodyGroup(LocalString(ctx, params[2]), params[3]);
+            return 0;
+        }
+
+        // ---- controllers ----------------------------------------------------------
+
+        cell_t N_PCSetPawn(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]);
+            CBasePlayerPawn* pawn = As<CBasePlayerPawn>(ctx, params[2]);
+            if (pc && pawn)
+                pc->SetPawn(pawn);
+            return 0;
+        }
+
+        cell_t N_PCGetPawn(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]);
+            return pc ? IndexOf(pc->GetPawn()) : -1;
+        }
+
+        template <void (CBasePlayerController::*Print)(const char*)>
+        cell_t N_PCPrint(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]))
+                (pc->*Print)(LocalString(ctx, params[2]));
+            return 0;
+        }
+
+        cell_t N_PCIsBot(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]);
+            return pc && pc->IsBot();
+        }
+
+        cell_t N_PCDisconnect(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]))
+            {
+                const char* reason = LocalString(ctx, params[3]);
+                pc->Disconnect(static_cast<ENetworkDisconnectionReason>(params[2]), *reason ? reason : nullptr);
+            }
+            return 0;
+        }
+
+        cell_t N_PCExecuteClientCommand(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]))
+                pc->ExecuteClientCommand(LocalString(ctx, params[2]));
+            return 0;
+        }
+
+        cell_t N_PCExecuteClientCommandFromServer(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]))
+                pc->ExecuteClientCommandFromServer(LocalString(ctx, params[2]));
+            return 0;
+        }
+
+        cell_t N_PCGetPlayerSlot(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]);
+            return pc ? pc->GetPlayerSlot().Get() : -1;
+        }
+
+        cell_t N_PCGetUserID(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]);
+            return pc ? pc->GetUserID() : -1;
+        }
+
+        cell_t N_PCGetSteamID(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]))
+                ctx->StringToLocalUTF8(params[2], params[3], std::to_string(pc->GetSteamID()).c_str(), nullptr);
+            return 0;
+        }
+
+        cell_t N_PCGetPlayerName(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]);
+            size_t written = 0;
+            if (pc)
+                ctx->StringToLocalUTF8(params[2], params[3], pc->GetPlayerName(), &written);
+            return static_cast<cell_t>(written);
+        }
+
+        cell_t N_PCGetIpAddress(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]))
+                ctx->StringToLocalUTF8(params[2], params[3], pc->GetIpAddress().Get(), nullptr);
+            return 0;
+        }
+
+        cell_t N_PCReplicateConVar(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]))
+                pc->ReplicateConVar(LocalString(ctx, params[2]), LocalString(ctx, params[3]));
+            return 0;
+        }
+
+        cell_t N_CSFromSlot(IPluginContext*, const cell_t* params)
+        {
+            if (params[1] < 0 || params[1] >= 64)
+                return -1;
+            return IndexOf(CCSPlayerController::FromSlot(params[1]));
+        }
+
+        cell_t N_CSPrintToCenterHtml(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]))
+                pc->PrintToCenterHtml(LocalString(ctx, params[2]), params[3], params[4] != 0);
+            return 0;
+        }
+
+        cell_t N_CSRespawn(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]))
+                pc->Respawn();
+            return 0;
+        }
+
+        cell_t N_CSSwitchTeam(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]))
+                pc->SwitchTeam(params[2]);
+            return 0;
+        }
+
+        cell_t N_CSChangeTeam(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]))
+                pc->ChangeTeam(params[2]);
+            return 0;
+        }
+
+        cell_t N_CSGetPlayerPawn(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]);
+            return pc ? IndexOf(pc->GetPlayerPawn()) : -1;
+        }
+
+        cell_t N_CSGetObserverPawn(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]);
+            return pc ? IndexOf(pc->GetObserverPawn()) : -1;
+        }
+
+        // ---- pawns ----------------------------------------------------------------
+
+        cell_t N_PawnCommitSuicide(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBasePlayerPawn* pawn = As<CBasePlayerPawn>(ctx, params[1]))
+                pawn->CommitSuicide(params[2] != 0, params[3] != 0);
+            return 0;
+        }
+
+        cell_t N_PawnSnapViewAngles(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerPawn* pawn = As<CBasePlayerPawn>(ctx, params[1]);
+            Vector v;
+            if (pawn && ReadVector(ctx, params[2], v))
+                pawn->SnapViewAngles(QAngle(v.x, v.y, v.z));
+            return 0;
+        }
+
+        cell_t N_PawnGetController(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerPawn* pawn = As<CBasePlayerPawn>(ctx, params[1]);
+            return pawn ? IndexOf(pawn->GetController()) : -1;
+        }
+
+        cell_t N_CSPawnGetEyeAngles(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CCSPlayerPawn* pawn = As<CCSPlayerPawn>(ctx, params[1]))
+            {
+                const QAngle a = pawn->GetEyeAngles();
+                WriteVector(ctx, params[2], a.x, a.y, a.z);
+            }
+            return 0;
+        }
+
+        // ---- services and game rules (SchemaObjects) --------------------------------
+
+        cell_t N_ItemsDropActive(IPluginContext* ctx, const cell_t* params)
+        {
+            CPlayer_ItemServices* items = ObjectOf<CPlayer_ItemServices>(ctx, params[1]);
+            CBasePlayerWeapon* weapon = As<CBasePlayerWeapon>(ctx, params[2]);
+            if (items && weapon)
+                items->DropActivePlayerWeapon(weapon);
+            return 0;
+        }
+
+        cell_t N_ItemsRemoveWeapons(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CPlayer_ItemServices* items = ObjectOf<CPlayer_ItemServices>(ctx, params[1]))
+                items->RemoveWeapons(params[2] != 0);
+            return 0;
+        }
+
+        cell_t N_ItemsGiveNamedItem(IPluginContext* ctx, const cell_t* params)
+        {
+            CPlayer_ItemServices* items = ObjectOf<CPlayer_ItemServices>(ctx, params[1]);
+            return items ? IndexOf(items->GiveNamedItem(LocalString(ctx, params[2]))) : -1;
+        }
+
+        cell_t N_WeaponsCanUse(IPluginContext* ctx, const cell_t* params)
+        {
+            CPlayer_WeaponServices* ws = ObjectOf<CPlayer_WeaponServices>(ctx, params[1]);
+            CBasePlayerWeapon* weapon = As<CBasePlayerWeapon>(ctx, params[2]);
+            return ws && weapon && ws->CanUse(weapon);
+        }
+
+        cell_t N_WeaponsDropWeapon(IPluginContext* ctx, const cell_t* params)
+        {
+            CPlayer_WeaponServices* ws = ObjectOf<CPlayer_WeaponServices>(ctx, params[1]);
+            CBasePlayerWeapon* weapon = As<CBasePlayerWeapon>(ctx, params[2]);
+            if (!ws || !weapon)
+                return 0;
+            Vector target, velocity;
+            const bool hasTarget = ReadVector(ctx, params[3], target);
+            const bool hasVelocity = ReadVector(ctx, params[4], velocity);
+            ws->DropWeapon(weapon, hasTarget ? &target : nullptr, hasVelocity ? &velocity : nullptr);
+            return 0;
+        }
+
+        cell_t N_WeaponsBumpWeapon(IPluginContext* ctx, const cell_t* params)
+        {
+            CPlayer_WeaponServices* ws = ObjectOf<CPlayer_WeaponServices>(ctx, params[1]);
+            CBasePlayerWeapon* weapon = As<CBasePlayerWeapon>(ctx, params[2]);
+            return ws && weapon ? ws->BumpWeapon(weapon) : 0;
+        }
+
+        cell_t N_WeaponsSelectItem(IPluginContext* ctx, const cell_t* params)
+        {
+            CPlayer_WeaponServices* ws = ObjectOf<CPlayer_WeaponServices>(ctx, params[1]);
+            CBasePlayerWeapon* weapon = As<CBasePlayerWeapon>(ctx, params[2]);
+            if (ws && weapon)
+                ws->SelectItem(weapon);
+            return 0;
+        }
+
+        cell_t N_RulesTerminateRound(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CCSGameRules* rules = ObjectOf<CCSGameRules>(ctx, params[1]))
+                rules->TerminateRound(sp_ctof(params[2]), params[3], static_cast<uint32>(params[4]));
+            return 0;
+        }
+
+        // ---- Source2ModEntities ---------------------------------------------------
+
+        cell_t N_EntsGetGameRules(IPluginContext*, const cell_t*)
+        {
+            if (!entities::entitiesManager.GetGameRules())
+                return 0;
+            return RefFor(Root::GameRules, CEntityHandle(), nullptr, {});
+        }
+
+        cell_t N_EntsFindPickerEntity(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]);
+            return pc ? IndexOf(entities::entitiesManager.FindPickerEntity(pc)) : -1;
+        }
+
+        cell_t N_EntsFindEntityByClassname(IPluginContext* ctx, const cell_t* params)
+        {
+            bool ok;
+            CEntityInstance* start = OptionalEntity(ctx, params[1], &ok);
+            return ok ? IndexOf(entities::entitiesManager.FindEntityByClassname(start, LocalString(ctx, params[2]))) : -1;
+        }
+
+        cell_t N_EntsFindEntityByName(IPluginContext* ctx, const cell_t* params)
+        {
+            bool ok;
+            CEntityInstance* start = OptionalEntity(ctx, params[1], &ok);
+            return ok ? IndexOf(entities::entitiesManager.FindEntityByName(start, LocalString(ctx, params[2]))) : -1;
+        }
+
+        cell_t N_EntsCreateEntityByName(IPluginContext* ctx, const cell_t* params)
+        {
+            return IndexOf(entities::entitiesManager.CreateEntityByName(LocalString(ctx, params[1])));
+        }
+
+        // AcceptInput(target, input, activator, caller, value)
+        cell_t N_EntsAcceptInput(IPluginContext* ctx, const cell_t* params)
+        {
+            CEntityInstance* target = CheckEntity(ctx, params[1]);
+            bool ok1, ok2;
+            CEntityInstance* activator = OptionalEntity(ctx, params[3], &ok1);
+            CEntityInstance* caller = OptionalEntity(ctx, params[4], &ok2);
+            if (target && ok1 && ok2)
+                entities::entitiesManager.AcceptInput(target, LocalString(ctx, params[2]), activator, caller, LocalString(ctx, params[5]));
+            return 0;
+        }
+
+        cell_t N_EntsAddEntityIOEvent(IPluginContext* ctx, const cell_t* params)
+        {
+            CEntityInstance* target = CheckEntity(ctx, params[1]);
+            bool ok1, ok2;
+            CEntityInstance* activator = OptionalEntity(ctx, params[3], &ok1);
+            CEntityInstance* caller = OptionalEntity(ctx, params[4], &ok2);
+            if (target && ok1 && ok2)
+                entities::entitiesManager.AddEntityIOEvent(target, LocalString(ctx, params[2]), activator, caller,
+                                                           LocalString(ctx, params[5]), sp_ctof(params[6]));
+            return 0;
+        }
+
+        // A script's IEntityListener: four optional functions.
+        class ScriptEntityListener final : public IEntityListener
+        {
+        public:
+            PluginId owner = 0;
+            IPluginFunction* created = nullptr;
+            IPluginFunction* spawned = nullptr;
+            IPluginFunction* deleted = nullptr;
+            IPluginFunction* parentChanged = nullptr;
+
+            void OnEntityCreated(CEntityInstance* e) override { Fire(created, e); }
+            void OnEntitySpawned(CEntityInstance* e) override { Fire(spawned, e); }
+            void OnEntityDeleted(CEntityInstance* e) override { Fire(deleted, e); }
+            void OnEntityParentChanged(CEntityInstance* e, CEntityInstance* parent) override
+            {
+                if (!parentChanged)
+                    return;
+                sp::CallArgs args;
+                args.PushCell(IndexOf(e));
+                args.PushCell(IndexOf(parent));
+                Invoke(parentChanged, args);
+            }
+
+        private:
+            static void Fire(IPluginFunction* fn, CEntityInstance* e)
+            {
+                if (!fn)
+                    return;
+                sp::CallArgs args;
+                args.PushCell(IndexOf(e));
+                Invoke(fn, args);
+            }
+        };
+
+        class ScriptIOListener final : public IEntityIOListener
+        {
+        public:
+            PluginId owner = 0;
+            IPluginFunction* fn = nullptr;
+            std::string className, outputName;
+            bool post = false;
+
+            Action OnEntityOutput(const char* output, CEntityInstance* activator, CEntityInstance* caller, float delay, bool isPost) override
+            {
+                sp::CallArgs args;
+                args.PushString(output ? output : "");
+                args.PushCell(IndexOf(activator));
+                args.PushCell(IndexOf(caller));
+                args.PushFloat(delay);
+                args.PushCell(isPost ? 1 : 0);
+                cell_t res = 0;
+                Invoke(fn, args, &res);
+                return static_cast<Action>(std::clamp<cell_t>(res, 0, 2));
+            }
+        };
+
+        cell_t g_nextListenerId = 1;
+        std::map<cell_t, std::unique_ptr<ScriptEntityListener>> g_entityListeners;
+        std::map<cell_t, std::unique_ptr<ScriptIOListener>> g_ioListeners;
+
+        PluginId CallerId(IPluginContext* ctx)
+        {
+            ScriptPlugin* plugin = ScriptPlugin::FromContext(ctx);
+            return plugin ? plugin->Id() : 0;
+        }
+
+        IPluginFunction* OptionalFunction(IPluginContext* ctx, cell_t id)
+        {
+            return id == 0 || id == -1 ? nullptr : ctx->GetFunctionById(static_cast<funcid_t>(id));
+        }
+
+        cell_t N_EntsAddEntityListener(IPluginContext* ctx, const cell_t* params)
+        {
+            auto listener = std::make_unique<ScriptEntityListener>();
+            listener->owner = CallerId(ctx);
+            listener->created = OptionalFunction(ctx, params[1]);
+            listener->spawned = OptionalFunction(ctx, params[2]);
+            listener->deleted = OptionalFunction(ctx, params[3]);
+            listener->parentChanged = OptionalFunction(ctx, params[4]);
+            entities::entitiesManager.AddEntityListener(listener->owner, listener.get());
+            const cell_t id = g_nextListenerId++;
+            g_entityListeners[id] = std::move(listener);
+            return id;
+        }
+
+        cell_t N_EntsRemoveEntityListener(IPluginContext* ctx, const cell_t* params)
+        {
+            auto it = g_entityListeners.find(params[1]);
+            if (it == g_entityListeners.end() || it->second->owner != CallerId(ctx))
+                return 0;
+            entities::entitiesManager.RemoveEntityListener(it->second.get());
+            g_entityListeners.erase(it);
             return 1;
         }
 
-        cell_t N_ChangeClientTeam(IPluginContext* ctx, const cell_t* params)
+        // AddEntityIOListener(handler, className, outputName, post)
+        cell_t N_EntsAddEntityIOListener(IPluginContext* ctx, const cell_t* params)
         {
-            if (CCSPlayerController* player = InGameClient(ctx, params[1]))
-                player->ChangeTeam(params[2]);
-            return 0;
+            IPluginFunction* fn = ctx->GetFunctionById(static_cast<funcid_t>(params[1]));
+            if (!fn)
+                return ctx->ThrowNativeError("Invalid function id (%X)", params[1]);
+            auto listener = std::make_unique<ScriptIOListener>();
+            listener->owner = CallerId(ctx);
+            listener->fn = fn;
+            listener->className = LocalString(ctx, params[2]);
+            listener->outputName = LocalString(ctx, params[3]);
+            listener->post = params[4] != 0;
+            entities::entitiesManager.AddEntityIOListener(listener->owner, listener.get(),
+                                                          listener->className.empty() ? nullptr : listener->className.c_str(),
+                                                          listener->outputName.empty() ? nullptr : listener->outputName.c_str(), listener->post);
+            const cell_t id = g_nextListenerId++;
+            g_ioListeners[id] = std::move(listener);
+            return id;
         }
 
-        // ForcePlayerSuicide(int client, bool explode=false)
-        cell_t N_ForcePlayerSuicide(IPluginContext* ctx, const cell_t* params)
+        cell_t N_EntsRemoveEntityIOListener(IPluginContext* ctx, const cell_t* params)
         {
-            if (CCSPlayerPawn* pawn = PawnOrError(ctx, params[1]))
-                pawn->CommitSuicide(params[0] >= 2 && params[2], true);
-            return 0;
-        }
-
-        // GivePlayerItem(int client, const char[] item, int iSubType=0): the entity or -1.
-        cell_t N_GivePlayerItem(IPluginContext* ctx, const cell_t* params)
-        {
-            CCSPlayerPawn* pawn = PawnOrError(ctx, params[1]);
-            if (!pawn || !pawn->m_pItemServices())
-                return -1;
-            return IndexOf(pawn->m_pItemServices()->GiveNamedItem(LocalString(ctx, params[2])));
-        }
-
-        cell_t N_GetClientModel(IPluginContext* ctx, const cell_t* params)
-        {
-            CCSPlayerPawn* pawn = PawnOrError(ctx, params[1]);
-            const char* model = pawn ? pawn->GetModelName().String() : nullptr;
-            ctx->StringToLocalUTF8(params[2], params[3], model ? model : "", nullptr);
-            return 0;
-        }
-
-        cell_t N_SetEntityModel(IPluginContext* ctx, const cell_t* params)
-        {
-            if (CEntityInstance* ent = CheckEntity(ctx, params[1]))
-                static_cast<CBaseModelEntity*>(ent)->SetModel(LocalString(ctx, params[2]));
-            return 0;
+            auto it = g_ioListeners.find(params[1]);
+            if (it == g_ioListeners.end() || it->second->owner != CallerId(ctx))
+                return 0;
+            ScriptIOListener* l = it->second.get();
+            entities::entitiesManager.RemoveEntityIOListener(l, l->className.empty() ? nullptr : l->className.c_str(),
+                                                             l->outputName.empty() ? nullptr : l->outputName.c_str(), l->post);
+            g_ioListeners.erase(it);
+            return 1;
         }
 
         const sp_nativeinfo_t g_entityNatives[] = {
-            // clients.inc / sdktools_functions.inc (players)
-            { "GetClientHealth", N_GetClientHealth },
-            { "GetClientArmor", N_GetClientArmor },
-            { "GetClientTeam", N_GetClientTeam },
-            { "IsPlayerAlive", N_IsPlayerAlive },
-            { "GetClientFrags", N_GetClientFrags },
-            { "GetClientDeaths", N_GetClientDeaths },
-            { "GetClientAbsOrigin", N_GetClientAbsOrigin },
-            { "GetClientAbsAngles", N_GetClientAbsAngles },
-            { "GetClientEyePosition", N_GetClientEyePosition },
-            { "GetClientEyeAngles", N_GetClientEyeAngles },
-            { "GetClientModel", N_GetClientModel },
-            { "ChangeClientTeam", N_ChangeClientTeam },
-            { "ForcePlayerSuicide", N_ForcePlayerSuicide },
-            { "GivePlayerItem", N_GivePlayerItem },
-            { "SetEntityModel", N_SetEntityModel },
-            // entity.inc
-            { "GetMaxEntities", N_GetMaxEntities },
-            { "GetEntityCount", N_GetEntityCount },
-            { "IsValidEntity", N_IsValidEntity },
-            { "IsValidEdict", N_IsValidEntity },
-            { "IsEntNetworkable", N_IsEntNetworkable },
-            { "RemoveEdict", N_RemoveEntity },
-            { "RemoveEntity", N_RemoveEntity },
-            { "GetEdictClassname", N_GetEdictClassname },
-            { "GetEntityNetClass", N_GetEntityNetClass },
-            { "ChangeEdictState", N_ChangeEdictState },
-            { "GetEntData", N_GetEntData },
-            { "SetEntData", N_SetEntData },
-            { "GetEntDataFloat", N_GetEntDataFloat },
-            { "SetEntDataFloat", N_SetEntDataFloat },
-            { "GetEntDataEnt2", N_GetEntDataEnt2 },
-            { "SetEntDataEnt2", N_SetEntDataEnt2 },
-            { "GetEntDataVector", N_GetEntDataVector },
-            { "SetEntDataVector", N_SetEntDataVector },
-            { "GetEntDataString", N_GetEntDataString },
-            { "SetEntDataString", N_SetEntDataString },
-            { "FindSendPropInfo", N_FindSendPropInfo },
-            { "FindDataMapInfo", N_FindDataMapInfo },
-            { "GetEntProp", N_GetEntProp },
-            { "SetEntProp", N_SetEntProp },
-            { "GetEntPropFloat", N_GetEntPropFloat },
-            { "SetEntPropFloat", N_SetEntPropFloat },
-            { "GetEntPropEnt", N_GetEntPropEnt },
-            { "SetEntPropEnt", N_SetEntPropEnt },
-            { "GetEntPropVector", N_GetEntPropVector },
-            { "SetEntPropVector", N_SetEntPropVector },
-            { "GetEntPropString", N_GetEntPropString },
-            { "SetEntPropString", N_SetEntPropString },
-            { "GetEntPropArraySize", N_GetEntPropArraySize },
-            // halflife.inc
-            { "EntIndexToEntRef", N_EntIndexToEntRef },
-            { "EntRefToEntIndex", N_EntRefToEntIndex },
-            { "MakeCompatEntRef", N_MakeCompatEntRef },
-            // sdktools_functions.inc / sdktools_entinput.inc / sdktools_variant_t.inc
-            { "CreateEntityByName", N_CreateEntityByName },
-            { "DispatchKeyValue", N_DispatchKeyValue },
-            { "DispatchKeyValueInt", N_DispatchKeyValueInt },
-            { "DispatchKeyValueFloat", N_DispatchKeyValueFloat },
-            { "DispatchKeyValueVector", N_DispatchKeyValueVector },
-            { "DispatchSpawn", N_DispatchSpawn },
-            { "SetVariantString", N_SetVariantString },
-            { "SetVariantInt", N_SetVariantInt },
-            { "SetVariantBool", N_SetVariantBool },
-            { "SetVariantFloat", N_SetVariantFloat },
-            { "SetVariantVector3D", N_SetVariantVector3D },
-            { "SetVariantPosVector3D", N_SetVariantVector3D },
-            { "SetVariantColor", N_SetVariantColor },
-            { "SetVariantEntity", N_SetVariantEntity },
-            { "AcceptEntityInput", N_AcceptEntityInput },
-            { "TeleportEntity", N_TeleportEntity },
-            { "FindEntityByClassname", N_FindEntityByClassname },
+            // source2mod/schema.inc
+            { "Source2ModSchema.GetInt", N_GetInt },
+            { "Source2ModSchema.SetInt", N_SetInt },
+            { "Source2ModSchema.GetFloat", N_GetFloat },
+            { "Source2ModSchema.SetFloat", N_SetFloat },
+            { "Source2ModSchema.GetBool", N_GetBool },
+            { "Source2ModSchema.SetBool", N_SetBool },
+            { "Source2ModSchema.GetHandle", N_GetHandle },
+            { "Source2ModSchema.SetHandle", N_SetHandle },
+            { "Source2ModSchema.GetEntityPointer", N_GetEntityPointer },
+            { "Source2ModSchema.GetObject", N_GetObject },
+            { "Source2ModSchema.GetVector", N_GetVector },
+            { "Source2ModSchema.SetVector", N_SetVector },
+            { "Source2ModSchema.GetColor", N_GetColor },
+            { "Source2ModSchema.SetColor", N_SetColor },
+            { "Source2ModSchema.GetString", N_GetString },
+            { "Source2ModSchema.SetString", N_SetString },
+            { "Source2ModSchema.GetOffset", N_GetOffset },
+            { "CEntityInstance.IsValid", N_EntIsValid },
+            { "CEntityInstance.GetClassname", N_EntGetClassname },
+            { "CEntityInstance.GetName", N_EntGetName },
+            { "CEntityInstance.GetRefEHandle", N_EntGetRefEHandle },
+            { "CEntityInstance.FromRefEHandle", N_EntFromRefEHandle },
+            // schema/classes.inc, from tools/sp_schemagen/methods.inc
+            { "CBaseEntity.FromIndex", N_BaseFromIndex },
+            { "CBaseEntity.CreateEntityByName", N_BaseCreateEntityByName },
+            { "CBaseEntity.AcceptInput", N_BaseAcceptInput },
+            { "CBaseEntity.GetAbsOrigin", N_BaseGetAbsOrigin },
+            { "CBaseEntity.DispatchSpawn", N_BaseDispatchSpawn },
+            { "CBaseEntity.Teleport", N_BaseTeleport },
+            { "CBaseEntity.Remove", N_BaseRemove },
+            { "CBaseEntity.GetIndex", N_BaseGetIndex },
+            { "CBaseModelEntity.GetModelName", N_ModelGetModelName },
+            { "CBaseModelEntity.GetEyePosition", N_ModelGetEyePosition },
+            { "CBaseModelEntity.SetModel", N_ModelSetModel },
+            { "CBaseModelEntity.SetBodyGroup", N_ModelSetBodyGroup },
+            { "CBasePlayerController.SetPawn", N_PCSetPawn },
+            { "CBasePlayerController.GetPawn", N_PCGetPawn },
+            { "CBasePlayerController.PrintToConsole", N_PCPrint<&CBasePlayerController::PrintToConsole> },
+            { "CBasePlayerController.PrintToChat", N_PCPrint<&CBasePlayerController::PrintToChat> },
+            { "CBasePlayerController.PrintToCenter", N_PCPrint<&CBasePlayerController::PrintToCenter> },
+            { "CBasePlayerController.PrintToCenterAlert", N_PCPrint<&CBasePlayerController::PrintToCenterAlert> },
+            { "CBasePlayerController.IsBot", N_PCIsBot },
+            { "CBasePlayerController.Disconnect", N_PCDisconnect },
+            { "CBasePlayerController.ExecuteClientCommand", N_PCExecuteClientCommand },
+            { "CBasePlayerController.ExecuteClientCommandFromServer", N_PCExecuteClientCommandFromServer },
+            { "CBasePlayerController.GetPlayerSlot", N_PCGetPlayerSlot },
+            { "CBasePlayerController.GetSlot", N_PCGetPlayerSlot },
+            { "CBasePlayerController.GetUserID", N_PCGetUserID },
+            { "CBasePlayerController.GetSteamID", N_PCGetSteamID },
+            { "CBasePlayerController.GetPlayerName", N_PCGetPlayerName },
+            { "CBasePlayerController.GetIpAddress", N_PCGetIpAddress },
+            { "CBasePlayerController.ReplicateConVar", N_PCReplicateConVar },
+            { "CCSPlayerController.FromSlot", N_CSFromSlot },
+            { "CCSPlayerController.PrintToCenterHtml", N_CSPrintToCenterHtml },
+            { "CCSPlayerController.Respawn", N_CSRespawn },
+            { "CCSPlayerController.SwitchTeam", N_CSSwitchTeam },
+            { "CCSPlayerController.ChangeTeam", N_CSChangeTeam },
+            { "CCSPlayerController.GetPlayerPawn", N_CSGetPlayerPawn },
+            { "CCSPlayerController.GetObserverPawn", N_CSGetObserverPawn },
+            { "CBasePlayerPawn.CommitSuicide", N_PawnCommitSuicide },
+            { "CBasePlayerPawn.SnapViewAngles", N_PawnSnapViewAngles },
+            { "CBasePlayerPawn.GetController", N_PawnGetController },
+            { "CCSPlayerPawn.GetEyeAngles", N_CSPawnGetEyeAngles },
+            { "CPlayer_ItemServices.DropActivePlayerWeapon", N_ItemsDropActive },
+            { "CPlayer_ItemServices.RemoveWeapons", N_ItemsRemoveWeapons },
+            { "CPlayer_ItemServices.GiveNamedItem", N_ItemsGiveNamedItem },
+            { "CPlayer_WeaponServices.CanUse", N_WeaponsCanUse },
+            { "CPlayer_WeaponServices.DropWeapon", N_WeaponsDropWeapon },
+            { "CPlayer_WeaponServices.BumpWeapon", N_WeaponsBumpWeapon },
+            { "CPlayer_WeaponServices.SelectItem", N_WeaponsSelectItem },
+            { "CCSGameRules.TerminateRound", N_RulesTerminateRound },
+            // source2mod/entities.inc
+            { "Source2ModEntities.GetGameRules", N_EntsGetGameRules },
+            { "Source2ModEntities.FindPickerEntity", N_EntsFindPickerEntity },
+            { "Source2ModEntities.FindEntityByClassname", N_EntsFindEntityByClassname },
+            { "Source2ModEntities.FindEntityByName", N_EntsFindEntityByName },
+            { "Source2ModEntities.CreateEntityByName", N_EntsCreateEntityByName },
+            { "Source2ModEntities.AddEntityListener", N_EntsAddEntityListener },
+            { "Source2ModEntities.RemoveEntityListener", N_EntsRemoveEntityListener },
+            { "Source2ModEntities.AcceptInput", N_EntsAcceptInput },
+            { "Source2ModEntities.AddEntityIOEvent", N_EntsAddEntityIOEvent },
+            { "Source2ModEntities.AddEntityIOListener", N_EntsAddEntityIOListener },
+            { "Source2ModEntities.RemoveEntityIOListener", N_EntsRemoveEntityIOListener },
             { nullptr, nullptr },
         };
+    }
+
+    void ForgetEntityListeners(PluginId id)
+    {
+        // The manager took them off the engine already (RemoveAllForPlugin).
+        std::erase_if(g_entityListeners, [id](const auto& e) { return e.second->owner == id; });
+        std::erase_if(g_ioListeners, [id](const auto& e) { return e.second->owner == id; });
     }
 
     const sp_nativeinfo_t* GetEntityNatives()

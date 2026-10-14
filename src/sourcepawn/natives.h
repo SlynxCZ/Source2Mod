@@ -61,6 +61,7 @@ namespace sourcepawn
     // Per-area cleanup when a plugin goes (RemoveAllForPlugin calls these).
     void ForgetEventHooks(PluginId id);     // natives.cpp
     void ForgetConVarHooks(PluginId id);    // natives_convars.cpp
+    void ForgetEntityListeners(PluginId id); // natives_entities.cpp
 
     /// ISource2ModNatives001, for native plugins (pluginsys.cpp).
     ISource2ModNatives* NativesInterface();
