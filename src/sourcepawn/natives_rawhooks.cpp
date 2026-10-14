@@ -1,0 +1,813 @@
+/**
+ * vim: set ts=4 sw=4 tw=99 noet:
+ * =============================================================================
+ * Source2Mod
+ * =============================================================================
+ *
+ * Raw hooks on game functions from SourcePawn (source2mod/hooks.inc): what
+ * C++ does with KHOOK_MEMBER / KHOOK_FUNCTION / KHOOK_VIRTUAL, with the
+ * signature described at runtime.
+ *
+ * KHook calls a hook's callbacks (pre, post, make-return, call-original)
+ * with the hooked function's own arguments. The callbacks here are generic
+ * over registers instead of over a C++ signature: on SysV x86-64 every
+ * callback takes the six integer and eight SSE argument registers, which is
+ * every argument of a function with at most that many of each class; on
+ * Windows x64 the four argument positions are each integer or SSE (one
+ * instantiation per combination) and the rest are stack slots. The
+ * parameter list the script gave says which register holds which argument.
+ *
+ * Return values are kept as eight bytes: integer-class in RAX, SSE in XMM0.
+ *
+ * Project: Source2Mod
+ */
+#include "natives.h"
+#include "handles.h"
+#include "scriptplugin.h"
+
+#include "core/gameconfig.h"
+#include "core/module.h"
+#include "core/shared.h"
+#include "utils/log.h"
+
+#include <source2mod/schema/entity/classes/CBaseEntity.h>
+
+#include <khook.hpp>
+#include <sp_callable.h>
+
+#include <algorithm>
+#include <cstring>
+#include <string>
+#include <type_traits>
+#include <vector>
+
+using namespace SourcePawn;
+
+namespace sourcepawn
+{
+    namespace
+    {
+        // enum Source2ModType (gameconfig.inc)
+        enum Type : cell_t
+        {
+            T_Void = 0,
+            T_Bool,
+            T_Int8,
+            T_Int16,
+            T_Int32,
+            T_Int64,
+            T_Float,
+            T_Double,
+            T_Entity,
+            T_Object,
+            T_String,
+            T_Vector,
+            T_VectorValue,
+            T_Pointer,
+        };
+
+        bool IsSse(Type t)
+        {
+            return t == T_Float || t == T_Double;
+        }
+
+        PluginId CallerId(IPluginContext* ctx)
+        {
+            ScriptPlugin* plugin = ScriptPlugin::FromContext(ctx);
+            return plugin ? plugin->Id() : 0;
+        }
+
+#if defined(_WIN32)
+        constexpr int kSlots = 14;
+#else
+        constexpr int kSlots = 14;   // 6 integer + 8 SSE
+#endif
+
+        // The argument registers of one call, as the callbacks got them.
+        struct Regs
+        {
+            uint64_t s[kSlots];
+        };
+
+        struct RawHook : HandleObject
+        {
+            PluginId owner = 0;
+            void* address = nullptr;
+            void** vtable = nullptr;
+            int index = -1;
+            Type ret = T_Void;
+            std::vector<Type> params;
+            std::vector<int> slot;          // params[i] lives in Regs::s[slot[i]]
+            IPluginFunction* pre = nullptr;
+            IPluginFunction* post = nullptr;
+            KHook::HookID_t id = KHook::INVALID_HOOK;
+            bool removing = false;          // RemoveHook asked, KHook not done yet
+            bool zombie = false;            // its handle is gone: delete once removed
+        };
+
+        // KHook is done with a hook it was asked to remove.
+        void OnRemoved(KHook::HookID_t, void* ctx)
+        {
+            auto* hook = static_cast<RawHook*>(ctx);
+            hook->removing = false;
+            if (hook->zombie)
+                delete hook;
+        }
+
+        void BeginRemove(RawHook* hook)
+        {
+            if (hook->id == KHook::INVALID_HOOK)
+                return;
+            const KHook::HookID_t id = hook->id;
+            hook->id = KHook::INVALID_HOOK;
+            hook->removing = true;
+            KHook::RemoveHook(id, true, OnRemoved, hook);
+        }
+
+        // Arguments a pre handler changed, for the call to the original that follows.
+        struct Pending
+        {
+            RawHook* hook;
+            Regs regs;
+        };
+        thread_local std::vector<Pending> t_pending;
+
+        // What the script's handlers are handed.
+        struct Frame
+        {
+            RawHook* hook;
+            Regs regs;
+            bool post;
+            uint64_t ret;
+            bool retSet;
+            bool changed;
+        };
+
+        HandleType HookType()
+        {
+            static const HandleType t = Handles().CreateType("Source2ModHook", [](void* p)
+            {
+                auto* hook = static_cast<RawHook*>(p);
+                hook->pre = hook->post = nullptr;
+                // KHook takes the detour down when no call is inside it;
+                // the object goes after that.
+                BeginRemove(hook);
+                if (hook->removing)
+                    hook->zombie = true;
+                else
+                    delete hook;
+            });
+            return t;
+        }
+
+        HandleType ParamsType()
+        {
+            static const HandleType t = Handles().CreateType("Source2ModHookParams", nullptr, 0, false);
+            return t;
+        }
+
+        HandleType ReturnType()
+        {
+            static const HandleType t = Handles().CreateType("Source2ModHookReturn", nullptr, 0, false);
+            return t;
+        }
+
+        template <typename R>
+        R FromBits(uint64_t bits)
+        {
+            R r{};
+            memcpy(&r, &bits, sizeof(R) < sizeof(bits) ? sizeof(R) : sizeof(bits));
+            return r;
+        }
+
+        template <typename R>
+        uint64_t ToBits(R r)
+        {
+            uint64_t bits = 0;
+            memcpy(&bits, &r, sizeof(R) < sizeof(bits) ? sizeof(R) : sizeof(bits));
+            return bits;
+        }
+
+        void SaveReturn(Action action, uint64_t* value, bool hasValue, bool original)
+        {
+            if (hasValue)
+                KHook::SaveReturnValue(action, value, sizeof(uint64_t), reinterpret_cast<void*>(KHook::init_operator<uint64_t>),
+                                       reinterpret_cast<void*>(KHook::deinit_operator<uint64_t>), original);
+            else
+                KHook::SaveReturnValue(action, nullptr, 0, nullptr, nullptr, original);
+        }
+
+        // pre / post: the script's handler, then the action for KHook.
+        uint64_t Handle(const Regs& regs, bool post)
+        {
+            auto* hook = static_cast<RawHook*>(KHook::GetContextPtr());
+            const bool hasValue = hook->ret != T_Void;
+            IPluginFunction* fn = post ? hook->post : hook->pre;
+
+            Frame frame{ hook, regs, post, 0, false, false };
+            if (post && hasValue)
+                if (void* original = KHook::GetOriginalValuePtr())
+                    frame.ret = *static_cast<uint64_t*>(original);
+
+            cell_t res = 0;
+            if (fn && !hook->zombie)
+            {
+                const cell_t params = Handles().Create(ParamsType(), &frame, hook->owner);
+                const cell_t ret = Handles().Create(ReturnType(), &frame, hook->owner);
+                sp::CallArgs args;
+                args.PushCell(params);
+                args.PushCell(ret);
+                args.PushCell(post ? 1 : 0);
+                Invoke(fn, args, &res);
+                Handles().Free(params, 0, true);
+                Handles().Free(ret, 0, true);
+            }
+
+            Action action = static_cast<Action>(std::clamp<cell_t>(res, 0, 2));
+            if (!post)
+            {
+                if (frame.changed && action != Action::Ignore)
+                    t_pending.push_back({ hook, frame.regs });
+            }
+            else if (!t_pending.empty() && t_pending.back().hook == hook)
+                t_pending.pop_back();
+
+            uint64_t value = frame.ret;
+            SaveReturn(action, &value, hasValue, false);
+            return value;
+        }
+
+        uint64_t MakeReturn()
+        {
+            auto* hook = static_cast<RawHook*>(KHook::GetContextPtr());
+            uint64_t value = 0;
+            if (hook->ret != T_Void)
+                if (void* current = KHook::GetCurrentValuePtr(true))
+                    value = *static_cast<uint64_t*>(current);
+            KHook::DestroyReturnValue();
+            return value;
+        }
+
+        // ---- the per-platform callback shapes -----------------------------------
+
+#if defined(_WIN32)
+        template <bool F>
+        using Pos = std::conditional_t<F, double, uint64_t>;
+
+        template <bool F>
+        uint64_t Bits(Pos<F> v)
+        {
+            if constexpr (F)
+                return ToBits(v);
+            else
+                return v;
+        }
+
+        template <bool F>
+        Pos<F> Unbits(uint64_t v)
+        {
+            if constexpr (F)
+                return FromBits<double>(v);
+            else
+                return v;
+        }
+
+#define S2M_ARGS Pos<F0> a0, Pos<F1> a1, Pos<F2> a2, Pos<F3> a3, uint64_t a4, uint64_t a5, uint64_t a6, uint64_t a7, uint64_t a8, uint64_t a9, uint64_t a10, uint64_t a11, uint64_t a12, uint64_t a13
+#define S2M_REGS Regs regs{ { Bits<F0>(a0), Bits<F1>(a1), Bits<F2>(a2), Bits<F3>(a3), a4, a5, a6, a7, a8, a9, a10, a11, a12, a13 } }
+
+        template <typename R, bool F0, bool F1, bool F2, bool F3>
+        struct Callbacks
+        {
+            static R Out(uint64_t v) { return FromBits<R>(v); }
+
+            static R Pre(S2M_ARGS) { S2M_REGS; return Out(Handle(regs, false)); }
+            static R Post(S2M_ARGS) { S2M_REGS; return Out(Handle(regs, true)); }
+            static R Return(S2M_ARGS) { return Out(MakeReturn()); }
+
+            static R CallOriginal(S2M_ARGS)
+            {
+                auto* hook = static_cast<RawHook*>(KHook::GetContextPtr());
+                S2M_REGS;
+                if (!t_pending.empty() && t_pending.back().hook == hook)
+                {
+                    regs = t_pending.back().regs;
+                    t_pending.pop_back();
+                }
+                using Fn = R (*)(Pos<F0>, Pos<F1>, Pos<F2>, Pos<F3>, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
+                auto original = reinterpret_cast<Fn>(KHook::GetOriginalFunction());
+                const uint64_t* s = regs.s;
+                const R r = original(Unbits<F0>(s[0]), Unbits<F1>(s[1]), Unbits<F2>(s[2]), Unbits<F3>(s[3]), s[4], s[5], s[6], s[7], s[8], s[9], s[10], s[11], s[12], s[13]);
+                uint64_t value = ToBits(r);
+                SaveReturn(Action::Ignore, &value, hook->ret != T_Void, true);
+                return r;
+            }
+        };
+#undef S2M_ARGS
+#undef S2M_REGS
+
+        struct CallbackSet
+        {
+            void* pre;
+            void* post;
+            void* ret;
+            void* original;
+        };
+
+        template <typename R, int M>
+        CallbackSet SetFor()
+        {
+            using C = Callbacks<R, (M & 1) != 0, (M & 2) != 0, (M & 4) != 0, (M & 8) != 0>;
+            return { reinterpret_cast<void*>(&C::Pre), reinterpret_cast<void*>(&C::Post), reinterpret_cast<void*>(&C::Return), reinterpret_cast<void*>(&C::CallOriginal) };
+        }
+
+        template <typename R>
+        CallbackSet Pick(int mask)
+        {
+            switch (mask)
+            {
+#define S2M_CASE(m) case m: return SetFor<R, m>();
+                S2M_CASE(0) S2M_CASE(1) S2M_CASE(2) S2M_CASE(3) S2M_CASE(4) S2M_CASE(5) S2M_CASE(6) S2M_CASE(7)
+                S2M_CASE(8) S2M_CASE(9) S2M_CASE(10) S2M_CASE(11) S2M_CASE(12) S2M_CASE(13) S2M_CASE(14) S2M_CASE(15)
+#undef S2M_CASE
+            }
+            return SetFor<R, 0>();
+        }
+
+        // Positions: one slot per parameter, in order.
+        bool Layout(RawHook* hook, int* mask, std::string& error)
+        {
+            if (hook->params.size() > static_cast<size_t>(kSlots))
+            {
+                error = "too many parameters (at most 14)";
+                return false;
+            }
+            *mask = 0;
+            hook->slot.clear();
+            for (size_t i = 0; i < hook->params.size(); i++)
+            {
+                if (IsSse(hook->params[i]) && i < 4)
+                    *mask |= 1 << i;
+                hook->slot.push_back(static_cast<int>(i));
+            }
+            return true;
+        }
+
+        unsigned StackSize(const RawHook* hook)
+        {
+            size_t args = hook->params.size() + (hook->ret != T_Void ? 1 : 0);
+            return static_cast<unsigned>((args <= 4 ? 0 : (args - 4)) * 8 + 32);
+        }
+#else
+        // SysV: s[0..5] the integer registers, s[6..13] the SSE ones.
+#define S2M_ARGS uint64_t i0, uint64_t i1, uint64_t i2, uint64_t i3, uint64_t i4, uint64_t i5, double f0, double f1, double f2, double f3, double f4, double f5, double f6, double f7
+#define S2M_REGS Regs regs{ { i0, i1, i2, i3, i4, i5, ToBits(f0), ToBits(f1), ToBits(f2), ToBits(f3), ToBits(f4), ToBits(f5), ToBits(f6), ToBits(f7) } }
+
+        template <typename R>
+        struct Callbacks
+        {
+            static R Out(uint64_t v) { return FromBits<R>(v); }
+
+            static R Pre(S2M_ARGS) { S2M_REGS; return Out(Handle(regs, false)); }
+            static R Post(S2M_ARGS) { S2M_REGS; return Out(Handle(regs, true)); }
+            static R Return(S2M_ARGS) { return Out(MakeReturn()); }
+
+            static R CallOriginal(S2M_ARGS)
+            {
+                auto* hook = static_cast<RawHook*>(KHook::GetContextPtr());
+                S2M_REGS;
+                if (!t_pending.empty() && t_pending.back().hook == hook)
+                {
+                    regs = t_pending.back().regs;
+                    t_pending.pop_back();
+                }
+                using Fn = R (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, double, double, double, double, double, double, double, double);
+                auto original = reinterpret_cast<Fn>(KHook::GetOriginalFunction());
+                const uint64_t* s = regs.s;
+                const R r = original(s[0], s[1], s[2], s[3], s[4], s[5], FromBits<double>(s[6]), FromBits<double>(s[7]), FromBits<double>(s[8]),
+                                     FromBits<double>(s[9]), FromBits<double>(s[10]), FromBits<double>(s[11]), FromBits<double>(s[12]), FromBits<double>(s[13]));
+                uint64_t value = ToBits(r);
+                SaveReturn(Action::Ignore, &value, hook->ret != T_Void, true);
+                return r;
+            }
+        };
+#undef S2M_ARGS
+#undef S2M_REGS
+
+        struct CallbackSet
+        {
+            void* pre;
+            void* post;
+            void* ret;
+            void* original;
+        };
+
+        template <typename R>
+        CallbackSet Pick(int)
+        {
+            using C = Callbacks<R>;
+            return { reinterpret_cast<void*>(&C::Pre), reinterpret_cast<void*>(&C::Post), reinterpret_cast<void*>(&C::Return), reinterpret_cast<void*>(&C::CallOriginal) };
+        }
+
+        // By class: integer parameters take s[0..5] in order, SSE ones s[6..13].
+        bool Layout(RawHook* hook, int* mask, std::string& error)
+        {
+            *mask = 0;
+            hook->slot.clear();
+            int ni = 0, nf = 0;
+            for (Type t : hook->params)
+            {
+                if (IsSse(t))
+                {
+                    if (nf == 8)
+                    {
+                        error = "too many floating-point parameters (at most 8)";
+                        return false;
+                    }
+                    hook->slot.push_back(6 + nf++);
+                }
+                else
+                {
+                    if (ni == 6)
+                    {
+                        error = "too many integer and pointer parameters (at most 6)";
+                        return false;
+                    }
+                    hook->slot.push_back(ni++);
+                }
+            }
+            return true;
+        }
+
+        unsigned StackSize(const RawHook* hook)
+        {
+            return static_cast<unsigned>((hook->ret != T_Void ? 8 : 0) + 8 * hook->params.size());
+        }
+#endif
+
+        // ---- natives -------------------------------------------------------------------
+
+        bool ValidType(cell_t t)
+        {
+            return t >= T_Void && t <= T_Pointer && t != T_VectorValue;
+        }
+
+        cell_t NewHook(IPluginContext* ctx, void* address, void** vtable, int index, cell_t returnType)
+        {
+            if (!ValidType(returnType) || returnType == T_String || returnType == T_Vector)
+                return ctx->ThrowNativeError("Unsupported return type %d", returnType);
+            auto* hook = new RawHook();
+            hook->owner = CallerId(ctx);
+            hook->address = address;
+            hook->vtable = vtable;
+            hook->index = index;
+            hook->ret = static_cast<Type>(returnType);
+            const cell_t h = Handles().Create(HookType(), hook, hook->owner);
+            if (!h)
+                delete hook;
+            return h;
+        }
+
+        cell_t N_HookFromGameConfig(IPluginContext* ctx, const cell_t* params)
+        {
+            if (!shared::g_pGameConfig)
+                return 0;
+            const uintptr_t addr = shared::g_pGameConfig->ResolveSignature(LocalString(ctx, params[1])).GetAddr();
+            return addr ? NewHook(ctx, reinterpret_cast<void*>(addr), nullptr, -1, params[2]) : 0;
+        }
+
+        cell_t N_HookFromSignature(IPluginContext* ctx, const cell_t* params)
+        {
+            Source2ModModule module(LocalString(ctx, params[1]));
+            const uintptr_t addr = module.FindPattern(LocalString(ctx, params[2])).GetAddr();
+            return addr ? NewHook(ctx, reinterpret_cast<void*>(addr), nullptr, -1, params[3]) : 0;
+        }
+
+        // FromVirtual(module, vtableName, index, returnType)
+        cell_t N_HookFromVirtual(IPluginContext* ctx, const cell_t* params)
+        {
+            Source2ModModule module(LocalString(ctx, params[1]));
+            void** vtable = reinterpret_cast<void**>(module.GetVirtualTableByName(LocalString(ctx, params[2])).GetAddr());
+            if (!vtable)
+                return 0;
+            if (params[3] < 0)
+                return ctx->ThrowNativeError("Invalid vtable index %d", params[3]);
+            return NewHook(ctx, nullptr, vtable, params[3], params[4]);
+        }
+
+        RawHook* HookOf(IPluginContext* ctx, cell_t handle)
+        {
+            return static_cast<RawHook*>(ReadHandle(ctx, handle, HookType()));
+        }
+
+        cell_t N_HookAddParam(IPluginContext* ctx, const cell_t* params)
+        {
+            RawHook* hook = HookOf(ctx, params[1]);
+            if (!hook)
+                return 0;
+            if (hook->id != KHook::INVALID_HOOK)
+                return ctx->ThrowNativeError("The hook is enabled; describe its parameters first");
+            if (!ValidType(params[2]) || params[2] == T_Void)
+                return ctx->ThrowNativeError("Invalid parameter type %d (a Vector by value cannot be hooked)", params[2]);
+            hook->params.push_back(static_cast<Type>(params[2]));
+            return 0;
+        }
+
+        IPluginFunction* OptionalFunction(IPluginContext* ctx, cell_t id)
+        {
+            return id == 0 || id == -1 ? nullptr : ctx->GetFunctionById(static_cast<funcid_t>(id));
+        }
+
+        // Enable(pre = INVALID_FUNCTION, post = INVALID_FUNCTION)
+        cell_t N_HookEnable(IPluginContext* ctx, const cell_t* params)
+        {
+            RawHook* hook = HookOf(ctx, params[1]);
+            if (!hook)
+                return 0;
+            hook->pre = OptionalFunction(ctx, params[2]);
+            hook->post = OptionalFunction(ctx, params[3]);
+            if (hook->id != KHook::INVALID_HOOK)
+                return 1;
+            if (hook->removing)
+                return ctx->ThrowNativeError("The hook is still being removed; enable it again next frame");
+
+            int mask = 0;
+            std::string error;
+            if (!Layout(hook, &mask, error))
+                return ctx->ThrowNativeError("Source2ModHook: %s", error.c_str());
+
+            const CallbackSet cb = (hook->ret == T_Float || hook->ret == T_Double) ? Pick<double>(mask) : Pick<uint64_t>(mask);
+            if (hook->vtable)
+                hook->id = KHook::SetupVirtualHook(hook->vtable, hook->index, hook, nullptr, cb.pre, cb.post, cb.ret, cb.original, StackSize(hook), true);
+            else
+                hook->id = KHook::SetupHook(hook->address, hook, nullptr, cb.pre, cb.post, cb.ret, cb.original, StackSize(hook), true);
+            return hook->id != KHook::INVALID_HOOK;
+        }
+
+        cell_t N_HookDisable(IPluginContext* ctx, const cell_t* params)
+        {
+            RawHook* hook = HookOf(ctx, params[1]);
+            if (!hook || hook->id == KHook::INVALID_HOOK)
+                return 0;
+            // Handlers off now; the detour comes down when no call is inside it.
+            hook->pre = hook->post = nullptr;
+            BeginRemove(hook);
+            return 0;
+        }
+
+        // ---- Source2ModHookParams / Source2ModHookReturn ------------------------------
+
+        Frame* ParamFrame(IPluginContext* ctx, const cell_t* params, int* slot, Type* type)
+        {
+            auto* frame = static_cast<Frame*>(ReadHandle(ctx, params[1], ParamsType()));
+            if (!frame)
+                return nullptr;
+            const cell_t num = params[2];
+            if (num < 1 || static_cast<size_t>(num) > frame->hook->params.size())
+            {
+                ctx->ThrowNativeError("Invalid parameter number %d (the hook has %d)", num, static_cast<int>(frame->hook->params.size()));
+                return nullptr;
+            }
+            *slot = frame->hook->slot[num - 1];
+            *type = frame->hook->params[num - 1];
+            return frame;
+        }
+
+        cell_t IntOf(uint64_t bits, Type t)
+        {
+            switch (t)
+            {
+            case T_Bool:
+                return (bits & 0xFF) != 0;
+            case T_Int8:
+                return static_cast<int8_t>(bits);
+            case T_Int16:
+                return static_cast<int16_t>(bits);
+            default:
+                return static_cast<cell_t>(bits);
+            }
+        }
+
+        float FloatOf(uint64_t bits, Type t)
+        {
+            return t == T_Double ? static_cast<float>(FromBits<double>(bits)) : FromBits<float>(bits);
+        }
+
+        cell_t EntityOf(uint64_t bits)
+        {
+            auto* e = reinterpret_cast<CEntityInstance*>(bits);
+            return e ? static_cast<cell_t>(e->GetEntityIndex().Get()) : -1;
+        }
+
+        cell_t N_PGetInt(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            Frame* f = ParamFrame(ctx, params, &slot, &t);
+            return f ? IntOf(f->regs.s[slot], t) : 0;
+        }
+
+        cell_t N_PGetFloat(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            Frame* f = ParamFrame(ctx, params, &slot, &t);
+            return f ? sp_ftoc(FloatOf(f->regs.s[slot], t)) : 0;
+        }
+
+        cell_t N_PGetEntity(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            Frame* f = ParamFrame(ctx, params, &slot, &t);
+            return f ? EntityOf(f->regs.s[slot]) : -1;
+        }
+
+        cell_t N_PGetObject(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            Frame* f = ParamFrame(ctx, params, &slot, &t);
+            return f ? SchemaObjectForPointer(reinterpret_cast<void*>(f->regs.s[slot])) : 0;
+        }
+
+        cell_t N_PGetString(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            Frame* f = ParamFrame(ctx, params, &slot, &t);
+            if (!f)
+                return 0;
+            const char* s = reinterpret_cast<const char*>(f->regs.s[slot]);
+            size_t written = 0;
+            ctx->StringToLocalUTF8(params[3], params[4], s ? s : "", &written);
+            return static_cast<cell_t>(written);
+        }
+
+        cell_t N_PGetVector(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            Frame* f = ParamFrame(ctx, params, &slot, &t);
+            if (!f)
+                return 0;
+            const auto* v = reinterpret_cast<const Vector*>(f->regs.s[slot]);
+            cell_t* out;
+            ctx->LocalToPhysAddr(params[3], &out);
+            out[0] = sp_ftoc(v ? v->x : 0.0f);
+            out[1] = sp_ftoc(v ? v->y : 0.0f);
+            out[2] = sp_ftoc(v ? v->z : 0.0f);
+            return 0;
+        }
+
+        cell_t N_PSetInt(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            if (Frame* f = ParamFrame(ctx, params, &slot, &t))
+            {
+                f->regs.s[slot] = static_cast<uint64_t>(static_cast<int64_t>(t == T_Bool ? (params[3] != 0) : params[3]));
+                f->changed = true;
+            }
+            return 0;
+        }
+
+        cell_t N_PSetFloat(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            if (Frame* f = ParamFrame(ctx, params, &slot, &t))
+            {
+                f->regs.s[slot] = t == T_Double ? ToBits<double>(sp_ctof(params[3])) : ToBits<float>(sp_ctof(params[3]));
+                f->changed = true;
+            }
+            return 0;
+        }
+
+        cell_t N_PSetEntity(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            if (Frame* f = ParamFrame(ctx, params, &slot, &t))
+            {
+                CEntityInstance* e = params[3] == -1 ? nullptr : CBaseEntity::FromIndex<CEntityInstance>(params[3]);
+                if (params[3] != -1 && !e)
+                    return ctx->ThrowNativeError("Entity %d is invalid", params[3]);
+                f->regs.s[slot] = reinterpret_cast<uintptr_t>(e);
+                f->changed = true;
+            }
+            return 0;
+        }
+
+        // A Vector parameter is a pointer: the vector is written in place.
+        cell_t N_PSetVector(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            if (Frame* f = ParamFrame(ctx, params, &slot, &t))
+            {
+                auto* v = reinterpret_cast<Vector*>(f->regs.s[slot]);
+                if (!v)
+                    return ctx->ThrowNativeError("The vector parameter is null");
+                cell_t* in;
+                ctx->LocalToPhysAddr(params[3], &in);
+                *v = Vector(sp_ctof(in[0]), sp_ctof(in[1]), sp_ctof(in[2]));
+            }
+            return 0;
+        }
+
+        Frame* RetFrame(IPluginContext* ctx, cell_t handle)
+        {
+            auto* frame = static_cast<Frame*>(ReadHandle(ctx, handle, ReturnType()));
+            if (frame && frame->hook->ret == T_Void)
+            {
+                ctx->ThrowNativeError("The hooked function returns nothing");
+                return nullptr;
+            }
+            return frame;
+        }
+
+        cell_t N_RGetInt(IPluginContext* ctx, const cell_t* params)
+        {
+            Frame* f = RetFrame(ctx, params[1]);
+            return f ? IntOf(f->ret, f->hook->ret) : 0;
+        }
+
+        cell_t N_RGetFloat(IPluginContext* ctx, const cell_t* params)
+        {
+            Frame* f = RetFrame(ctx, params[1]);
+            return f ? sp_ftoc(FloatOf(f->ret, f->hook->ret)) : 0;
+        }
+
+        cell_t N_RGetEntity(IPluginContext* ctx, const cell_t* params)
+        {
+            Frame* f = RetFrame(ctx, params[1]);
+            return f ? EntityOf(f->ret) : -1;
+        }
+
+        cell_t N_RSetInt(IPluginContext* ctx, const cell_t* params)
+        {
+            if (Frame* f = RetFrame(ctx, params[1]))
+            {
+                f->ret = static_cast<uint64_t>(static_cast<int64_t>(f->hook->ret == T_Bool ? (params[2] != 0) : params[2]));
+                f->retSet = true;
+            }
+            return 0;
+        }
+
+        cell_t N_RSetFloat(IPluginContext* ctx, const cell_t* params)
+        {
+            if (Frame* f = RetFrame(ctx, params[1]))
+            {
+                f->ret = f->hook->ret == T_Double ? ToBits<double>(sp_ctof(params[2])) : ToBits<float>(sp_ctof(params[2]));
+                f->retSet = true;
+            }
+            return 0;
+        }
+
+        cell_t N_RSetEntity(IPluginContext* ctx, const cell_t* params)
+        {
+            if (Frame* f = RetFrame(ctx, params[1]))
+            {
+                CEntityInstance* e = params[2] == -1 ? nullptr : CBaseEntity::FromIndex<CEntityInstance>(params[2]);
+                f->ret = reinterpret_cast<uintptr_t>(e);
+                f->retSet = true;
+            }
+            return 0;
+        }
+
+        const sp_nativeinfo_t g_rawHookNatives[] = {
+            { "Source2ModHook.FromGameConfig", N_HookFromGameConfig },
+            { "Source2ModHook.FromSignature", N_HookFromSignature },
+            { "Source2ModHook.FromVirtual", N_HookFromVirtual },
+            { "Source2ModHook.AddParam", N_HookAddParam },
+            { "Source2ModHook.Enable", N_HookEnable },
+            { "Source2ModHook.Disable", N_HookDisable },
+            { "Source2ModHookParams.GetInt", N_PGetInt },
+            { "Source2ModHookParams.GetFloat", N_PGetFloat },
+            { "Source2ModHookParams.GetBool", N_PGetInt },
+            { "Source2ModHookParams.GetEntity", N_PGetEntity },
+            { "Source2ModHookParams.GetObject", N_PGetObject },
+            { "Source2ModHookParams.GetString", N_PGetString },
+            { "Source2ModHookParams.GetVector", N_PGetVector },
+            { "Source2ModHookParams.SetInt", N_PSetInt },
+            { "Source2ModHookParams.SetFloat", N_PSetFloat },
+            { "Source2ModHookParams.SetBool", N_PSetInt },
+            { "Source2ModHookParams.SetEntity", N_PSetEntity },
+            { "Source2ModHookParams.SetVector", N_PSetVector },
+            { "Source2ModHookReturn.GetInt", N_RGetInt },
+            { "Source2ModHookReturn.GetFloat", N_RGetFloat },
+            { "Source2ModHookReturn.GetBool", N_RGetInt },
+            { "Source2ModHookReturn.GetEntity", N_RGetEntity },
+            { "Source2ModHookReturn.SetInt", N_RSetInt },
+            { "Source2ModHookReturn.SetFloat", N_RSetFloat },
+            { "Source2ModHookReturn.SetBool", N_RSetInt },
+            { "Source2ModHookReturn.SetEntity", N_RSetEntity },
+            { nullptr, nullptr },
+        };
+    }
+
+    const sp_nativeinfo_t* GetRawHookNatives()
+    {
+        return g_rawHookNatives;
+    }
+}

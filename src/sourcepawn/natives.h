@@ -50,6 +50,7 @@ namespace sourcepawn
     const sp_nativeinfo_t* GetNetSoundNatives();     // natives_netsound.cpp
     const sp_nativeinfo_t* GetGameHookNatives();     // natives_gamehooks.cpp
     const sp_nativeinfo_t* GetGameConfigNatives();   // natives_gameconfig.cpp
+    const sp_nativeinfo_t* GetRawHookNatives();      // natives_rawhooks.cpp
 
     /**
      * SourceMod's format: the string at params[fmtParam], its arguments right
