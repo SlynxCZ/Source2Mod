@@ -593,17 +593,20 @@ namespace sourcepawn
             }
         };
 
-        cell_t N_CreateTimer(IPluginContext* ctx, const cell_t* params)
+        // A timer of either API: SourceMod's callback gets (Handle timer, any
+        // data) and stops a repeating timer with Plugin_Stop; Source2Mod's
+        // gets (any data) and repeats until it is killed.
+        cell_t StartTimer(IPluginContext* ctx, float interval, cell_t funcId, cell_t data, int flags, bool sourcemod)
         {
             ScriptPlugin* plugin = Plugin(ctx);
-            IPluginFunction* fn = ctx->GetFunctionById(params[2]);
+            IPluginFunction* fn = ctx->GetFunctionById(funcId);
             if (!plugin || !fn)
-                return ctx->ThrowNativeError("Invalid function id (%X)", params[2]);
+                return ctx->ThrowNativeError("Invalid function id (%X)", funcId);
 
             auto state = std::make_shared<TimerState>();
             state->owner = plugin->Id();
-            state->data = params[3];
-            state->flags = params[4];
+            state->data = data;
+            state->flags = flags;
 
             auto* object = new TimerObject();
             object->state = state;
@@ -617,28 +620,51 @@ namespace sourcepawn
             // Action (Handle timer, any data); Plugin_Stop ends a repeating timer.
             const bool repeat = (state->flags & TIMER_FLAG_REPEAT) != 0;
             auto guard = std::make_shared<TimerGuard>(state);
-            TimerCallback callback([guard, fn, repeat]()
+            TimerCallback callback([guard, fn, repeat, sourcemod]()
             {
                 const std::shared_ptr<TimerState>& s = guard->state;
                 if (!s->handle)
                     return;
 
                 sp::CallArgs args;
-                args.PushCell(s->handle);
+                if (sourcemod)
+                    args.PushCell(s->handle);
                 args.PushCell(s->data);
 
                 cell_t res = kPluginContinue;
                 Invoke(fn, args, &res);
 
-                if (repeat && res == kPluginStop && s->handle)
+                if (sourcemod && repeat && res == kPluginStop && s->handle)
                     Handles().Free(s->handle, s->owner, true);
             });
 
             // The script's timer flags are SourceMod's and match the scheduler's
             // bit for bit (TIMER_REPEAT, TIMER_FLAG_NO_MAPCHANGE).
-            state->timer = scheduler::schedulerManager.AddTimer(plugin->Id(), sp_ctof(params[1]), std::move(callback),
+            state->timer = scheduler::schedulerManager.AddTimer(plugin->Id(), interval, std::move(callback),
                                                                 state->flags & (TIMER_FLAG_REPEAT | TIMER_FLAG_NO_MAPCHANGE));
             return state->handle;
+        }
+
+        cell_t N_CreateTimer(IPluginContext* ctx, const cell_t* params)
+        {
+            return StartTimer(ctx, sp_ctof(params[1]), params[2], params[3], params[4], true);
+        }
+
+        // Source2ModScheduler.AddTimer(float interval, Source2ModTask callback, any data = 0, int flags = 0)
+        cell_t N_S2MAddTimer(IPluginContext* ctx, const cell_t* params)
+        {
+            return StartTimer(ctx, sp_ctof(params[1]), params[2], params[3], params[4], false);
+        }
+
+        // Source2ModScheduler.KillTimer(Source2ModTimer timer): one that has ended is fine.
+        cell_t N_S2MKillTimer(IPluginContext*, const cell_t* params)
+        {
+            if (!Handles().Read(params[1], Types().timer))
+                return 0;
+            PluginId owner = 0;
+            Handles().OwnerOf(params[1], &owner);
+            Handles().Free(params[1], owner, true);
+            return 0;
         }
 
         // KillTimer(Handle timer, bool autoClose=false)
@@ -847,6 +873,135 @@ namespace sourcepawn
         {
             bool* dontBroadcast = nullptr;
             return EventOf(ctx, params[1], &dontBroadcast) && dontBroadcast && *dontBroadcast;
+        }
+
+        // ---- Source2ModEvents / IGameEvent / IGameEventManager2 ---------------------
+
+        // Events a script created: an Event handle the script owns, which
+        // frees the event when it is closed without being fired.
+        HandleType CreatedEventType()
+        {
+            static const HandleType t = Handles().CreateType("CreatedEvent", [](void* p)
+            {
+                auto* frame = static_cast<EventFrame*>(p);
+                if (frame->event && shared::g_pGameEventManager)
+                    shared::g_pGameEventManager->FreeEvent(frame->event);
+                delete frame;
+            }, Types().event, true);
+            return t;
+        }
+
+        // HookGameEvent(name, handler(IGameEvent event, bool post, bool &dontBroadcast), bool post)
+        cell_t N_S2MHookGameEvent(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptPlugin* plugin = Plugin(ctx);
+            IPluginFunction* fn = ctx->GetFunctionById(params[2]);
+            if (!plugin || !fn)
+                return ctx->ThrowNativeError("Invalid function id (%X)", params[2]);
+
+            const PluginId owner = plugin->Id();
+            GameEventHandler handler([fn, owner](IGameEvent* event, bool post, bool& dontBroadcast) -> Action
+            {
+                EventFrame frame{ event, &dontBroadcast };
+                const cell_t handle = Handles().Create(Types().event, &frame, owner);
+                cell_t broadcast = dontBroadcast ? 1 : 0;
+
+                sp::CallArgs args;
+                args.PushCell(handle);
+                args.PushCell(post ? 1 : 0);
+                args.PushCellByRef(&broadcast);
+                cell_t res = 0;
+                Invoke(fn, args, &res);
+
+                dontBroadcast = broadcast != 0;
+                Handles().Free(handle, owner, true);
+                return static_cast<Action>(std::clamp<cell_t>(res, 0, 2));
+            });
+            return static_cast<cell_t>(events::eventManager.HookGameEvent(owner, Str(ctx, params[1]), std::move(handler), params[3] != 0));
+        }
+
+        cell_t N_S2MUnhookGameEvent(IPluginContext*, const cell_t* params)
+        {
+            return static_cast<ISource2ModEvents&>(events::eventManager).UnhookGameEvent(static_cast<Source2ModHookId>(params[1]));
+        }
+
+        cell_t N_GameEventGetPlayerSlot(IPluginContext* ctx, const cell_t* params)
+        {
+            IGameEvent* ev = EventOf(ctx, params[1]);
+            return ev ? ev->GetPlayerSlot(Str(ctx, params[2])).Get() : -1;
+        }
+
+        cell_t N_GameEventGetPlayerController(IPluginContext* ctx, const cell_t* params)
+        {
+            IGameEvent* ev = EventOf(ctx, params[1]);
+            CEntityInstance* e = ev ? ev->GetPlayerController(Str(ctx, params[2])) : nullptr;
+            return e ? static_cast<cell_t>(e->GetEntityIndex().Get()) : -1;
+        }
+
+        cell_t N_GameEventGetPlayerPawn(IPluginContext* ctx, const cell_t* params)
+        {
+            IGameEvent* ev = EventOf(ctx, params[1]);
+            CEntityInstance* e = ev ? ev->GetPlayerPawn(Str(ctx, params[2])) : nullptr;
+            return e ? static_cast<cell_t>(e->GetEntityIndex().Get()) : -1;
+        }
+
+        cell_t N_GameEventSetPlayer(IPluginContext* ctx, const cell_t* params)
+        {
+            if (IGameEvent* ev = EventOf(ctx, params[1]))
+                ev->SetPlayer(Str(ctx, params[2]), CPlayerSlot(params[3]));
+            return 0;
+        }
+
+        // IGameEventManager2.CreateEvent(name, bool force = false)
+        cell_t N_ManagerCreateEvent(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptPlugin* plugin = Plugin(ctx);
+            IGameEvent* ev = shared::g_pGameEventManager ? shared::g_pGameEventManager->CreateEvent(Str(ctx, params[1]), params[2] != 0) : nullptr;
+            if (!ev)
+                return 0;
+            auto* frame = new EventFrame{ ev, nullptr };
+            const cell_t handle = Handles().Create(CreatedEventType(), frame, plugin ? plugin->Id() : 0);
+            if (!handle)
+            {
+                shared::g_pGameEventManager->FreeEvent(ev);
+                delete frame;
+            }
+            return handle;
+        }
+
+        // FireEvent(event, bool dontBroadcast = false): the engine frees it.
+        cell_t N_ManagerFireEvent(IPluginContext* ctx, const cell_t* params)
+        {
+            auto* frame = static_cast<EventFrame*>(ReadHandle(ctx, params[1], CreatedEventType()));
+            if (!frame)
+                return 0;
+            IGameEvent* ev = std::exchange(frame->event, nullptr);
+            Handles().Free(params[1], 0, true);
+            return shared::g_pGameEventManager->FireEvent(ev, params[2] != 0);
+        }
+
+        cell_t N_ManagerFreeEvent(IPluginContext* ctx, const cell_t* params)
+        {
+            if (ReadHandle(ctx, params[1], CreatedEventType()))
+                Handles().Free(params[1], 0, true);
+            return 0;
+        }
+
+        // CBasePlayerController.FireEventToClient(IGameEvent event): the event stays the script's.
+        cell_t N_ControllerFireEventToClient(IPluginContext* ctx, const cell_t* params)
+        {
+            auto* controller = CBaseEntity::FromIndex<CBasePlayerController>(params[1]);
+            if (!controller)
+                return ctx->ThrowNativeError("Entity %d is invalid", params[1]);
+            if (IGameEvent* ev = EventOf(ctx, params[2]))
+                controller->FireEventToClient(ev);
+            return 0;
+        }
+
+        // Source2ModScheduler.NextFrame(Source2ModTask task, any data = 0)
+        cell_t N_S2MNextFrame(IPluginContext* ctx, const cell_t* params)
+        {
+            return N_RequestFrame(ctx, params);
         }
 
         // ---- clients ------------------------------------------------------------
@@ -1094,6 +1249,21 @@ namespace sourcepawn
             { "GetMyHandle", N_GetMyHandle },
             { "GetPluginFilename", N_GetPluginFilename },
             { "RequestFrame", N_RequestFrame },
+            // source2mod/scheduler.inc
+            { "Source2ModScheduler.NextFrame", N_S2MNextFrame },
+            { "Source2ModScheduler.AddTimer", N_S2MAddTimer },
+            { "Source2ModScheduler.KillTimer", N_S2MKillTimer },
+            // source2mod/events.inc
+            { "Source2ModEvents.HookGameEvent", N_S2MHookGameEvent },
+            { "Source2ModEvents.UnhookGameEvent", N_S2MUnhookGameEvent },
+            { "IGameEvent.GetPlayerSlot", N_GameEventGetPlayerSlot },
+            { "IGameEvent.GetPlayerController", N_GameEventGetPlayerController },
+            { "IGameEvent.GetPlayerPawn", N_GameEventGetPlayerPawn },
+            { "IGameEvent.SetPlayer", N_GameEventSetPlayer },
+            { "IGameEventManager2.CreateEvent", N_ManagerCreateEvent },
+            { "IGameEventManager2.FireEvent", N_ManagerFireEvent },
+            { "IGameEventManager2.FreeEvent", N_ManagerFreeEvent },
+            { "CBasePlayerController.FireEventToClient", N_ControllerFireEventToClient },
             // events.inc
             { "HookEvent", N_HookEvent },
             { "UnhookEvent", N_UnhookEvent },
@@ -1152,7 +1322,7 @@ namespace sourcepawn
         static const std::vector<sp_nativeinfo_t> s_all = []
         {
             std::vector<sp_nativeinfo_t> all;
-            for (const sp_nativeinfo_t* table : { g_natives, GetAdtNatives(), GetConVarNatives(), GetPluginSysNatives(), GetEntityNatives() })
+            for (const sp_nativeinfo_t* table : { g_natives, GetAdtNatives(), GetConVarNatives(), GetPluginSysNatives(), GetEntityNatives(), GetApiNatives() })
                 for (const sp_nativeinfo_t* n = table; n->name; ++n)
                     all.push_back(*n);
             all.push_back({ nullptr, nullptr });

@@ -83,6 +83,12 @@ namespace sourcepawn
         void OnClientPutInServer(CPlayerSlot slot, const char* name, int type, uint64 xuid) override;
         void OnClientDisconnect(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId) override;
         void OnClientAuthorized(CPlayerSlot slot, uint64 steamId) override;
+        void OnClientAuthorizeFailed(CPlayerSlot slot, uint64 steamId) override;
+        void OnClientVoice(CPlayerSlot slot) override;
+        void OnClientSettingsChanged(CPlayerSlot slot) override;
+        void OnPermissionsChanged(uint64 steamId) override;
+        void OnGameServerSteamAPIActivated() override;
+        void OnGameServerSteamAPIDeactivated() override;
 
         PluginId Id() const { return m_id; }
         const std::string& Path() const { return m_path; }
@@ -141,6 +147,7 @@ namespace sourcepawn
         std::string m_name, m_description, m_author, m_version, m_url;
 
         SourcePawn::IPluginFunction* m_onGameFrame = nullptr;
+        SourcePawn::IPluginFunction* m_s2mOnGameFrame = nullptr;   // source2mod/listener.inc
 
         bool m_autoExec = false;
         bool m_autoCreate = true;

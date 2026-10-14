@@ -189,6 +189,7 @@ namespace sourcepawn
         g_scripts.push_back(this);
         ReadMyInfo();
         m_onGameFrame = m_runtime->GetFunctionByName("OnGameFrame");
+        m_s2mOnGameFrame = m_runtime->GetFunctionByName("Source2Mod_OnGameFrame");
     }
 
     ScriptPlugin::~ScriptPlugin()
@@ -458,8 +459,19 @@ namespace sourcepawn
         CallForward("OnAllPluginsLoaded");
     }
 
-    void ScriptPlugin::OnLevelInit(const char*, const char*, const char*, const char*, bool, bool)
+    void ScriptPlugin::OnLevelInit(const char* mapName, const char* mapEntities, const char* oldLevel, const char* landmarkName, bool loadGame, bool background)
     {
+        if (IPluginFunction* fn = m_runtime->GetFunctionByName("Source2Mod_OnLevelInit"))
+        {
+            sp::CallArgs args;
+            args.PushString(mapName ? mapName : "");
+            args.PushString(mapEntities ? mapEntities : "");
+            args.PushString(oldLevel ? oldLevel : "");
+            args.PushString(landmarkName ? landmarkName : "");
+            args.PushCell(loadGame ? 1 : 0);
+            args.PushCell(background ? 1 : 0);
+            Invoke(fn, args);
+        }
         CallForward("OnMapStart");
         ExecAutoConfig();
         CallForward("OnAutoConfigsBuffered");
@@ -468,28 +480,66 @@ namespace sourcepawn
 
     void ScriptPlugin::OnLevelShutdown()
     {
+        CallForward("Source2Mod_OnLevelShutdown");
         CallForward("OnMapEnd");
     }
 
-    void ScriptPlugin::OnGameFrame(bool, bool, bool)
+    void ScriptPlugin::OnGameFrame(bool simulating, bool firstTick, bool lastTick)
     {
+        if (m_s2mOnGameFrame)
+        {
+            sp::CallArgs args;
+            args.PushCell(simulating ? 1 : 0);
+            args.PushCell(firstTick ? 1 : 0);
+            args.PushCell(lastTick ? 1 : 0);
+            Invoke(m_s2mOnGameFrame, args);
+        }
         if (m_onGameFrame)
             Invoke(m_onGameFrame, sp::CallArgs());
     }
 
-    void ScriptPlugin::OnClientPutInServer(CPlayerSlot slot, const char*, int, uint64)
+    void ScriptPlugin::OnClientPutInServer(CPlayerSlot slot, const char* name, int type, uint64 xuid)
     {
+        if (IPluginFunction* fn = m_runtime->GetFunctionByName("Source2Mod_OnClientPutInServer"))
+        {
+            const std::string id = std::to_string(xuid);
+            sp::CallArgs args;
+            args.PushCell(slot.Get());
+            args.PushString(name ? name : "");
+            args.PushCell(type);
+            args.PushString(id.c_str());
+            Invoke(fn, args);
+        }
         CallForwardClient("OnClientPutInServer", slot.Get() + 1);
     }
 
-    void ScriptPlugin::OnClientDisconnect(CPlayerSlot slot, ENetworkDisconnectionReason, const char*, uint64, const char*)
+    void ScriptPlugin::OnClientDisconnect(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId)
     {
+        if (IPluginFunction* fn = m_runtime->GetFunctionByName("Source2Mod_OnClientDisconnect"))
+        {
+            const std::string id = std::to_string(xuid);
+            sp::CallArgs args;
+            args.PushCell(slot.Get());
+            args.PushCell(static_cast<cell_t>(reason));
+            args.PushString(name ? name : "");
+            args.PushString(id.c_str());
+            args.PushString(networkId ? networkId : "");
+            Invoke(fn, args);
+        }
         CallForwardClient("OnClientDisconnect", slot.Get() + 1);
         CallForwardClient("OnClientDisconnect_Post", slot.Get() + 1);
     }
 
     void ScriptPlugin::OnClientAuthorized(CPlayerSlot slot, uint64 steamId)
     {
+        if (IPluginFunction* fn = m_runtime->GetFunctionByName("Source2Mod_OnClientAuthorized"))
+        {
+            const std::string id = std::to_string(steamId);
+            sp::CallArgs args;
+            args.PushCell(slot.Get());
+            args.PushString(id.c_str());
+            Invoke(fn, args);
+        }
         if (IPluginFunction* fn = m_runtime->GetFunctionByName("OnClientAuthorized"))
         {
             const std::string auth = Steam2(steamId);
@@ -498,6 +548,43 @@ namespace sourcepawn
             args.PushString(auth.c_str());
             Invoke(fn, args);
         }
+    }
+
+    void ScriptPlugin::OnClientAuthorizeFailed(CPlayerSlot slot, uint64 steamId)
+    {
+        if (IPluginFunction* fn = m_runtime->GetFunctionByName("Source2Mod_OnClientAuthorizeFailed"))
+        {
+            const std::string id = std::to_string(steamId);
+            sp::CallArgs args;
+            args.PushCell(slot.Get());
+            args.PushString(id.c_str());
+            Invoke(fn, args);
+        }
+    }
+
+    void ScriptPlugin::OnClientVoice(CPlayerSlot slot)
+    {
+        CallForwardClient("Source2Mod_OnClientVoice", slot.Get());
+    }
+
+    void ScriptPlugin::OnClientSettingsChanged(CPlayerSlot slot)
+    {
+        CallForwardClient("Source2Mod_OnClientSettingsChanged", slot.Get());
+    }
+
+    void ScriptPlugin::OnPermissionsChanged(uint64 steamId)
+    {
+        CallForwardString("Source2Mod_OnPermissionsChanged", std::to_string(steamId).c_str());
+    }
+
+    void ScriptPlugin::OnGameServerSteamAPIActivated()
+    {
+        CallForward("Source2Mod_OnGameServerSteamAPIActivated");
+    }
+
+    void ScriptPlugin::OnGameServerSteamAPIDeactivated()
+    {
+        CallForward("Source2Mod_OnGameServerSteamAPIDeactivated");
     }
 
     // ---- AutoExecConfig ---------------------------------------------------------
