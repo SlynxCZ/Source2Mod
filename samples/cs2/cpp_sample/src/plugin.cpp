@@ -880,6 +880,12 @@ KHook::Return<void> SamplePlugin::Hook_UtilRemove(CEntityInstance* pEntity)
 // looks.
 KHook::Return<void> SamplePlugin::Hook_SnapViewAngles(CBasePlayerPawn* pThis, QAngle* pAngles)
 {
+    // Bots have their views snapped all the time; only players are worth a
+    // log line.
+    auto *pController = pThis ? static_cast<CCSPlayerController *>(pThis->m_hController().Get()) : nullptr;
+    if (!pController || pController->IsBot())
+        return { KHook::Action::Ignore };
+
     if (pAngles)
         SOURCE2MOD_LOG(this, "SnapViewAngles: %.1f %.1f %.1f\n", pAngles->x, pAngles->y, pAngles->z);
 

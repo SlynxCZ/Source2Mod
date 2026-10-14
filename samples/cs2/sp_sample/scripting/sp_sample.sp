@@ -1051,6 +1051,14 @@ public Source2ModAction Hook_SnapViewAngles(Source2ModHookParams params, Source2
 {
 	// A pawn's view snapped to new angles -- a teleport with angles, a
 	// respawn. params.SetVector(2, ...) here changes where it looks.
+
+	// Bots have their views snapped all the time; only players are worth a
+	// log line.
+	CBasePlayerPawn pawn = view_as<CBasePlayerPawn>(params.GetEntity(1));
+	CCSPlayerController controller = pawn != NULL_ENTITY ? pawn.GetController() : NULL_ENTITY;
+	if (controller == NULL_ENTITY || controller.IsBot())
+		return Action_Ignore;
+
 	float angles[3];
 	params.GetVector(2, angles);
 	LogMessage("SnapViewAngles: %.1f %.1f %.1f", angles[0], angles[1], angles[2]);
