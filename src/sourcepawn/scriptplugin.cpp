@@ -158,6 +158,7 @@ namespace sourcepawn
         ForgetEntityListeners(id);
         ForgetGameHooks(id);
         ForgetWorldHooks(id);
+        ForgetUiHooks(id);
         Handles().RemoveAllForPlugin(id);
     }
 

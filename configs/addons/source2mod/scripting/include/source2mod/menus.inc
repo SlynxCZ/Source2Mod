@@ -42,7 +42,11 @@ methodmap CenterHtmlMenu < Handle
 	/** @return The option's index */
 	public native int AddMenuOption(const char[] text, CenterHtmlMenuHandler handler, any data = 0, bool disabled = false);
 
-	/** Picks it at most once per cooldown; close = close the menu after a pick. */
+	/**
+	 * IBaseMenu::AddMenuOptionWithCooldown with the default cooldown handlers:
+	 * close = after a pick, close the menu and show the option text centered
+	 * for 5 seconds.
+	 */
 	public native int AddMenuOptionWithCooldown(const char[] text, CenterHtmlMenuHandler handler, any data = 0, bool disabled = false, bool close = true);
 
 	public native void ClearOptions();
