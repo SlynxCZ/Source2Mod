@@ -506,6 +506,13 @@ namespace sourcepawn
             return NewHook(ctx, nullptr, vtable, params[3], params[4]);
         }
 
+        // FromAddress(Source2ModAddress address, Source2ModType returnType)
+        cell_t N_HookFromAddress(IPluginContext* ctx, const cell_t* params)
+        {
+            void* addr = AddressOf(ctx, params[1]);
+            return addr ? NewHook(ctx, addr, nullptr, -1, params[2]) : 0;
+        }
+
         RawHook* HookOf(IPluginContext* ctx, cell_t handle)
         {
             return static_cast<RawHook*>(ReadHandle(ctx, handle, HookType()));
@@ -850,6 +857,7 @@ namespace sourcepawn
             { "Source2ModHook.FromGameConfig", N_HookFromGameConfig },
             { "Source2ModHook.FromSignature", N_HookFromSignature },
             { "Source2ModHook.FromVirtual", N_HookFromVirtual },
+            { "Source2ModHook.FromAddress", N_HookFromAddress },
             { "Source2ModHook.AddParam", N_HookAddParam },
             { "Source2ModHook.Enable", N_HookEnable },
             { "Source2ModHook.Disable", N_HookDisable },

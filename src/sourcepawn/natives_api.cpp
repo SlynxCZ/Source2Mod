@@ -373,6 +373,11 @@ namespace sourcepawn
         return Handles().Create(ArgsType(), const_cast<Source2ModCommandArgs*>(args), owner);
     }
 
+    cell_t LendCommandContext(const Source2ModCommandContext* context, PluginId owner)
+    {
+        return Handles().Create(ContextType(), const_cast<Source2ModCommandContext*>(context), owner);
+    }
+
     const sp_nativeinfo_t* GetApiNatives()
     {
         return g_apiNatives;

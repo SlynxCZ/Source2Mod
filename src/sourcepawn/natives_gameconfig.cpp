@@ -171,6 +171,13 @@ namespace sourcepawn
             return NewFunction(ctx, nullptr, params[1], params[2]);
         }
 
+        // FromAddress(Source2ModAddress address, Source2ModType returnType)
+        cell_t N_FnFromAddress(IPluginContext* ctx, const cell_t* params)
+        {
+            void* addr = AddressOf(ctx, params[1]);
+            return addr ? NewFunction(ctx, addr, -1, params[2]) : 0;
+        }
+
         Function* FnOf(IPluginContext* ctx, cell_t handle)
         {
             return static_cast<Function*>(ReadHandle(ctx, handle, FunctionType()));
@@ -490,6 +497,7 @@ namespace sourcepawn
             { "Source2ModFunction.FromGameConfig", N_FnFromGameConfig },
             { "Source2ModFunction.FromSignature", N_FnFromSignature },
             { "Source2ModFunction.FromVirtual", N_FnFromVirtual },
+            { "Source2ModFunction.FromAddress", N_FnFromAddress },
             { "Source2ModFunction.AddParam", N_FnAddParam },
             { "Source2ModFunction.Call", N_FnCall },
             { nullptr, nullptr },

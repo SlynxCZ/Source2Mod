@@ -25,6 +25,7 @@ namespace sp
 
 class ISource2ModNatives;
 class Source2ModCommandArgs;
+class Source2ModCommandContext;
 
 namespace sourcepawn
 {
@@ -52,6 +53,7 @@ namespace sourcepawn
     const sp_nativeinfo_t* GetGameHookNatives();     // natives_gamehooks.cpp
     const sp_nativeinfo_t* GetGameConfigNatives();   // natives_gameconfig.cpp
     const sp_nativeinfo_t* GetRawHookNatives();      // natives_rawhooks.cpp
+    const sp_nativeinfo_t* GetWorldNatives();        // natives_world.cpp
 
     /**
      * SourceMod's format: the string at params[fmtParam], its arguments right
@@ -69,6 +71,7 @@ namespace sourcepawn
     void ForgetConVarHooks(PluginId id);    // natives_convars.cpp
     void ForgetEntityListeners(PluginId id); // natives_entities.cpp
     void ForgetGameHooks(PluginId id);       // natives_gamehooks.cpp
+    void ForgetWorldHooks(PluginId id);      // natives_world.cpp
 
     /// ISource2ModNatives001, for native plugins (pluginsys.cpp).
     ISource2ModNatives* NativesInterface();
@@ -80,6 +83,12 @@ namespace sourcepawn
 
     /// A Source2ModCommandArgs handle for `args`; the caller frees it (Handles().Free) before args goes.
     cell_t LendCommandArgs(const ::Source2ModCommandArgs* args, PluginId owner);
+
+    /// A Source2ModCommandContext handle for `context`; the caller frees it (Handles().Free) before it goes.
+    cell_t LendCommandContext(const ::Source2ModCommandContext* context, PluginId owner);
+
+    /// The function behind a Source2ModAddress (addresses.inc); nullptr when not resolved, and a script error for a bad value.
+    void* AddressOf(SourcePawn::IPluginContext* ctx, cell_t address);
 
     /// The ConVar handle for an access index, made on first use.
     cell_t ConVarHandle(uint16_t accessIndex);
