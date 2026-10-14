@@ -49,6 +49,7 @@ namespace sourcepawn
     const sp_nativeinfo_t* GetApiNatives();          // natives_api.cpp
     const sp_nativeinfo_t* GetNetSoundNatives();     // natives_netsound.cpp
     const sp_nativeinfo_t* GetGameHookNatives();     // natives_gamehooks.cpp
+    const sp_nativeinfo_t* GetGameConfigNatives();   // natives_gameconfig.cpp
 
     /**
      * SourceMod's format: the string at params[fmtParam], its arguments right
@@ -69,6 +70,11 @@ namespace sourcepawn
 
     /// ISource2ModNatives001, for native plugins (pluginsys.cpp).
     ISource2ModNatives* NativesInterface();
+
+    /// The object behind a SchemaObject handle, nullptr (and a script error) when it is gone.
+    void* SchemaObjectPointer(SourcePawn::IPluginContext* ctx, cell_t handle);
+    /// A SchemaObject for a raw pointer; 0 for nullptr.
+    cell_t SchemaObjectForPointer(void* ptr);
 
     /// The ConVar handle for an access index, made on first use.
     cell_t ConVarHandle(uint16_t accessIndex);

@@ -1354,6 +1354,18 @@ namespace sourcepawn
         };
     }
 
+    void* SchemaObjectPointer(IPluginContext* ctx, cell_t handle)
+    {
+        return Base(ctx, handle);
+    }
+
+    cell_t SchemaObjectForPointer(void* ptr)
+    {
+        // A pointer the game handed back, with nothing to find it again by:
+        // good for as long as the object it points at.
+        return ptr ? RefFor(Root::Raw, CEntityHandle(), ptr, {}) : 0;
+    }
+
     void ForgetEntityListeners(PluginId id)
     {
         // The manager took them off the engine already (RemoveAllForPlugin).
