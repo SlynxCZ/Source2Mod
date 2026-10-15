@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-15T15:49:59+00:00",
+  "generated_at": "2026-10-15T17:24:36+00:00",
   "build": {
     "buildid": "25947352",
     "linux_manifest": "5513399157532729905",
@@ -1275,9 +1275,9 @@
         "status": "ok"
       },
       "linux": {
-        "status": "broken",
-        "detail": "no match",
-        "matches": 0
+        "matches": 1,
+        "address": "0xbc4c70",
+        "status": "ok"
       }
     },
     {
