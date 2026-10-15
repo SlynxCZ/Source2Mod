@@ -78,7 +78,7 @@ public:
     ISource2ModGameSystems* GameSystems() override;
     ISource2ModHTTP* HTTP() override;
     ISource2ModMenus* Menus() override;
-    ISource2ModMySQL* MySQL() override;
+    ISource2ModSQL* SQL() override;
     ISource2ModNetworkMessages* NetworkMessages() override;
     ISource2ModScheduler* Scheduler() override;
     ISource2ModSounds* Sounds() override;

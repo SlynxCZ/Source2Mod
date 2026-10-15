@@ -34,7 +34,7 @@
  * Project: Source2Mod
  */
 #pragma once
-#include "source2mod/ISource2ModMySQL.h"
+#include "source2mod/ISource2ModSQL.h"
 
 #ifdef WIN32
 #include <WinSock2.h>
@@ -61,7 +61,7 @@ namespace mysql {
 
     /// A set of connection details Source2Mod owns outright.
     ///
-    /// Source2ModMySQLConnectionInfo holds bare const char*, and a plugin has
+    /// Source2ModSQLConnectionInfo holds bare const char*, and a plugin has
     /// every reason to build one out of temporaries -- a std::string member,
     /// a config lookup, a literal in the same call. The worker thread reads
     /// these long after that call has returned, so the strings have to be
@@ -70,7 +70,7 @@ namespace mysql {
     {
         OwnedConnectionInfo() = default;
 
-        explicit OwnedConnectionInfo(const Source2ModMySQLConnectionInfo &info)
+        explicit OwnedConnectionInfo(const Source2ModSQLConnectionInfo &info)
             : m_sHost(info.host ? info.host : ""),
               m_sUser(info.user ? info.user : ""),
               m_sPass(info.pass ? info.pass : ""),
@@ -101,7 +101,7 @@ namespace mysql {
         struct Field
         {
             std::string m_sName;
-            int m_nType = SOURCE2MOD_MYSQL_TYPE_UNKNOWN;
+            int m_nType = SOURCE2MOD_SQL_TYPE_UNKNOWN;
         };
 
         /// Binary safe: the bytes are kept with their length, not as a C string.
@@ -128,7 +128,7 @@ namespace mysql {
     class TMySQLConnectOp : public ThreadOperation
     {
     public:
-        TMySQLConnectOp(MySQLConnection *con, Source2ModMySQLConnectCallbackFunc func) : m_pCon(con), m_callback(func) {}
+        TMySQLConnectOp(MySQLConnection *con, Source2ModSQLConnectCallbackFunc func) : m_pCon(con), m_callback(func) {}
 
         void RunThreadPart();
         void CancelThinkPart();
@@ -136,7 +136,7 @@ namespace mysql {
 
     private:
         MySQLConnection *m_pCon;
-        Source2ModMySQLConnectCallbackFunc m_callback;
+        Source2ModSQLConnectCallbackFunc m_callback;
         MYSQL *m_pDatabase = nullptr;
         char m_szError[255] {};
     };
@@ -144,7 +144,7 @@ namespace mysql {
     class TMySQLQueryOp : public ThreadOperation
     {
     public:
-        TMySQLQueryOp(MySQLConnection *con, std::string query, Source2ModMySQLQueryCallbackFunc func) : m_pCon(con), m_szQuery(query), m_callback(func) {}
+        TMySQLQueryOp(MySQLConnection *con, std::string query, Source2ModSQLQueryCallbackFunc func) : m_pCon(con), m_szQuery(query), m_callback(func) {}
 
         ~TMySQLQueryOp();
 
@@ -159,7 +159,7 @@ namespace mysql {
     private:
         MySQLConnection *m_pCon;
         std::string m_szQuery;
-        Source2ModMySQLQueryCallbackFunc m_callback;
+        Source2ModSQLQueryCallbackFunc m_callback;
         CMySQLStoredQuery *m_pQuery = nullptr;
         char m_szError[255] {};
     };
@@ -167,7 +167,7 @@ namespace mysql {
     class TMySQLTransactOp : public ThreadOperation
     {
     public:
-        TMySQLTransactOp(MySQLConnection *con, Source2ModMySQLTransaction txn, Source2ModMySQLTransactionSuccessCallbackFunc success, Source2ModMySQLTransactionFailureCallbackFunc failure)
+        TMySQLTransactOp(MySQLConnection *con, Source2ModSQLTransaction txn, Source2ModSQLTransactionSuccessCallbackFunc success, Source2ModSQLTransactionFailureCallbackFunc failure)
             : m_pCon(con), m_txn(txn), m_successCallback(success), m_failureCallback(failure)
         {
         }
@@ -183,10 +183,10 @@ namespace mysql {
 
     private:
         MySQLConnection *m_pCon;
-        Source2ModMySQLTransaction m_txn;
-        Source2ModMySQLTransactionSuccessCallbackFunc m_successCallback;
-        Source2ModMySQLTransactionFailureCallbackFunc m_failureCallback;
-        std::vector<ISource2ModMySQLQuery *> m_pQueries;
+        Source2ModSQLTransaction m_txn;
+        Source2ModSQLTransactionSuccessCallbackFunc m_successCallback;
+        Source2ModSQLTransactionFailureCallbackFunc m_failureCallback;
+        std::vector<ISource2ModSQLQuery *> m_pQueries;
         char m_szError[255] {};
         int m_failIndex = -1;
 
@@ -196,7 +196,7 @@ namespace mysql {
     };
 
     /// Reads rows out of a MySQLResultSet the worker filled in.
-    class CMySQLStoredResult final : public ISource2ModMySQLResult, ISource2ModMySQLRow
+    class CMySQLStoredResult final : public ISource2ModSQLResult, ISource2ModSQLRow
     {
     public:
         explicit CMySQLStoredResult(const MySQLResultSet *set) : m_pSet(set) {}
@@ -208,8 +208,8 @@ namespace mysql {
         bool FieldNameToNum(const char *name, unsigned int *columnId) override;
         const char *FieldNumToName(unsigned int colId) override;
         bool MoreRows() override;
-        ISource2ModMySQLRow *FetchRow() override;
-        ISource2ModMySQLRow *CurrentRow() override;
+        ISource2ModSQLRow *FetchRow() override;
+        ISource2ModSQLRow *CurrentRow() override;
         bool Rewind() override;
         int GetFieldType(unsigned int field) override;
         const char *GetString(unsigned int columnId, size_t *length = nullptr) override;
@@ -230,12 +230,12 @@ namespace mysql {
     /// What every query hands to its callback, serverless or on a connection.
     /// Owns its rows outright, so reading it never touches libmysql: the
     /// connection behind it may be closed, or running the next query.
-    class CMySQLStoredQuery final : public ISource2ModMySQLQuery
+    class CMySQLStoredQuery final : public ISource2ModSQLQuery
     {
     public:
         CMySQLStoredQuery(std::vector<MySQLResultSet> sets, unsigned int insertId, unsigned int affectedRows);
 
-        ISource2ModMySQLResult *GetResultSet() override;
+        ISource2ModSQLResult *GetResultSet() override;
         bool FetchMoreResults() override;
         unsigned int GetInsertId() override;
         unsigned int GetAffectedRows() override;
@@ -248,18 +248,18 @@ namespace mysql {
         unsigned int m_affectedRows;
     };
 
-    class MySQLConnection : public ISource2ModMySQLConnection
+    class MySQLConnection : public ISource2ModSQLConnection
     {
     public:
-        MySQLConnection(PluginId owner, const Source2ModMySQLConnectionInfo info);
+        MySQLConnection(PluginId owner, const Source2ModSQLConnectionInfo info);
         ~MySQLConnection() override;
 
         PluginId Owner() const { return m_Owner; }
 
-        void Connect(Source2ModMySQLConnectCallbackFunc callback) override;
-        void Query(char *query, Source2ModMySQLQueryCallbackFunc callback) override;
-        void Query(const char *query, Source2ModMySQLQueryCallbackFunc callback, ...) override;
-        void ExecuteTransaction(Source2ModMySQLTransaction txn, Source2ModMySQLTransactionSuccessCallbackFunc success, Source2ModMySQLTransactionFailureCallbackFunc failure) override;
+        void Connect(Source2ModSQLConnectCallbackFunc callback) override;
+        void Query(char *query, Source2ModSQLQueryCallbackFunc callback) override;
+        void Query(const char *query, Source2ModSQLQueryCallbackFunc callback, ...) override;
+        void ExecuteTransaction(Source2ModSQLTransaction txn, Source2ModSQLTransactionSuccessCallbackFunc success, Source2ModSQLTransactionFailureCallbackFunc failure) override;
 
         void Destroy() override;
         void RunFrame();
@@ -274,6 +274,7 @@ namespace mysql {
             return m_pDatabase;
         }
 
+        ESource2ModSQLDriver GetDriver() override { return SOURCE2MOD_SQL_DRIVER_MYSQL; }
         std::string Escape(char *string) override;
         std::string Escape(const char *string) override;
 
@@ -310,7 +311,7 @@ namespace mysql {
         /// The only part of this op that lives inside a plugin. Cleared on the
         /// main thread when its owner goes away while the worker still has the
         /// op, which leaves the op to finish and be dropped in silence.
-        Source2ModMySQLServerlessCallbackFunc m_Callback;
+        Source2ModSQLServerlessCallbackFunc m_Callback;
 
         bool m_bSuccess = false;
         unsigned int m_nErrorCode = 0;
@@ -323,10 +324,10 @@ namespace mysql {
     /// A set of connection details a plugin holds on to. Keeps no connection
     /// of its own -- every query it is handed gets one opened and closed
     /// around it by the shared worker.
-    class ServerlessHandle final : public ISource2ModMySQLServerless
+    class ServerlessHandle final : public ISource2ModSQLServerless
     {
     public:
-        ServerlessHandle(PluginId owner, uint32_t id, const Source2ModMySQLConnectionInfo &info)
+        ServerlessHandle(PluginId owner, uint32_t id, const Source2ModSQLConnectionInfo &info)
             : m_Owner(owner), m_Id(id), m_Info(info)
         {
         }
@@ -334,8 +335,8 @@ namespace mysql {
         PluginId Owner() const { return m_Owner; }
         uint32_t Id() const { return m_Id; }
 
-        void Query(const char *query, Source2ModMySQLServerlessCallbackFunc callback) override;
-        void Query(const char *query, std::vector<std::string> params, Source2ModMySQLServerlessCallbackFunc callback) override;
+        void Query(const char *query, Source2ModSQLServerlessCallbackFunc callback) override;
+        void Query(const char *query, std::vector<std::string> params, Source2ModSQLServerlessCallbackFunc callback) override;
         void Destroy() override;
 
     private:
@@ -344,11 +345,12 @@ namespace mysql {
         OwnedConnectionInfo m_Info;
     };
 
-    class MySQLManager final : public ISource2ModMySQL
+    class MySQLManager final : public ISource2ModSQL
     {
     public:
-        ISource2ModMySQLConnection* CreateConnection(PluginId owner, Source2ModMySQLConnectionInfo info) override;
-        ISource2ModMySQLServerless* CreateServerless(PluginId owner, Source2ModMySQLConnectionInfo info) override;
+        ISource2ModSQLConnection* CreateConnection(PluginId owner, Source2ModSQLConnectionInfo info) override;
+        ISource2ModSQLServerless* CreateServerless(PluginId owner, Source2ModSQLConnectionInfo info) override;
+        bool GetNamedConnection(const char* name, Source2ModSQLConnectionInfo& info) override { return false; }
 
     public:
         /// Everything that has to happen on the main thread: each connection's

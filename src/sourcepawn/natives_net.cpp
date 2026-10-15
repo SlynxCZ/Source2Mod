@@ -504,22 +504,22 @@ namespace sourcepawn
 
         HandleType QueryType()
         {
-            static const HandleType t = FrameType("ISource2ModMySQLQuery");
+            static const HandleType t = FrameType("ISource2ModSQLQuery");
             return t;
         }
 
         HandleType ResultType()
         {
-            static const HandleType t = FrameType("ISource2ModMySQLResult");
+            static const HandleType t = FrameType("ISource2ModSQLResult");
             return t;
         }
 
         /// A query lent to a callback, and the result-set handle taken from it.
         struct QueryFrame
         {
-            ISource2ModMySQLQuery* query = nullptr;
+            ISource2ModSQLQuery* query = nullptr;
             PluginId owner = 0;
-            ISource2ModMySQLResult* result = nullptr;
+            ISource2ModSQLResult* result = nullptr;
             cell_t resultHandle = 0;
             cell_t handle = 0;
 
@@ -543,20 +543,20 @@ namespace sourcepawn
             return static_cast<QueryFrame*>(ReadHandle(ctx, handle, QueryType()));
         }
 
-        ISource2ModMySQLResult* ResultOf(IPluginContext* ctx, cell_t handle)
+        ISource2ModSQLResult* ResultOf(IPluginContext* ctx, cell_t handle)
         {
-            return static_cast<ISource2ModMySQLResult*>(ReadHandle(ctx, handle, ResultType()));
+            return static_cast<ISource2ModSQLResult*>(ReadHandle(ctx, handle, ResultType()));
         }
 
         struct Conn : HandleObject
         {
-            ISource2ModMySQLConnection* connection = nullptr;
+            ISource2ModSQLConnection* connection = nullptr;
             std::shared_ptr<bool> alive = std::make_shared<bool>(true);
 
             ~Conn() override
             {
                 *alive = false;
-                ISource2ModMySQLConnection* c = connection;
+                ISource2ModSQLConnection* c = connection;
                 scheduler::schedulerManager.NextFrame(0, [c]()
                 {
                     auto& all = mysql::mysqlManager.m_vecMysqlConnections;
@@ -568,37 +568,37 @@ namespace sourcepawn
 
         struct Serverless : HandleObject
         {
-            ISource2ModMySQLServerless* serverless = nullptr;
+            ISource2ModSQLServerless* serverless = nullptr;
             std::shared_ptr<bool> alive = std::make_shared<bool>(true);
 
             ~Serverless() override
             {
                 *alive = false;
-                ISource2ModMySQLServerless* s = serverless;
+                ISource2ModSQLServerless* s = serverless;
                 scheduler::schedulerManager.NextFrame(0, [s]() { s->Destroy(); });
             }
         };
 
         struct Txn : HandleObject
         {
-            Source2ModMySQLTransaction txn;
+            Source2ModSQLTransaction txn;
         };
 
         HandleType ConnType()
         {
-            static const HandleType t = Handles().CreateType("ISource2ModMySQLConnection", [](void* p) { delete static_cast<Conn*>(p); });
+            static const HandleType t = Handles().CreateType("ISource2ModSQLConnection", [](void* p) { delete static_cast<Conn*>(p); });
             return t;
         }
 
         HandleType ServerlessType()
         {
-            static const HandleType t = Handles().CreateType("ISource2ModMySQLServerless", [](void* p) { delete static_cast<Serverless*>(p); });
+            static const HandleType t = Handles().CreateType("ISource2ModSQLServerless", [](void* p) { delete static_cast<Serverless*>(p); });
             return t;
         }
 
         HandleType TxnType()
         {
-            static const HandleType t = Handles().CreateType("Source2ModMySQLTransaction", [](void* p) { delete static_cast<Txn*>(p); });
+            static const HandleType t = Handles().CreateType("Source2ModSQLTransaction", [](void* p) { delete static_cast<Txn*>(p); });
             return t;
         }
 
@@ -620,19 +620,19 @@ namespace sourcepawn
         // Result set natives (lent, valid inside the query callback).
         cell_t N_ResGetRowCount(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             return r ? r->GetRowCount() : 0;
         }
 
         cell_t N_ResGetFieldCount(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             return r ? r->GetFieldCount() : 0;
         }
 
         cell_t N_ResFieldNameToNum(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             if (!r)
                 return 0;
             unsigned int column = 0;
@@ -644,7 +644,7 @@ namespace sourcepawn
             return 1;
         }
 
-        bool ColumnOk(IPluginContext* ctx, ISource2ModMySQLResult* r, cell_t column)
+        bool ColumnOk(IPluginContext* ctx, ISource2ModSQLResult* r, cell_t column)
         {
             if (column < 0 || column >= r->GetFieldCount())
             {
@@ -656,36 +656,36 @@ namespace sourcepawn
 
         cell_t N_ResFieldNumToName(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             return r && ColumnOk(ctx, r, params[2]) ? ToBuffer(ctx, params[3], params[4], r->FieldNumToName(params[2])) : 0;
         }
 
         cell_t N_ResMoreRows(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             return r && r->MoreRows();
         }
 
         cell_t N_ResFetchRow(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             return r && r->FetchRow() != nullptr;
         }
 
         cell_t N_ResCurrentRow(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             return r && r->CurrentRow() != nullptr;
         }
 
         cell_t N_ResRewind(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             return r && r->Rewind();
         }
 
         /// A column of the current row; false (and a script error) when there is no row or no such column.
-        bool CellOk(IPluginContext* ctx, ISource2ModMySQLResult* r, cell_t column)
+        bool CellOk(IPluginContext* ctx, ISource2ModSQLResult* r, cell_t column)
         {
             if (!ColumnOk(ctx, r, column))
                 return false;
@@ -699,37 +699,37 @@ namespace sourcepawn
 
         cell_t N_ResGetFieldType(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             return r && ColumnOk(ctx, r, params[2]) ? r->GetFieldType(params[2]) : 0;
         }
 
         cell_t N_ResGetString(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             return r && CellOk(ctx, r, params[2]) ? ToBuffer(ctx, params[3], params[4], r->GetString(params[2])) : 0;
         }
 
         cell_t N_ResGetDataSize(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             return r && CellOk(ctx, r, params[2]) ? static_cast<cell_t>(r->GetDataSize(params[2])) : 0;
         }
 
         cell_t N_ResGetFloat(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             return r && CellOk(ctx, r, params[2]) ? sp_ftoc(r->GetFloat(params[2])) : 0;
         }
 
         cell_t N_ResGetInt(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             return r && CellOk(ctx, r, params[2]) ? r->GetInt(params[2]) : 0;
         }
 
         cell_t N_ResGetInt64(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             if (r && CellOk(ctx, r, params[2]))
                 WriteInt64(ctx, params[3], r->GetInt64(params[2]));
             return 0;
@@ -737,7 +737,7 @@ namespace sourcepawn
 
         cell_t N_ResIsNull(IPluginContext* ctx, const cell_t* params)
         {
-            ISource2ModMySQLResult* r = ResultOf(ctx, params[1]);
+            ISource2ModSQLResult* r = ResultOf(ctx, params[1]);
             return r && CellOk(ctx, r, params[2]) && r->IsNull(params[2]);
         }
 
@@ -747,7 +747,7 @@ namespace sourcepawn
             QueryFrame* q = QueryOf(ctx, params[1]);
             if (!q)
                 return 0;
-            ISource2ModMySQLResult* r = q->query->GetResultSet();
+            ISource2ModSQLResult* r = q->query->GetResultSet();
             if (r != q->result)
             {
                 if (q->resultHandle)
@@ -799,9 +799,9 @@ namespace sourcepawn
             return t ? static_cast<cell_t>(t->txn.queries.size()) : 0;
         }
 
-        Source2ModMySQLConnectionInfo InfoArgs(IPluginContext* ctx, const cell_t* params)
+        Source2ModSQLConnectionInfo InfoArgs(IPluginContext* ctx, const cell_t* params)
         {
-            Source2ModMySQLConnectionInfo info{};
+            Source2ModSQLConnectionInfo info{};
             info.host = LocalString(ctx, params[1]);
             info.user = LocalString(ctx, params[2]);
             info.pass = LocalString(ctx, params[3]);
@@ -862,7 +862,7 @@ namespace sourcepawn
             const cell_t data = params[4];
             const PluginId owner = CallerId(ctx);
             std::string query = LocalString(ctx, params[2]);
-            c->connection->Query(query.data(), [fn, data, owner, alive = c->alive](ISource2ModMySQLQuery* result)
+            c->connection->Query(query.data(), [fn, data, owner, alive = c->alive](ISource2ModSQLQuery* result)
             {
                 if (!*alive)
                     return;
@@ -891,7 +891,7 @@ namespace sourcepawn
             const cell_t data = params[5];
             const PluginId owner = CallerId(ctx);
             c->connection->ExecuteTransaction(t->txn,
-                [success, data, owner, alive = c->alive](std::vector<ISource2ModMySQLQuery*> queries)
+                [success, data, owner, alive = c->alive](std::vector<ISource2ModSQLQuery*> queries)
                 {
                     if (!*alive)
                         return;
@@ -939,9 +939,9 @@ namespace sourcepawn
             return ToBuffer(ctx, params[3], params[4], escaped.c_str());
         }
 
-        Source2ModMySQLServerlessCallbackFunc ServerlessCallback(IPluginFunction* fn, cell_t data, PluginId owner, std::shared_ptr<bool> alive)
+        Source2ModSQLServerlessCallbackFunc ServerlessCallback(IPluginFunction* fn, cell_t data, PluginId owner, std::shared_ptr<bool> alive)
         {
-            return [fn, data, owner, alive = std::move(alive)](const Source2ModMySQLServerlessResult& result)
+            return [fn, data, owner, alive = std::move(alive)](const Source2ModSQLServerlessResult& result)
             {
                 if (!*alive)
                     return;
@@ -1041,36 +1041,36 @@ namespace sourcepawn
             { "Source2ModHTTP.Patch", N_HttpPatch },
             { "Source2ModHTTP.Delete", N_HttpDelete },
 
-            { "ISource2ModMySQLResult.GetRowCount", N_ResGetRowCount },
-            { "ISource2ModMySQLResult.GetFieldCount", N_ResGetFieldCount },
-            { "ISource2ModMySQLResult.FieldNameToNum", N_ResFieldNameToNum },
-            { "ISource2ModMySQLResult.FieldNumToName", N_ResFieldNumToName },
-            { "ISource2ModMySQLResult.MoreRows", N_ResMoreRows },
-            { "ISource2ModMySQLResult.FetchRow", N_ResFetchRow },
-            { "ISource2ModMySQLResult.CurrentRow", N_ResCurrentRow },
-            { "ISource2ModMySQLResult.Rewind", N_ResRewind },
-            { "ISource2ModMySQLResult.GetFieldType", N_ResGetFieldType },
-            { "ISource2ModMySQLResult.GetString", N_ResGetString },
-            { "ISource2ModMySQLResult.GetDataSize", N_ResGetDataSize },
-            { "ISource2ModMySQLResult.GetFloat", N_ResGetFloat },
-            { "ISource2ModMySQLResult.GetInt", N_ResGetInt },
-            { "ISource2ModMySQLResult.GetInt64", N_ResGetInt64 },
-            { "ISource2ModMySQLResult.IsNull", N_ResIsNull },
-            { "ISource2ModMySQLQuery.GetResultSet", N_QueryGetResultSet },
-            { "ISource2ModMySQLQuery.FetchMoreResults", N_QueryFetchMoreResults },
-            { "ISource2ModMySQLQuery.GetInsertId", N_QueryGetInsertId },
-            { "ISource2ModMySQLQuery.GetAffectedRows", N_QueryGetAffectedRows },
-            { "Source2ModMySQLTransaction.Source2ModMySQLTransaction", N_TxnNew },
-            { "Source2ModMySQLTransaction.AddQuery", N_TxnAddQuery },
-            { "Source2ModMySQLTransaction.Count", N_TxnCount },
-            { "ISource2ModMySQLConnection.Connect", N_ConnConnect },
-            { "ISource2ModMySQLConnection.Query", N_ConnQuery },
-            { "ISource2ModMySQLConnection.ExecuteTransaction", N_ConnExecuteTransaction },
-            { "ISource2ModMySQLConnection.Escape", N_ConnEscape },
-            { "ISource2ModMySQLServerless.Query", N_ServerlessQuery },
-            { "ISource2ModMySQLServerless.QueryWithParams", N_ServerlessQueryWithParams },
-            { "Source2ModMySQL.CreateConnection", N_MySQLCreateConnection },
-            { "Source2ModMySQL.CreateServerless", N_MySQLCreateServerless },
+            { "ISource2ModSQLResult.GetRowCount", N_ResGetRowCount },
+            { "ISource2ModSQLResult.GetFieldCount", N_ResGetFieldCount },
+            { "ISource2ModSQLResult.FieldNameToNum", N_ResFieldNameToNum },
+            { "ISource2ModSQLResult.FieldNumToName", N_ResFieldNumToName },
+            { "ISource2ModSQLResult.MoreRows", N_ResMoreRows },
+            { "ISource2ModSQLResult.FetchRow", N_ResFetchRow },
+            { "ISource2ModSQLResult.CurrentRow", N_ResCurrentRow },
+            { "ISource2ModSQLResult.Rewind", N_ResRewind },
+            { "ISource2ModSQLResult.GetFieldType", N_ResGetFieldType },
+            { "ISource2ModSQLResult.GetString", N_ResGetString },
+            { "ISource2ModSQLResult.GetDataSize", N_ResGetDataSize },
+            { "ISource2ModSQLResult.GetFloat", N_ResGetFloat },
+            { "ISource2ModSQLResult.GetInt", N_ResGetInt },
+            { "ISource2ModSQLResult.GetInt64", N_ResGetInt64 },
+            { "ISource2ModSQLResult.IsNull", N_ResIsNull },
+            { "ISource2ModSQLQuery.GetResultSet", N_QueryGetResultSet },
+            { "ISource2ModSQLQuery.FetchMoreResults", N_QueryFetchMoreResults },
+            { "ISource2ModSQLQuery.GetInsertId", N_QueryGetInsertId },
+            { "ISource2ModSQLQuery.GetAffectedRows", N_QueryGetAffectedRows },
+            { "Source2ModSQLTransaction.Source2ModSQLTransaction", N_TxnNew },
+            { "Source2ModSQLTransaction.AddQuery", N_TxnAddQuery },
+            { "Source2ModSQLTransaction.Count", N_TxnCount },
+            { "ISource2ModSQLConnection.Connect", N_ConnConnect },
+            { "ISource2ModSQLConnection.Query", N_ConnQuery },
+            { "ISource2ModSQLConnection.ExecuteTransaction", N_ConnExecuteTransaction },
+            { "ISource2ModSQLConnection.Escape", N_ConnEscape },
+            { "ISource2ModSQLServerless.Query", N_ServerlessQuery },
+            { "ISource2ModSQLServerless.QueryWithParams", N_ServerlessQueryWithParams },
+            { "Source2ModSQL.CreateConnection", N_MySQLCreateConnection },
+            { "Source2ModSQL.CreateServerless", N_MySQLCreateServerless },
             { nullptr, nullptr },
         };
     }

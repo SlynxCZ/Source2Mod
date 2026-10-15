@@ -71,7 +71,7 @@
 #include <source2mod/ISource2ModGameSystems.h>
 #include <source2mod/ISource2ModHTTP.h>
 #include <source2mod/ISource2ModMenus.h>
-#include <source2mod/ISource2ModMySQL.h>
+#include <source2mod/ISource2ModSQL.h>
 #include <source2mod/ISource2ModNatives.h>
 #include <source2mod/ISource2ModNetworkMessages.h>
 #include <source2mod/ISource2ModPlugin.h>
@@ -296,7 +296,7 @@ namespace
             { SOURCE2MOD_HTTP_INTERFACE, &http::httpManager },
             { SOURCE2MOD_JSON_INTERFACE, &json::jsonManager },
             { SOURCE2MOD_MENUS_INTERFACE, &menus::menuManager },
-            { SOURCE2MOD_MYSQL_INTERFACE, &mysql::mysqlManager },
+            { SOURCE2MOD_SQL_INTERFACE, &mysql::mysqlManager },
             { SOURCE2MOD_NETWORKMESSAGES_INTERFACE, &networkmessages::networkMessagesManager },
             { SOURCE2MOD_SCHEDULER_INTERFACE, &scheduler::schedulerManager },
             { SOURCE2MOD_SCRIPTS_INTERFACE, &scripts::scriptsManager },
@@ -477,7 +477,7 @@ ISource2ModMenus* PluginApi::Menus()
     return &menus::menuManager;
 }
 
-ISource2ModMySQL* PluginApi::MySQL()
+ISource2ModSQL* PluginApi::SQL()
 {
     return &mysql::mysqlManager;
 }

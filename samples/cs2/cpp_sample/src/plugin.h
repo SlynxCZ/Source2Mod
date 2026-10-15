@@ -66,7 +66,7 @@
 #include "source2mod/ISource2ModMemory.h"
 #include "source2mod/ISource2ModMenus.h"
 #include "source2mod/ISource2ModModule.h"
-#include "source2mod/ISource2ModMySQL.h"
+#include "source2mod/ISource2ModSQL.h"
 #include "source2mod/ISource2ModNetworkMessages.h"
 #include "source2mod/ISource2ModScheduler.h"
 #include "source2mod/ISource2ModSounds.h"
@@ -215,8 +215,8 @@ private:
 	int m_nCountdown = 0;
 
 	// 17. MySQL -- made on first use, gone with the plugin.
-	ISource2ModMySQLServerless *m_pServerless = nullptr;
-	ISource2ModMySQLConnection *m_pConnection = nullptr;
+	ISource2ModSQLServerless *m_pServerless = nullptr;
+	ISource2ModSQLConnection *m_pConnection = nullptr;
 
 public:
 	const char *GetAuthor() override { return PLUGIN_AUTHOR; }

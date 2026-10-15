@@ -112,7 +112,7 @@ namespace mysql
 
                 MySQLResultSet::Field out;
                 out.m_sName = (field && field->name) ? field->name : "";
-                out.m_nType = field ? (int)field->type : SOURCE2MOD_MYSQL_TYPE_UNKNOWN;
+                out.m_nType = field ? (int)field->type : SOURCE2MOD_SQL_TYPE_UNKNOWN;
 
                 set.m_vecFields.push_back(std::move(out));
             }
@@ -583,7 +583,7 @@ namespace mysql
         return m_pSet && m_CurRow < m_pSet->m_vecRows.size();
     }
 
-    ISource2ModMySQLRow *CMySQLStoredResult::FetchRow()
+    ISource2ModSQLRow *CMySQLStoredResult::FetchRow()
     {
         if (!m_pSet || m_CurRow >= m_pSet->m_vecRows.size())
         {
@@ -596,7 +596,7 @@ namespace mysql
         return this;
     }
 
-    ISource2ModMySQLRow *CMySQLStoredResult::CurrentRow()
+    ISource2ModSQLRow *CMySQLStoredResult::CurrentRow()
     {
         if (!m_pSet || !m_CurRow || m_CurRow > m_pSet->m_vecRows.size())
         {
@@ -616,7 +616,7 @@ namespace mysql
     {
         if (!m_pSet || field >= m_pSet->m_vecFields.size())
         {
-            return SOURCE2MOD_MYSQL_TYPE_UNKNOWN;
+            return SOURCE2MOD_SQL_TYPE_UNKNOWN;
         }
 
         return m_pSet->m_vecFields[field].m_nType;
@@ -682,7 +682,7 @@ namespace mysql
         }
     }
 
-    ISource2ModMySQLResult *CMySQLStoredQuery::GetResultSet()
+    ISource2ModSQLResult *CMySQLStoredQuery::GetResultSet()
     {
         // A statement that returns no rows at all -- an INSERT, an UPDATE --
         // has no result set to hand back.
@@ -716,7 +716,7 @@ namespace mysql
         return m_affectedRows;
     }
 
-    MySQLConnection::MySQLConnection(PluginId owner, const Source2ModMySQLConnectionInfo info)
+    MySQLConnection::MySQLConnection(PluginId owner, const Source2ModSQLConnectionInfo info)
     {
         this->m_info = OwnedConnectionInfo(info);
         this->m_Owner = owner;
@@ -762,14 +762,14 @@ namespace mysql
         }
     }
 
-    void MySQLConnection::Connect(Source2ModMySQLConnectCallbackFunc callback)
+    void MySQLConnection::Connect(Source2ModSQLConnectCallbackFunc callback)
     {
         TMySQLConnectOp *op = new TMySQLConnectOp(this, callback);
 
         AddToThreadQueue(op);
     }
 
-    void MySQLConnection::Query(char *query, Source2ModMySQLQueryCallbackFunc callback)
+    void MySQLConnection::Query(char *query, Source2ModSQLQueryCallbackFunc callback)
     {
         TMySQLQueryOp *op = new TMySQLQueryOp(this, std::string(query), callback);
 
@@ -785,7 +785,7 @@ namespace mysql
         AddToThreadQueue(op);
     }
 
-    void MySQLConnection::Query(const char *query, Source2ModMySQLQueryCallbackFunc callback, ...)
+    void MySQLConnection::Query(const char *query, Source2ModSQLQueryCallbackFunc callback, ...)
     {
         va_list args;
         va_start(args, callback);
@@ -811,7 +811,7 @@ namespace mysql
         AddToThreadQueue(op);
     }
 
-    void MySQLConnection::ExecuteTransaction(Source2ModMySQLTransaction txn, Source2ModMySQLTransactionSuccessCallbackFunc success, Source2ModMySQLTransactionFailureCallbackFunc failure)
+    void MySQLConnection::ExecuteTransaction(Source2ModSQLTransaction txn, Source2ModSQLTransactionSuccessCallbackFunc success, Source2ModSQLTransactionFailureCallbackFunc failure)
     {
         TMySQLTransactOp *op = new TMySQLTransactOp(this, txn, success, failure);
 
@@ -926,12 +926,12 @@ namespace mysql
         return out;
     }
 
-    void ServerlessHandle::Query(const char *query, Source2ModMySQLServerlessCallbackFunc callback)
+    void ServerlessHandle::Query(const char *query, Source2ModSQLServerlessCallbackFunc callback)
     {
         Query(query, std::vector<std::string>(), std::move(callback));
     }
 
-    void ServerlessHandle::Query(const char *query, std::vector<std::string> params, Source2ModMySQLServerlessCallbackFunc callback)
+    void ServerlessHandle::Query(const char *query, std::vector<std::string> params, Source2ModSQLServerlessCallbackFunc callback)
     {
         auto *op = new ServerlessOp();
 
@@ -950,7 +950,7 @@ namespace mysql
         mysqlManager.DestroyServerless(this);
     }
 
-    ISource2ModMySQLConnection* MySQLManager::CreateConnection(PluginId owner, Source2ModMySQLConnectionInfo info)
+    ISource2ModSQLConnection* MySQLManager::CreateConnection(PluginId owner, Source2ModSQLConnectionInfo info)
     {
         auto connection = new MySQLConnection(owner, info);
         m_vecMysqlConnections.push_back(connection);
@@ -958,7 +958,7 @@ namespace mysql
         return connection;
     }
 
-    ISource2ModMySQLServerless* MySQLManager::CreateServerless(PluginId owner, Source2ModMySQLConnectionInfo info)
+    ISource2ModSQLServerless* MySQLManager::CreateServerless(PluginId owner, Source2ModSQLConnectionInfo info)
     {
         auto *handle = new ServerlessHandle(owner, m_NextServerlessId++, info);
         m_vecServerless.push_back(handle);
@@ -1105,7 +1105,7 @@ namespace mysql
             // left to hand it to.
             if (op->m_Callback)
             {
-                Source2ModMySQLServerlessResult result;
+                Source2ModSQLServerlessResult result;
                 result.m_bSuccess = op->m_bSuccess;
                 result.m_nErrorCode = op->m_nErrorCode;
                 result.m_sError = op->m_sError;

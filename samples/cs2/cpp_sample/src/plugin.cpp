@@ -1562,9 +1562,9 @@ CConVar<CUtlString> sample_mysql_user("sample_mysql_user", FCVAR_PROTECTED, "MyS
 CConVar<CUtlString> sample_mysql_pass("sample_mysql_pass", FCVAR_PROTECTED, "MySQL password", "");
 CConVar<CUtlString> sample_mysql_db("sample_mysql_db", FCVAR_PROTECTED, "MySQL database", "test");
 
-static Source2ModMySQLConnectionInfo MySQLInfo()
+static Source2ModSQLConnectionInfo MySQLInfo()
 {
-    Source2ModMySQLConnectionInfo info;
+    Source2ModSQLConnectionInfo info;
     info.host = sample_mysql_host.Get().Get();
     info.user = sample_mysql_user.Get().Get();
     info.pass = sample_mysql_pass.Get().Get();
@@ -1584,11 +1584,11 @@ void SamplePlugin::SetupMySQL()
         }
 
         if (!m_pServerless)
-            m_pServerless = g_pSource2ModMySQL->CreateServerless(g_PluginID, MySQLInfo());
+            m_pServerless = g_pSource2ModSQL->CreateServerless(g_PluginID, MySQLInfo());
 
         const int slot = SlotOf(context);
         m_pServerless->Query("SELECT ? AS greeting, NOW() AS now", { args.ArgC() >= 2 ? args.Arg(1) : "hello" },
-            [slot](const Source2ModMySQLServerlessResult &result)
+            [slot](const Source2ModSQLServerlessResult &result)
         {
             if (!result.m_bSuccess)
             {
@@ -1596,7 +1596,7 @@ void SamplePlugin::SetupMySQL()
                 return;
             }
 
-            ISource2ModMySQLResult *pRows = result.m_pQuery ? result.m_pQuery->GetResultSet() : nullptr;
+            ISource2ModSQLResult *pRows = result.m_pQuery ? result.m_pQuery->GetResultSet() : nullptr;
             if (pRows && pRows->FetchRow())
                 ReplyToSlot(slot, "MySQL says %s at %s", pRows->GetString(0), pRows->GetString(1));
         });
@@ -1613,7 +1613,7 @@ void SamplePlugin::SetupMySQL()
 
         const int slot = SlotOf(context);
         if (!m_pConnection)
-            m_pConnection = MYSQL_CREATE_CONNECTION(MySQLInfo());
+            m_pConnection = SQL_CREATE_CONNECTION(MySQLInfo());
 
         m_pConnection->Connect([this, slot](bool bConnected)
         {
@@ -1623,14 +1623,14 @@ void SamplePlugin::SetupMySQL()
                 return;
             }
 
-            Source2ModMySQLTransaction txn;
+            Source2ModSQLTransaction txn;
             txn.queries = { "SELECT VERSION()", "SELECT COUNT(*) FROM information_schema.tables" };
 
-            m_pConnection->ExecuteTransaction(txn, [slot](std::vector<ISource2ModMySQLQuery *> queries)
+            m_pConnection->ExecuteTransaction(txn, [slot](std::vector<ISource2ModSQLQuery *> queries)
             {
                 // One result per query, in order.
-                ISource2ModMySQLResult *pVersion = queries[0]->GetResultSet();
-                ISource2ModMySQLResult *pTables = queries[1]->GetResultSet();
+                ISource2ModSQLResult *pVersion = queries[0]->GetResultSet();
+                ISource2ModSQLResult *pTables = queries[1]->GetResultSet();
                 if (pVersion && pVersion->FetchRow() && pTables && pTables->FetchRow())
                     ReplyToSlot(slot, "MySQL %s, %d tables", pVersion->GetString(0), pTables->GetInt(0));
             }, [slot](std::string error, int failIndex)

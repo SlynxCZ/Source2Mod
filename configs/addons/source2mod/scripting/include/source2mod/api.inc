@@ -32,7 +32,12 @@
 #include <source2mod/addresses>
 #include <source2mod/json>
 #include <source2mod/http>
-#include <source2mod/mysql>
+#include <source2mod/sql>
 #include <source2mod/menus>
 #include <source2mod/customhud>
 #include <source2mod/scripts>
+#include <source2mod/translations>
+#include <source2mod/files>
+#include <source2mod/utils>
+#include <source2mod/targeting>
+#include <source2mod/clients>

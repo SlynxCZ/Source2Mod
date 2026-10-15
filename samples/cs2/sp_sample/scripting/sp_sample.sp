@@ -1816,8 +1816,8 @@ CConVar sp_sample_mysql_pass;
 CConVar sp_sample_mysql_db;
 
 // Made on first use, gone with the plugin.
-ISource2ModMySQLServerless g_Serverless;
-ISource2ModMySQLConnection g_Connection;
+ISource2ModSQLServerless g_Serverless;
+ISource2ModSQLConnection g_Connection;
 
 void SetupMySQL()
 {
@@ -1856,7 +1856,7 @@ public void Cmd_MySQL(Source2ModCommandContext context, Source2ModCommandArgs ar
 		return;
 
 	if (g_Serverless == null)
-		g_Serverless = Source2ModMySQL.CreateServerless(host, user, pass, db);
+		g_Serverless = Source2ModSQL.CreateServerless(host, user, pass, db);
 
 	char params[1][64];
 	Arg1(args, params[0], sizeof(params[]));
@@ -1866,7 +1866,7 @@ public void Cmd_MySQL(Source2ModCommandContext context, Source2ModCommandArgs ar
 	g_Serverless.QueryWithParams("SELECT ? AS greeting, NOW() AS now", params, 1, OnMySQLGreeting, SlotOf(context));
 }
 
-public void OnMySQLGreeting(bool success, int errorCode, const char[] error, ISource2ModMySQLQuery query, any slot)
+public void OnMySQLGreeting(bool success, int errorCode, const char[] error, ISource2ModSQLQuery query, any slot)
 {
 	if (!success)
 	{
@@ -1874,7 +1874,7 @@ public void OnMySQLGreeting(bool success, int errorCode, const char[] error, ISo
 		return;
 	}
 
-	ISource2ModMySQLResult rows = query != null ? query.GetResultSet() : null;
+	ISource2ModSQLResult rows = query != null ? query.GetResultSet() : null;
 	if (rows != null && rows.FetchRow())
 	{
 		char greeting[64], now[64];
@@ -1891,7 +1891,7 @@ public void Cmd_MySQLTxn(Source2ModCommandContext context, Source2ModCommandArgs
 		return;
 
 	if (g_Connection == null)
-		g_Connection = Source2ModMySQL.CreateConnection(host, user, pass, db);
+		g_Connection = Source2ModSQL.CreateConnection(host, user, pass, db);
 
 	g_Connection.Connect(OnMySQLConnected, SlotOf(context));
 }
@@ -1905,7 +1905,7 @@ public void OnMySQLConnected(bool connected, any slot)
 	}
 
 	// ExecuteTransaction runs a copy: the transaction can go right after.
-	Source2ModMySQLTransaction txn = new Source2ModMySQLTransaction();
+	Source2ModSQLTransaction txn = new Source2ModSQLTransaction();
 	txn.AddQuery("SELECT VERSION()");
 	txn.AddQuery("SELECT COUNT(*) FROM information_schema.tables");
 	g_Connection.ExecuteTransaction(txn, OnTxnSuccess, OnTxnFailure, slot);
@@ -1915,10 +1915,10 @@ public void OnMySQLConnected(bool connected, any slot)
 public void OnTxnSuccess(ArrayList queries, any slot)
 {
 	// One result per query, in order.
-	ISource2ModMySQLQuery versionQuery = queries.Get(0);
-	ISource2ModMySQLQuery tablesQuery = queries.Get(1);
-	ISource2ModMySQLResult version = versionQuery.GetResultSet();
-	ISource2ModMySQLResult tables = tablesQuery.GetResultSet();
+	ISource2ModSQLQuery versionQuery = queries.Get(0);
+	ISource2ModSQLQuery tablesQuery = queries.Get(1);
+	ISource2ModSQLResult version = versionQuery.GetResultSet();
+	ISource2ModSQLResult tables = tablesQuery.GetResultSet();
 
 	if (version != null && version.FetchRow() && tables != null && tables.FetchRow())
 	{
