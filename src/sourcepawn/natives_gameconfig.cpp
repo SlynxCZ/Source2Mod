@@ -337,18 +337,9 @@ namespace sourcepawn
             return f;
         }
 
-        void* EntityPointer(IPluginContext* ctx, cell_t index, bool* ok)
+        void* EntityPointer(IPluginContext* ctx, cell_t entity, bool* ok)
         {
-            *ok = true;
-            if (index == -1)
-                return nullptr;
-            CEntityInstance* e = (index >= 0 && index < 32768) ? CBaseEntity::FromIndex<CEntityInstance>(index) : nullptr;
-            if (!e)
-            {
-                ctx->ThrowNativeError("Entity %d is invalid", index);
-                *ok = false;
-            }
-            return e;
+            return OptionalEntityArg(ctx, entity, ok);
         }
 
         // XMM0 and XMM1 as a SysV function returning a two-eightbyte SSE struct
@@ -700,8 +691,7 @@ namespace sourcepawn
                 return static_cast<cell_t>(r.bits);
             case T_Entity:
             {
-                auto* e = reinterpret_cast<CEntityInstance*>(r.bits);
-                return e ? static_cast<cell_t>(e->GetEntityIndex().Get()) : -1;
+                return EntityCell(reinterpret_cast<CEntityInstance*>(r.bits));
             }
             case T_Object:
             case T_Pointer:

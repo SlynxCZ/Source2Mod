@@ -856,15 +856,13 @@ namespace sourcepawn
         cell_t N_GameEventGetPlayerController(IPluginContext* ctx, const cell_t* params)
         {
             IGameEvent* ev = EventOf(ctx, params[1]);
-            CEntityInstance* e = ev ? ev->GetPlayerController(Str(ctx, params[2])) : nullptr;
-            return e ? static_cast<cell_t>(e->GetEntityIndex().Get()) : -1;
+            return EntityCell(ev ? ev->GetPlayerController(Str(ctx, params[2])) : nullptr);
         }
 
         cell_t N_GameEventGetPlayerPawn(IPluginContext* ctx, const cell_t* params)
         {
             IGameEvent* ev = EventOf(ctx, params[1]);
-            CEntityInstance* e = ev ? ev->GetPlayerPawn(Str(ctx, params[2])) : nullptr;
-            return e ? static_cast<cell_t>(e->GetEntityIndex().Get()) : -1;
+            return EntityCell(ev ? ev->GetPlayerPawn(Str(ctx, params[2])) : nullptr);
         }
 
         cell_t N_GameEventSetPlayer(IPluginContext* ctx, const cell_t* params)
@@ -912,9 +910,9 @@ namespace sourcepawn
         // CBasePlayerController.FireEventToClient(IGameEvent event): the event stays the script's.
         cell_t N_ControllerFireEventToClient(IPluginContext* ctx, const cell_t* params)
         {
-            auto* controller = CBaseEntity::FromIndex<CBasePlayerController>(params[1]);
+            auto* controller = static_cast<CBasePlayerController*>(EntityArg(ctx, params[1]));
             if (!controller)
-                return ctx->ThrowNativeError("Entity %d is invalid", params[1]);
+                return 0;
             if (IGameEvent* ev = EventOf(ctx, params[2]))
                 controller->FireEventToClient(ev);
             return 0;

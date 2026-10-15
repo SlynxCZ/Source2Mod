@@ -1,6 +1,7 @@
 @CBaseEntity
 	// CBaseEntity's helpers, as in the SDK's CBaseEntity.h. `chain` is C++'s
 	// HookChain: HookChain_Default keeps the C++ default.
+	// The entity now at an index, NULL_ENTITY when none: an index into an entity.
 	public static native CBaseEntity FromIndex(int index);
 	public static native CBaseEntity CreateEntityByName(const char[] className);
 	public native void AcceptInput(const char[] input, CEntityInstance activator = NULL_ENTITY, CEntityInstance caller = NULL_ENTITY, const char[] value = "", Source2ModHookChain chain = HookChain_Default);
@@ -26,6 +27,7 @@
 	public native void SetCollisionGroup(int collisionGroup);
 	public native void CollisionRulesChanged();
 	public native void Remove(Source2ModHookChain chain = HookChain_Default);
+	// The entity index (GetEntityIndex): an entity into an index.
 	public native int GetIndex();
 	// ParticleAttachment_t (PATTACH_ABSORIGIN_FOLLOW = 1); recipients: a player mask, all players by default.
 	public native void DispatchParticleEffect(const char[] particle, int attachType = 1, int attachmentPoint = 0, bool resetAllParticles = false, const int recipients[2] = {-1, -1}, Source2ModHookChain chain = HookChain_Default);
@@ -55,7 +57,8 @@
 	public native void ReplicateConVar(const char[] name, const char[] value);
 	public native void FireEventToClient(IGameEvent event);
 @CCSPlayerController
-	public static native CCSPlayerController FromSlot(int slot);
+	// The controller in a player slot, NULL_ENTITY when the slot is empty.
+	public static native CCSPlayerController FromSlot(CPlayerSlot slot);
 	public static native CCSPlayerController FromPawn(CCSPlayerPawn pawn);
 	public static native CCSPlayerController FromUserId(int userId);
 	// The 64-bit SteamID as decimal text.

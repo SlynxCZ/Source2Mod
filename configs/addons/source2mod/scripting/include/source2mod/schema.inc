@@ -3,11 +3,17 @@
  *
  * Every class of the SDK's schema (schema/entity/classes) is a methodmap of
  * the same name deriving from the same base (schema/classes.inc, generated).
- * Entity classes -- CEntityInstance and everything under it -- hold the
- * entity index, so view_as<CCSPlayerPawn>(index) is a pawn and an entity
- * methodmap converts to its index with view_as<int>. Every other class
- * (services, the scene node, the game rules) is a SchemaObject: a reference
- * the core hands out, good as long as what it belongs to exists.
+ * Entity classes -- CEntityInstance and everything under it -- hold an
+ * entity handle (C++ CEntityHandle: the index and a serial), not the index:
+ * a value kept after its entity is removed stays bound to that entity, so
+ * IsValid() turns false and every native on it fails with "no longer
+ * exists" instead of reaching whatever reuses the index. Keep entities
+ * across frames as they are; convert only where an index or a slot is the
+ * point (CBaseEntity.FromIndex / GetEntityIndex, CCSPlayerController.FromSlot
+ * / CBasePlayerController.GetPlayerSlot). A plain index is not an entity:
+ * view_as<CBaseEntity>(5) is rejected. Every other class (services, the
+ * scene node, the game rules) is a SchemaObject: a reference the core hands
+ * out, good as long as what it belongs to exists.
  *
  * Fields are properties named like the C++ accessors (pawn.m_iHealth = 50;
  * a write to a networked field is sent to the clients). A field that cannot
@@ -24,9 +30,6 @@
 #include <source2mod/types>
 #include <source2mod/events>
 #include <source2mod/adt>
-
-/** No entity: an empty handle, a failed lookup. */
-#define NULL_ENTITY view_as<any>(-1)
 
 /**
  * A schema object that is not an entity (services, the scene node, the game
@@ -45,18 +48,14 @@ methodmap SchemaObject
  */
 methodmap CEntityInstance
 {
-	public CEntityInstance(int index)
-	{
-		return view_as<CEntityInstance>(index);
-	}
+	/**
+	 * The entity index the handle carries, whether the entity still exists or
+	 * not (C++ CEntityHandle::GetEntryIndex); -1 for NULL_ENTITY. For what
+	 * really is per index (transmit bits, an index from a game event).
+	 */
+	public native int GetEntityIndex();
 
-	/** The entity index. */
-	public int GetEntityIndex()
-	{
-		return view_as<int>(this);
-	}
-
-	/** Whether an entity lives at this index. */
+	/** Whether the entity still exists: false for NULL_ENTITY and after it was removed. */
 	public native bool IsValid();
 
 	/** The designer name ("weapon_ak47", "cs_player_controller"). */
@@ -64,21 +63,12 @@ methodmap CEntityInstance
 
 	/** The entity's targetname, "" when it has none. */
 	public native int GetName(char[] buffer, int maxlen);
-
-	/**
-	 * A reference that stays bound to this entity: FromRefEHandle() gives
-	 * NULL_ENTITY once it is gone, even when its index has been reused. What
-	 * to keep across frames.
-	 */
-	public native int GetRefEHandle();
-
-	public static native CEntityInstance FromRefEHandle(int ref);
 }
 
 /**
  * Generic access to a schema field, by class and field name -- what the
  * generated properties are made of, for the fields they do not cover.
- * `instance` is an entity (index) or a SchemaObject.
+ * `instance` is an entity or a SchemaObject.
  */
 methodmap Source2ModSchema
 {
@@ -89,12 +79,12 @@ methodmap Source2ModSchema
 	public static native bool GetBool(any instance, const char[] className, const char[] field);
 	public static native void SetBool(any instance, const char[] className, const char[] field, bool value);
 
-	/** A CHandle field: the entity index, -1 when empty. */
-	public static native int GetHandle(any instance, const char[] className, const char[] field);
-	public static native void SetHandle(any instance, const char[] className, const char[] field, int entity);
+	/** A CHandle field: the entity, NULL_ENTITY when empty or when its entity is gone. */
+	public static native CEntityInstance GetHandle(any instance, const char[] className, const char[] field);
+	public static native void SetHandle(any instance, const char[] className, const char[] field, CEntityInstance entity);
 
-	/** A pointer to an entity: its index, -1 when null. */
-	public static native int GetEntityPointer(any instance, const char[] className, const char[] field);
+	/** A pointer to an entity: the entity, NULL_ENTITY when null. */
+	public static native CEntityInstance GetEntityPointer(any instance, const char[] className, const char[] field);
 
 	/** A pointer to, or an embedded, schema object: its SchemaObject, 0 when null. */
 	public static native SchemaObject GetObject(any instance, const char[] className, const char[] field);
@@ -133,9 +123,9 @@ methodmap Source2ModSchema
 	public static native void SetFloatAt(any instance, int offset, float value);
 	public static native void GetVectorAt(any instance, int offset, float vec[3]);
 	public static native void SetVectorAt(any instance, int offset, const float vec[3]);
-	/** A CHandle at the offset, as the entity; NULL_ENTITY when empty. */
-	public static native int GetEntityAt(any instance, int offset);
-	public static native void SetEntityAt(any instance, int offset, int entity);
+	/** A CHandle at the offset, as the entity; NULL_ENTITY when empty or when its entity is gone. */
+	public static native CEntityInstance GetEntityAt(any instance, int offset);
+	public static native void SetEntityAt(any instance, int offset, CEntityInstance entity);
 	/** The pointer stored at the offset (Deref), 0 when null. */
 	public static native SchemaObject GetObjectAt(any instance, int offset);
 	/** The object that starts at the offset (Offset). */

@@ -1147,9 +1147,9 @@ namespace sourcepawn
         // EmitSoundFromEntity(entity, name, volume = 1.0, pitch = 1.0, players = {-1, -1}, channel = "")
         cell_t N_EmitFromEntity(IPluginContext* ctx, const cell_t* params)
         {
-            CEntityInstance* ent = params[1] >= 0 && params[1] < 32768 ? CBaseEntity::FromIndex<CBaseEntity>(params[1]) : nullptr;
+            CEntityInstance* ent = EntityArg(ctx, params[1]);
             if (!ent)
-                return ctx->ThrowNativeError("Entity %d is invalid", params[1]);
+                return 0;
             return static_cast<cell_t>(SM().EmitSoundFromEntity(ent, LocalString(ctx, params[2]), sp_ctof(params[3]), sp_ctof(params[4]),
                                                                ReadMask(ctx, params[5]), Channel(ctx, params[6])));
         }

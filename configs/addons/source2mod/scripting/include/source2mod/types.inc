@@ -14,6 +14,13 @@
 #define _source2mod_types_included
 
 /**
+ * No entity: an empty handle, a failed lookup, an entity argument left out.
+ * Entity methodmap values are entity handles (source2mod/schema.inc); -1 is
+ * the empty one.
+ */
+#define NULL_ENTITY view_as<any>(-1)
+
+/**
  * What a hook answers, as KHook::Action in C++.
  */
 enum Source2ModAction

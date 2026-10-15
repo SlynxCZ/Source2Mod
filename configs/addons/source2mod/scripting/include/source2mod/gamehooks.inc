@@ -13,7 +13,7 @@
  * can be changed in place and the original sees the change; what it passes
  * by value (a speed, a flag) is read-only, as in C++.
  *
- * Objects without an entity index (the services, the jump component, the
+ * Objects that are not entities (the services, the jump component, the
  * econ item, the user command) are SchemaObjects; CUserCmd has no schema
  * class, its SchemaObject is opaque (for Source2ModFunction calls).
  */

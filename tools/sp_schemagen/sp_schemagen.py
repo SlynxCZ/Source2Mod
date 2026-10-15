@@ -10,8 +10,8 @@ Source2ModSchema's generic accessors -- no native per field. The C++ helper
 methods (Teleport, GiveNamedItem, ...) come from methods.inc next to this
 script and are spliced into their class.
 
-Entity classes (CEntityInstance and everything under it) hold the entity
-index; every other class (services, the scene node, ...) holds an object
+Entity classes (CEntityInstance and everything under it) hold an entity
+handle (index + serial); every other class (services, the scene node, ...) holds an object
 reference the core hands out, valid as long as its owner.
 
     python3 tools/sp_schemagen/sp_schemagen.py <Source2Mod-sdk> <output .inc>
@@ -147,7 +147,7 @@ def property_for(owner, macro, ctype, field, classes, enums):
         if target not in classes or not is_entity(target, classes):
             target = "CBaseEntity"
         return prop(target, f"view_as<{target}>(Source2ModSchema.GetHandle(this, {acc}))",
-                    f"Source2ModSchema.SetHandle(this, {acc}, view_as<int>(value))")
+                    f"Source2ModSchema.SetHandle(this, {acc}, value)")
 
     m = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)\s*\*", t)
     if m and m.group(1) in classes:

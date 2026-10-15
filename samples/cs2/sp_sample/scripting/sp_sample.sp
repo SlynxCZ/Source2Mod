@@ -79,7 +79,7 @@ public Plugin myinfo =
 CCSPlayerController CallerOf(Source2ModCommandContext context)
 {
 	CPlayerSlot slot = context.GetPlayerSlot();
-	return slot.IsValid() ? CCSPlayerController.FromSlot(slot.Get()) : NULL_ENTITY;
+	return slot.IsValid() ? CCSPlayerController.FromSlot(slot) : NULL_ENTITY;
 }
 
 // Answers where the command came from: the player's chat, or the server console.
@@ -119,7 +119,7 @@ CCSPlayerPawn AlivePawnOf(Source2ModCommandContext context)
 // in cpp_sample takes a lambda, a script loops.
 CCSPlayerController PlayerInSlot(int slot)
 {
-	return CCSPlayerController.FromSlot(slot);
+	return CCSPlayerController.FromSlot(CPlayerSlot(slot));
 }
 
 // The first argument as text, "" when there is none.
@@ -513,16 +513,16 @@ public void OnEntitySpawned(CEntityInstance entity)
 		return;
 
 	// The game fills the projectile in right after spawning it, so a change
-	// made here would be overwritten. One frame later it sticks. An index
-	// must not cross a frame -- the entity may be gone and the index reused by
-	// then -- a handle resolves to NULL_ENTITY instead.
-	Source2ModScheduler.NextFrame(PaintSmoke, entity.GetRefEHandle());
+	// made here would be overwritten. One frame later it sticks. The entity
+	// is a handle, not an index: should the smoke be gone by then (and its
+	// index reused), IsValid() says so instead of finding the newcomer.
+	Source2ModScheduler.NextFrame(PaintSmoke, entity);
 }
 
-public void PaintSmoke(any ref)
+public void PaintSmoke(any data)
 {
-	CSmokeGrenadeProjectile smoke = view_as<CSmokeGrenadeProjectile>(CEntityInstance.FromRefEHandle(ref));
-	if (smoke == NULL_ENTITY)
+	CSmokeGrenadeProjectile smoke = view_as<CSmokeGrenadeProjectile>(data);
+	if (!smoke.IsValid())
 		return;
 
 	float purple[3] = { 170.0, 0.0, 255.0 };
@@ -531,7 +531,8 @@ public void PaintSmoke(any ref)
 
 public void OnEntityDeleted(CEntityInstance entity)
 {
-	// Last call for this entity. Anything holding its index has to let go now.
+	// Last call for this entity: after it, anything still holding it reads
+	// IsValid() == false.
 }
 
 public Source2ModAction OnEntityOutput(const char[] output, CEntityInstance activator, CEntityInstance caller, float delay, bool post)

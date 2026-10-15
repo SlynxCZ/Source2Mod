@@ -752,8 +752,7 @@ namespace sourcepawn
 
         cell_t EntityOf(uint64_t bits)
         {
-            auto* e = reinterpret_cast<CEntityInstance*>(bits);
-            return e ? static_cast<cell_t>(e->GetEntityIndex().Get()) : -1;
+            return EntityCell(reinterpret_cast<CEntityInstance*>(bits));
         }
 
         cell_t N_PGetInt(IPluginContext* ctx, const cell_t* params)
@@ -872,9 +871,10 @@ namespace sourcepawn
             Type t;
             if (Frame* f = ParamFrame(ctx, params, &slot, &t))
             {
-                CEntityInstance* e = params[3] == -1 ? nullptr : CBaseEntity::FromIndex<CEntityInstance>(params[3]);
-                if (params[3] != -1 && !e)
-                    return ctx->ThrowNativeError("Entity %d is invalid", params[3]);
+                bool ok;
+                CEntityInstance* e = OptionalEntityArg(ctx, params[3], &ok);
+                if (!ok)
+                    return 0;
                 f->regs.s[slot] = reinterpret_cast<uintptr_t>(e);
                 f->changed = true;
             }
@@ -1077,7 +1077,10 @@ namespace sourcepawn
         {
             if (Frame* f = RetFrame(ctx, params[1]))
             {
-                CEntityInstance* e = params[2] == -1 ? nullptr : CBaseEntity::FromIndex<CEntityInstance>(params[2]);
+                bool ok;
+                CEntityInstance* e = OptionalEntityArg(ctx, params[2], &ok);
+                if (!ok)
+                    return 0;
                 f->ret = reinterpret_cast<uintptr_t>(e);
                 f->retSet = true;
             }

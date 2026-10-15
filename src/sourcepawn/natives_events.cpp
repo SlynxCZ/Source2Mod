@@ -47,24 +47,12 @@ namespace sourcepawn
             return shared::g_pGameEventManager;
         }
 
-        cell_t IndexOf(CEntityInstance* inst)
-        {
-            return inst ? static_cast<cell_t>(inst->GetEntityIndex().Get()) : -1;
-        }
-
         // An entity argument: NULL_ENTITY (-1) is null; anything else must exist.
-        bool EntityArg(IPluginContext* ctx, cell_t index, CEntityInstance** out)
+        bool EntityArg(IPluginContext* ctx, cell_t entity, CEntityInstance** out)
         {
-            *out = nullptr;
-            if (index == -1)
-                return true;
-            *out = (index >= 0 && index < 32768) ? CBaseEntity::FromIndex<CEntityInstance>(index) : nullptr;
-            if (!*out)
-            {
-                ctx->ThrowNativeError("Entity %d is invalid", index);
-                return false;
-            }
-            return true;
+            bool ok;
+            *out = OptionalEntityArg(ctx, entity, &ok);
+            return ok;
         }
 
         cell_t WriteString(IPluginContext* ctx, cell_t addr, cell_t maxlen, const char* value)
@@ -129,7 +117,7 @@ namespace sourcepawn
         cell_t N_GetEHandle(IPluginContext* ctx, const cell_t* params)
         {
             IGameEvent* ev = ScriptEvent(ctx, params[1]);
-            return ev ? RefForHandle(ev->GetEHandle(LocalString(ctx, params[2]), HandleForRef(params[3]))) : -1;
+            return ev ? EntityCell(ev->GetEHandle(LocalString(ctx, params[2]), HandleFromCell(params[3]))) : -1;
         }
 
         cell_t N_GetEntity(IPluginContext* ctx, const cell_t* params)
@@ -138,7 +126,7 @@ namespace sourcepawn
             CEntityInstance* fallback;
             if (!ev || !EntityArg(ctx, params[3], &fallback))
                 return -1;
-            return IndexOf(ev->GetEntity(LocalString(ctx, params[2]), fallback));
+            return EntityCell(ev->GetEntity(LocalString(ctx, params[2]), fallback));
         }
 
         cell_t N_GetEntityIndex(IPluginContext* ctx, const cell_t* params)
@@ -150,7 +138,7 @@ namespace sourcepawn
         cell_t N_GetPawnEHandle(IPluginContext* ctx, const cell_t* params)
         {
             IGameEvent* ev = ScriptEvent(ctx, params[1]);
-            return ev ? RefForHandle(ev->GetPawnEHandle(LocalString(ctx, params[2]))) : -1;
+            return ev ? EntityCell(ev->GetPawnEHandle(LocalString(ctx, params[2]))) : -1;
         }
 
         cell_t N_GetPawnEntityIndex(IPluginContext* ctx, const cell_t* params)
@@ -171,7 +159,7 @@ namespace sourcepawn
         cell_t N_SetEntityHandle(IPluginContext* ctx, const cell_t* params)
         {
             if (IGameEvent* ev = ScriptEvent(ctx, params[1]))
-                ev->SetEntity(LocalString(ctx, params[2]), HandleForRef(params[3]));
+                ev->SetEntity(LocalString(ctx, params[2]), HandleFromCell(params[3]));
             return 0;
         }
 

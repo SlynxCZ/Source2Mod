@@ -26,6 +26,7 @@ namespace sp
     class BaseRuntime;
 }
 
+class CEntityInstance;
 class CGameTrace;
 class IGameEvent;
 class Timer;
@@ -159,10 +160,32 @@ namespace sourcepawn
     /// A StringMap's string and cell (as decimal) entries; false (and a script error) for a bad handle (natives_adt.cpp).
     bool StringMapStrings(SourcePawn::IPluginContext* ctx, cell_t handle, std::vector<std::pair<std::string, std::string>>& out);
 
-    /// An entity handle as the value CEntityInstance.GetRefEHandle() gives, -1 when empty (natives_entities.cpp).
-    cell_t RefForHandle(CEntityHandle handle);
-    /// The handle behind a GetRefEHandle() value; an empty one for -1 or a bad value.
-    CEntityHandle HandleForRef(cell_t ref);
+    /**
+     * Entities on the script side (natives_entities.cpp): every entity
+     * methodmap value is an entity handle -- index and serial -- so a value
+     * kept after its entity is removed reads as gone instead of naming
+     * whatever reuses the index. -1 is NULL_ENTITY (and CEntityHandle's own
+     * invalid value). EntityCell(handle) does not check the entity is alive.
+     */
+    cell_t EntityCell(CEntityInstance* inst);
+    cell_t EntityCell(CEntityHandle handle);
+    /// Whether `value` has an entity cell's shape (NULL_ENTITY does not); says nothing about the entity being alive.
+    bool IsEntityCell(cell_t value);
+    /// The entity index an entity cell carries, alive or not; -1 for NULL_ENTITY and anything else.
+    cell_t EntityCellIndex(cell_t value);
+    /// The live entity an entity cell names; nullptr for NULL_ENTITY, a removed entity, or anything else.
+    CEntityInstance* EntityFromCell(cell_t value);
+    template <typename T>
+    T* EntityFromCell(cell_t value)
+    {
+        return static_cast<T*>(EntityFromCell(value));
+    }
+    /// An entity argument: the live entity, or nullptr after a script error (null, not an entity, removed).
+    CEntityInstance* EntityArg(SourcePawn::IPluginContext* ctx, cell_t value);
+    /// An argument that may be NULL_ENTITY (nullptr, *ok true); *ok is false after a script error.
+    CEntityInstance* OptionalEntityArg(SourcePawn::IPluginContext* ctx, cell_t value, bool* ok);
+    /// The handle of the live entity a cell names; an empty one for NULL_ENTITY or a removed entity.
+    CEntityHandle HandleFromCell(cell_t value);
 
     /// The ConVar handle for an access index, made on first use.
     cell_t ConVarHandle(uint16_t accessIndex);

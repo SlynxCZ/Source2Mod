@@ -61,28 +61,15 @@ namespace sourcepawn
             return static_cast<cell_t>(written);
         }
 
-        cell_t IndexOf(CEntityInstance* inst)
-        {
-            return inst ? static_cast<cell_t>(inst->GetEntityIndex().Get()) : -1;
-        }
-
-        cell_t IndexOf(const CEntityHandle& handle)
-        {
-            return handle.IsValid() ? handle.GetEntryIndex() : -1;
-        }
-
         template <typename T>
-        T* EntityArg(IPluginContext* ctx, cell_t index, const char* what)
+        T* TypedEntityArg(IPluginContext* ctx, cell_t entity)
         {
-            T* ent = (index >= 0 && index < 32768) ? CBaseEntity::FromIndex<T>(index) : nullptr;
-            if (!ent)
-                ctx->ThrowNativeError("%s %d is invalid", what, index);
-            return ent;
+            return static_cast<T*>(EntityArg(ctx, entity));
         }
 
-        CCSPlayerController* PlayerArg(IPluginContext* ctx, cell_t index)
+        CCSPlayerController* PlayerArg(IPluginContext* ctx, cell_t entity)
         {
-            return EntityArg<CCSPlayerController>(ctx, index, "Player");
+            return TypedEntityArg<CCSPlayerController>(ctx, entity);
         }
 
         // ---- CenterHtmlMenu ------------------------------------------------------------
@@ -152,7 +139,7 @@ namespace sourcepawn
             if (m->dead)
                 return;
             sp::CallArgs args;
-            args.PushCell(IndexOf(player));
+            args.PushCell(EntityCell(player));
             args.PushCell(m->handle);
             args.PushCell(option);
             args.PushCell(data);
@@ -176,7 +163,7 @@ namespace sourcepawn
                 if (m->dead)
                     return whenDead;
                 sp::CallArgs args;
-                args.PushCell(IndexOf(player));
+                args.PushCell(EntityCell(player));
                 args.PushCell(m->handle);
                 args.PushCell(option);
                 args.PushCell(data);
@@ -195,7 +182,7 @@ namespace sourcepawn
                     return {};
                 char buffer[256] = {};
                 sp::CallArgs args;
-                args.PushCell(IndexOf(player));
+                args.PushCell(EntityCell(player));
                 args.PushCell(m->handle);
                 args.PushCell(option);
                 args.PushString(buffer, sizeof(buffer), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY | SM_PARAM_COPYBACK);
@@ -460,7 +447,7 @@ namespace sourcepawn
                 if (m->dead)
                     return;
                 sp::CallArgs args;
-                args.PushCell(IndexOf(player));
+                args.PushCell(EntityCell(player));
                 args.PushCell(m->handle);
                 args.PushCell(static_cast<cell_t>(reason));
                 Invoke(fn, args);
@@ -501,7 +488,7 @@ namespace sourcepawn
             if (!m)
                 return 0;
             const cell_t index = params[0] >= 2 ? params[2] : -1;
-            if (index < 0)
+            if (index == -1)
             {
                 menus::menuManager.CloseMenu(&m->menu);
                 return 0;
@@ -656,7 +643,7 @@ namespace sourcepawn
         // HookCustomHudClick(layout, handler)
         cell_t N_HudHookCustomHudClick(IPluginContext* ctx, const cell_t* params)
         {
-            auto* layout = EntityArg<CCSCustomHudLayout>(ctx, params[1], "Layout");
+            auto* layout = TypedEntityArg<CCSCustomHudLayout>(ctx, params[1]);
             IPluginFunction* fn = layout ? Function(ctx, params[2]) : nullptr;
             if (!fn)
                 return 0;
@@ -664,8 +651,8 @@ namespace sourcepawn
             CustomHudClickHandler handler([fn](CCSPlayerController* player, CCSCustomHudLayout* l, const char* buttonId)
             {
                 sp::CallArgs args;
-                args.PushCell(IndexOf(player));
-                args.PushCell(IndexOf(l));
+                args.PushCell(EntityCell(player));
+                args.PushCell(EntityCell(l));
                 args.PushString(buttonId ? buttonId : "");
                 Invoke(fn, args);
             });
@@ -686,7 +673,7 @@ namespace sourcepawn
 
         cell_t N_HudUnhookCustomHudClickLayout(IPluginContext* ctx, const cell_t* params)
         {
-            auto* layout = EntityArg<CCSCustomHudLayout>(ctx, params[1], "Layout");
+            auto* layout = TypedEntityArg<CCSCustomHudLayout>(ctx, params[1]);
             if (!layout)
                 return 0;
             const PluginId owner = CallerId(ctx);
@@ -716,25 +703,25 @@ namespace sourcepawn
         // LoadAsset(name, asset, persistent)
         cell_t N_ScriptsLoadAsset(IPluginContext* ctx, const cell_t* params)
         {
-            return IndexOf(scripts::scriptsManager.LoadAsset(CallerId(ctx), LocalString(ctx, params[1]), LocalString(ctx, params[2]), params[3] != 0));
+            return EntityCell(scripts::scriptsManager.LoadAsset(CallerId(ctx), LocalString(ctx, params[1]), LocalString(ctx, params[2]), params[3] != 0));
         }
 
         // RunSource(name, virtualPath, source, persistent)
         cell_t N_ScriptsRunSource(IPluginContext* ctx, const cell_t* params)
         {
-            return IndexOf(scripts::scriptsManager.RunSource(CallerId(ctx), LocalString(ctx, params[1]), LocalString(ctx, params[2]),
+            return EntityCell(scripts::scriptsManager.RunSource(CallerId(ctx), LocalString(ctx, params[1]), LocalString(ctx, params[2]),
                                                              LocalString(ctx, params[3]), params[4] != 0));
         }
 
         // RunFile(name, filePath, persistent)
         cell_t N_ScriptsRunFile(IPluginContext* ctx, const cell_t* params)
         {
-            return IndexOf(scripts::scriptsManager.RunFile(CallerId(ctx), LocalString(ctx, params[1]), LocalString(ctx, params[2]), params[3] != 0));
+            return EntityCell(scripts::scriptsManager.RunFile(CallerId(ctx), LocalString(ctx, params[1]), LocalString(ctx, params[2]), params[3] != 0));
         }
 
         cell_t N_ScriptsReload(IPluginContext* ctx, const cell_t* params)
         {
-            return IndexOf(scripts::scriptsManager.Reload(LocalString(ctx, params[1])));
+            return EntityCell(scripts::scriptsManager.Reload(LocalString(ctx, params[1])));
         }
 
         cell_t N_ScriptsRemove(IPluginContext* ctx, const cell_t* params)
@@ -745,7 +732,7 @@ namespace sourcepawn
 
         cell_t N_ScriptsFind(IPluginContext* ctx, const cell_t* params)
         {
-            return IndexOf(scripts::scriptsManager.Find(LocalString(ctx, params[1])));
+            return EntityCell(scripts::scriptsManager.Find(LocalString(ctx, params[1])));
         }
 
         cell_t N_ScriptsFireInput(IPluginContext* ctx, const cell_t* params)

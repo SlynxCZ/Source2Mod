@@ -64,17 +64,9 @@ namespace sourcepawn
             return fn;
         }
 
-        cell_t IndexOf(CEntityInstance* inst)
+        CEntityInstance* EntityAt(IPluginContext* ctx, cell_t entity)
         {
-            return inst ? static_cast<cell_t>(inst->GetEntityIndex().Get()) : -1;
-        }
-
-        CEntityInstance* EntityAt(IPluginContext* ctx, cell_t index)
-        {
-            CEntityInstance* inst = (index >= 0 && index < 32768) ? CBaseEntity::FromIndex<CEntityInstance>(index) : nullptr;
-            if (!inst)
-                ctx->ThrowNativeError("Entity %d is invalid", index);
-            return inst;
+            return EntityArg(ctx, entity);
         }
 
         Action ToAction(cell_t res)
@@ -326,12 +318,12 @@ namespace sourcepawn
             return services ? services->GetPlayerPawn() : nullptr;
         }
 
-        // A context property: an entity (index), a SchemaObject, a cell.
+        // A context property: an entity, a SchemaObject, a cell.
 #define S2M_CTX_ENTITY(C, prop, expr)                                           \
         cell_t N_##C##_##prop(IPluginContext* ctx, const cell_t* params)        \
         {                                                                       \
             C* c = Ctx<C>(ctx, params[1]);                                      \
-            return c ? IndexOf(expr) : -1;                                      \
+            return c ? EntityCell(expr) : -1;                                      \
         }
 #define S2M_CTX_OBJECT(C, prop, expr)                                           \
         cell_t N_##C##_##prop(IPluginContext* ctx, const cell_t* params)        \
@@ -554,7 +546,7 @@ namespace sourcepawn
         }
 #define S2M_CELL(v) static_cast<cell_t>(v)
 #define S2M_BOOL(v) ((v) != 0)
-#define S2M_INDEX(v) IndexOf((v).Get())
+#define S2M_ENTITY(v) EntityCell((v).Get())
 #define S2M_HANDLE(v) CHandle<CBaseEntity>(static_cast<CBaseEntity*>(OptionalEntityAt(ctx, v)))
 
         CEntityInstance* OptionalEntityAt(IPluginContext* ctx, cell_t index)
@@ -566,7 +558,7 @@ namespace sourcepawn
 #define S2M_INFO_FLOAT(f) S2M_FIELD_GET(CTakeDamageInfo, DamageInfoType, f, sp_ftoc) S2M_FIELD_SET(CTakeDamageInfo, DamageInfoType, f, sp_ctof)
 #define S2M_INFO_INT(f) S2M_FIELD_GET(CTakeDamageInfo, DamageInfoType, f, S2M_CELL) S2M_FIELD_SET(CTakeDamageInfo, DamageInfoType, f, S2M_CELL)
 #define S2M_INFO_BOOL(f) S2M_FIELD_GET(CTakeDamageInfo, DamageInfoType, f, S2M_CELL) S2M_FIELD_SET(CTakeDamageInfo, DamageInfoType, f, S2M_BOOL)
-#define S2M_INFO_HANDLE(f) S2M_FIELD_GET(CTakeDamageInfo, DamageInfoType, f, S2M_INDEX) S2M_FIELD_SET(CTakeDamageInfo, DamageInfoType, f, S2M_HANDLE)
+#define S2M_INFO_HANDLE(f) S2M_FIELD_GET(CTakeDamageInfo, DamageInfoType, f, S2M_ENTITY) S2M_FIELD_SET(CTakeDamageInfo, DamageInfoType, f, S2M_HANDLE)
         S2M_INFO_FLOAT(m_flDamage)
         S2M_FIELD_GET(CTakeDamageInfo, DamageInfoType, m_flOriginalDamage, sp_ftoc)
         S2M_INFO_FLOAT(m_flTotalledDamage)
@@ -646,7 +638,7 @@ namespace sourcepawn
             *out = a.m_nAttackerPlayerSlot;
             ctx->LocalToPhysAddr(params[5], &out);
             *out = a.m_nTeam;
-            return IndexOf(a.m_hAttackerPawn.Get());
+            return EntityCell(a.m_hAttackerPawn.Get());
         }
 
         // CTakeDamageResult
@@ -691,7 +683,7 @@ namespace sourcepawn
 
         // CMoveData
 #define S2M_MOVE(f, get, set) S2M_FIELD_GET(CMoveData, MoveDataType, f, get) S2M_FIELD_SET(CMoveData, MoveDataType, f, set)
-        S2M_FIELD_GET(CMoveData, MoveDataType, m_nPlayerHandle, S2M_INDEX)
+        S2M_FIELD_GET(CMoveData, MoveDataType, m_nPlayerHandle, S2M_ENTITY)
         S2M_MOVE(m_flForwardMove, sp_ftoc, sp_ctof)
         S2M_MOVE(m_flSideMove, sp_ftoc, sp_ctof)
         S2M_MOVE(m_flUpMove, sp_ftoc, sp_ctof)
@@ -810,7 +802,7 @@ namespace sourcepawn
 #undef S2M_FIELD_VEC
 #undef S2M_CELL
 #undef S2M_BOOL
-#undef S2M_INDEX
+#undef S2M_ENTITY
 #undef S2M_HANDLE
 
         // ---- transmit -----------------------------------------------------------------
@@ -885,7 +877,7 @@ namespace sourcepawn
         cell_t N_TGetOwner(IPluginContext* ctx, const cell_t* params)
         {
             CEntityInstance* e = EntityAt(ctx, params[1]);
-            return e ? IndexOf(TM().GetOwner(e)) : -1;
+            return e ? EntityCell(TM().GetOwner(e)) : -1;
         }
 
         cell_t N_TResetViewer(IPluginContext*, const cell_t* params)

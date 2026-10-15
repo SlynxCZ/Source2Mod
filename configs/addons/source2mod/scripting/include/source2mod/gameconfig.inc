@@ -33,7 +33,7 @@ enum Source2ModType
 	Source2ModType_Int64,           /**< passed as decimal text ("123"); returned through CallInt64 */
 	Source2ModType_Float,
 	Source2ModType_Double,          /**< passed as float */
-	Source2ModType_Entity,          /**< CEntityInstance*: an entity (index) on the script side, NULL_ENTITY = nullptr */
+	Source2ModType_Entity,          /**< CEntityInstance*: an entity (handle) on the script side, NULL_ENTITY = nullptr */
 	Source2ModType_Object,          /**< a schema object pointer: a SchemaObject */
 	Source2ModType_String,          /**< const char*; returned through CallString */
 	Source2ModType_Vector,          /**< Vector* / const Vector&: float[3], written back after the call; returned through CallVector */

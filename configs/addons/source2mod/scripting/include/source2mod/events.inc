@@ -73,28 +73,28 @@ methodmap IGameEvent < Handle
 	public native void SetUint64(const char[] key, const char[] value);
 
 	/**
-	 * An entity handle field as a reference (CEntityInstance.FromRefEHandle
-	 * turns it into the entity); `defValue` when unset (-1 = an empty handle).
+	 * An entity handle field as is, whether its entity still exists or not
+	 * (IsValid tells); `defValue` when unset.
 	 */
-	public native int GetEHandle(const char[] key, int defValue = -1);
+	public native CEntityInstance GetEHandle(const char[] key, CEntityInstance defValue = NULL_ENTITY);
 
 	/** An entity field as the entity; mostly for _pawn keys. NULL_ENTITY when there is none. */
-	public native CEntityInstance GetEntity(const char[] key, CEntityInstance fallback = view_as<CEntityInstance>(-1));
+	public native CEntityInstance GetEntity(const char[] key, CEntityInstance fallback = NULL_ENTITY);
 
-	/** An entity field as an index; `defValue` when unset. */
+	/** An entity field as an entity index; `defValue` when unset. */
 	public native int GetEntityIndex(const char[] key, int defValue = -1);
 
-	/** The _pawn entity of a player field, as a reference (see GetEHandle). */
-	public native int GetPawnEHandle(const char[] key);
+	/** The _pawn entity handle of a player field, as is (see GetEHandle). */
+	public native CEntityInstance GetPawnEHandle(const char[] key);
 
-	/** The _pawn entity of a player field, as an index. */
+	/** The _pawn entity of a player field, as an entity index. */
 	public native int GetPawnEntityIndex(const char[] key);
 
 	/** Sets an entity field (NULL_ENTITY clears it). */
 	public native void SetEntity(const char[] key, CEntityInstance entity);
 
-	/** Sets an entity field from a reference (GetRefEHandle). */
-	public native void SetEntityHandle(const char[] key, int ref);
+	/** Sets an entity handle field; an entity that no longer exists (or NULL_ENTITY) clears it. */
+	public native void SetEntityHandle(const char[] key, CEntityInstance entity);
 
 	/** Sets a player field from the player's pawn (and its _pawn key): SetPlayer(key, pawn) in C++. */
 	public native void SetPlayerPawn(const char[] key, CBasePlayerPawn pawn);

@@ -9,7 +9,9 @@
  * the generated class methodmaps, the C++ helper methods of the schema
  * classes, and Source2ModEntities.
  *
- * An entity is its index. Anything else the schema reaches -- services,
+ * An entity is an entity handle (index + serial, see EntityCell): a value
+ * kept after its entity is removed reads as gone instead of finding whatever
+ * reuses the index. Anything else the schema reaches -- services,
  * the scene node, the game rules -- is a SchemaObject: a handle the core
  * keeps, which remembers how it was reached (an entity and the fields from
  * it, or the game rules) and finds the object again on every use, so a
@@ -73,60 +75,15 @@ namespace sourcepawn
 {
     namespace
     {
-        constexpr cell_t kMaxEntities = 32768;
-        constexpr uint32_t kRefFlag = 1u << 31;
-
-        CEntityInstance* InstanceAt(cell_t index)
-        {
-            if (index < 0 || index >= kMaxEntities)
-                return nullptr;
-            return CBaseEntity::FromIndex<CEntityInstance>(index);
-        }
-
-        cell_t IndexOf(CEntityInstance* inst)
-        {
-            return inst ? static_cast<cell_t>(inst->GetEntityIndex().Get()) : -1;
-        }
-
-        // GetRefEHandle(): index, 16 bits of serial, and the top bit so a
-        // reference is never mistaken for an index.
-        cell_t RefOf(CEntityInstance* inst)
-        {
-            if (!inst)
-                return -1;
-            const CEntityHandle h = inst->GetRefEHandle();
-            return static_cast<cell_t>(kRefFlag | ((static_cast<uint32_t>(h.GetSerialNumber()) & 0xFFFF) << 15)
-                                       | (static_cast<uint32_t>(h.GetEntryIndex()) & 0x7FFF));
-        }
-
-        CEntityInstance* FromRef(cell_t ref)
-        {
-            const uint32_t raw = static_cast<uint32_t>(ref);
-            if (!(raw & kRefFlag))
-                return nullptr;
-            CEntityInstance* inst = InstanceAt(static_cast<cell_t>(raw & 0x7FFF));
-            if (!inst || (static_cast<uint32_t>(inst->GetRefEHandle().GetSerialNumber()) & 0xFFFF) != ((raw >> 15) & 0xFFFF))
-                return nullptr;
-            return inst;
-        }
-
         CEntityInstance* CheckEntity(IPluginContext* ctx, cell_t entity)
         {
-            CEntityInstance* inst = InstanceAt(entity);
-            if (!inst)
-                ctx->ThrowNativeError("Entity %d is invalid", entity);
-            return inst;
+            return EntityArg(ctx, entity);
         }
 
         // An entity argument that may be NULL_ENTITY (-1).
         CEntityInstance* OptionalEntity(IPluginContext* ctx, cell_t entity, bool* ok)
         {
-            *ok = true;
-            if (entity == -1)
-                return nullptr;
-            CEntityInstance* inst = CheckEntity(ctx, entity);
-            *ok = inst != nullptr;
-            return inst;
+            return OptionalEntityArg(ctx, entity, ok);
         }
 
         template <typename T>
@@ -378,12 +335,12 @@ namespace sourcepawn
             return handle;
         }
 
-        // What an `instance` argument points at: an entity by index, or a SchemaObject.
+        // What an `instance` argument points at: an entity (handle), or a SchemaObject.
         void* Base(IPluginContext* ctx, cell_t instance, const SchemaRef** ref = nullptr)
         {
             if (ref)
                 *ref = nullptr;
-            if (instance >= 0 && instance < kMaxEntities)
+            if (IsEntityCell(instance))
                 return CheckEntity(ctx, instance);
             if (instance == -1)
             {
@@ -563,7 +520,7 @@ namespace sourcepawn
             if (!Lookup(ctx, params, a, Kind::Handle, "an entity handle"))
                 return -1;
             const CEntityHandle h = *reinterpret_cast<CEntityHandle*>(a.addr);
-            return IndexOf(h.IsValid() ? GetEntitySystem()->GetEntityInstance(h) : nullptr);
+            return EntityCell(h.IsValid() ? GetEntitySystem()->GetEntityInstance(h) : nullptr);
         }
 
         cell_t N_SetHandle(IPluginContext* ctx, const cell_t* params)
@@ -585,7 +542,7 @@ namespace sourcepawn
             Access a;
             if (!Lookup(ctx, params, a, Kind::Pointer, "a pointer"))
                 return -1;
-            return IndexOf(*reinterpret_cast<CEntityInstance**>(a.addr));
+            return EntityCell(*reinterpret_cast<CEntityInstance**>(a.addr));
         }
 
         // Source2ModSchema.GetObject: a pointer to, or an embedded, schema object.
@@ -829,14 +786,14 @@ namespace sourcepawn
             return 0;
         }
 
-        // A CHandle at the offset, as the entity (index).
+        // A CHandle at the offset, as the entity.
         cell_t N_GetEntityAt(IPluginContext* ctx, const cell_t* params)
         {
             uint8_t* p = At(ctx, params[1], params[2]);
             if (!p)
                 return -1;
             const CEntityHandle h = *reinterpret_cast<const CEntityHandle*>(p);
-            return IndexOf(h.IsValid() ? GetEntitySystem()->GetEntityInstance(h) : nullptr);
+            return EntityCell(h.IsValid() ? GetEntitySystem()->GetEntityInstance(h) : nullptr);
         }
 
         cell_t N_SetEntityAt(IPluginContext* ctx, const cell_t* params)
@@ -922,7 +879,13 @@ namespace sourcepawn
 
         cell_t N_EntIsValid(IPluginContext*, const cell_t* params)
         {
-            return InstanceAt(params[1]) != nullptr;
+            return EntityFromCell(params[1]) != nullptr;
+        }
+
+        // The index the handle carries, alive or not; -1 for NULL_ENTITY.
+        cell_t N_EntGetEntityIndex(IPluginContext*, const cell_t* params)
+        {
+            return EntityCellIndex(params[1]);
         }
 
         cell_t N_EntGetClassname(IPluginContext* ctx, const cell_t* params)
@@ -944,16 +907,6 @@ namespace sourcepawn
                 ctx->StringToLocalUTF8(params[2], params[3], name ? name : "", &written);
             }
             return static_cast<cell_t>(written);
-        }
-
-        cell_t N_EntGetRefEHandle(IPluginContext* ctx, const cell_t* params)
-        {
-            return RefOf(CheckEntity(ctx, params[1]));
-        }
-
-        cell_t N_EntFromRefEHandle(IPluginContext*, const cell_t* params)
-        {
-            return IndexOf(FromRef(params[1]));
         }
 
         // ---- CBaseEntity and below ----------------------------------------------
@@ -979,12 +932,14 @@ namespace sourcepawn
 
         cell_t N_BaseFromIndex(IPluginContext*, const cell_t* params)
         {
-            return InstanceAt(params[1]) ? params[1] : -1;
+            if (params[1] < 0 || params[1] >= MAX_TOTAL_ENTITIES)
+                return -1;
+            return EntityCell(CBaseEntity::FromIndex<CEntityInstance>(params[1]));
         }
 
         cell_t N_BaseCreateEntityByName(IPluginContext* ctx, const cell_t* params)
         {
-            return IndexOf(CBaseEntity::CreateEntityByName(LocalString(ctx, params[1])));
+            return EntityCell(CBaseEntity::CreateEntityByName(LocalString(ctx, params[1])));
         }
 
         // AcceptInput(input, activator = NULL_ENTITY, caller = NULL_ENTITY, value = "", chain)
@@ -1139,7 +1094,7 @@ namespace sourcepawn
 
         cell_t N_BaseGetIndex(IPluginContext*, const cell_t* params)
         {
-            return params[1];
+            return EntityCellIndex(params[1]);
         }
 
         cell_t N_ModelGetModelName(IPluginContext* ctx, const cell_t* params)
@@ -1192,7 +1147,7 @@ namespace sourcepawn
         cell_t N_PCGetPawn(IPluginContext* ctx, const cell_t* params)
         {
             CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]);
-            return pc ? IndexOf(pc->GetPawn()) : -1;
+            return pc ? EntityCell(pc->GetPawn()) : -1;
         }
 
         template <void (CBasePlayerController::*Print)(const char*)>
@@ -1279,7 +1234,7 @@ namespace sourcepawn
         {
             if (params[1] < 0 || params[1] >= 64)
                 return -1;
-            return IndexOf(CCSPlayerController::FromSlot(params[1]));
+            return EntityCell(CCSPlayerController::FromSlot(params[1]));
         }
 
         cell_t N_CSPrintToCenterHtml(IPluginContext* ctx, const cell_t* params)
@@ -1292,17 +1247,17 @@ namespace sourcepawn
         cell_t N_CSFromPawn(IPluginContext* ctx, const cell_t* params)
         {
             CCSPlayerPawn* pawn = As<CCSPlayerPawn>(ctx, params[1]);
-            return pawn ? IndexOf(CCSPlayerController::FromPawn(pawn)) : -1;
+            return pawn ? EntityCell(CCSPlayerController::FromPawn(pawn)) : -1;
         }
 
         cell_t N_CSFromUserId(IPluginContext*, const cell_t* params)
         {
-            return IndexOf(CCSPlayerController::FromUserId(params[1]));
+            return EntityCell(CCSPlayerController::FromUserId(params[1]));
         }
 
         cell_t N_CSFromSteamId(IPluginContext* ctx, const cell_t* params)
         {
-            return IndexOf(CCSPlayerController::FromSteamId(static_cast<uint64>(std::strtoull(LocalString(ctx, params[1]), nullptr, 10))));
+            return EntityCell(CCSPlayerController::FromSteamId(static_cast<uint64>(std::strtoull(LocalString(ctx, params[1]), nullptr, 10))));
         }
 
         // TakeDamage(attacker, damage, damageType, chain): C++ defaults to Bypass.
@@ -1340,13 +1295,13 @@ namespace sourcepawn
         cell_t N_CSGetPlayerPawn(IPluginContext* ctx, const cell_t* params)
         {
             CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]);
-            return pc ? IndexOf(pc->GetPlayerPawn()) : -1;
+            return pc ? EntityCell(pc->GetPlayerPawn()) : -1;
         }
 
         cell_t N_CSGetObserverPawn(IPluginContext* ctx, const cell_t* params)
         {
             CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]);
-            return pc ? IndexOf(pc->GetObserverPawn()) : -1;
+            return pc ? EntityCell(pc->GetObserverPawn()) : -1;
         }
 
         // ---- pawns ----------------------------------------------------------------
@@ -1370,19 +1325,19 @@ namespace sourcepawn
         cell_t N_PawnGetController(IPluginContext* ctx, const cell_t* params)
         {
             CBasePlayerPawn* pawn = As<CBasePlayerPawn>(ctx, params[1]);
-            return pawn ? IndexOf(pawn->GetController()) : -1;
+            return pawn ? EntityCell(pawn->GetController()) : -1;
         }
 
         cell_t N_PawnGetDefaultController(IPluginContext* ctx, const cell_t* params)
         {
             CBasePlayerPawn* pawn = As<CBasePlayerPawn>(ctx, params[1]);
-            return pawn ? IndexOf(pawn->GetDefaultController()) : -1;
+            return pawn ? EntityCell(pawn->GetDefaultController()) : -1;
         }
 
         cell_t N_CSPawnBaseGetOriginalController(IPluginContext* ctx, const cell_t* params)
         {
             CCSPlayerPawnBase* pawn = As<CCSPlayerPawnBase>(ctx, params[1]);
-            return pawn ? IndexOf(pawn->GetOriginalController()) : -1;
+            return pawn ? EntityCell(pawn->GetOriginalController()) : -1;
         }
 
         cell_t N_CSPawnBaseCanMove(IPluginContext* ctx, const cell_t* params)
@@ -1429,7 +1384,7 @@ namespace sourcepawn
         cell_t N_ItemsGiveNamedItem(IPluginContext* ctx, const cell_t* params)
         {
             CPlayer_ItemServices* items = ObjectOf<CPlayer_ItemServices>(ctx, params[1]);
-            return items ? IndexOf(items->GiveNamedItem(LocalString(ctx, params[2]), ChainArg(params, 3))) : -1;
+            return items ? EntityCell(items->GiveNamedItem(LocalString(ctx, params[2]), ChainArg(params, 3))) : -1;
         }
 
         cell_t N_WeaponsCanUse(IPluginContext* ctx, const cell_t* params)
@@ -1500,13 +1455,13 @@ namespace sourcepawn
         cell_t N_PawnComponentGetPlayerPawn(IPluginContext* ctx, const cell_t* params)
         {
             CPlayerPawnComponent* c = ObjectOf<CPlayerPawnComponent>(ctx, params[1]);
-            return c ? IndexOf(c->GetPlayerPawn()) : -1;
+            return c ? EntityCell(c->GetPlayerPawn()) : -1;
         }
 
         cell_t N_ControllerComponentGetPlayerController(IPluginContext* ctx, const cell_t* params)
         {
             CPlayerControllerComponent* c = ObjectOf<CPlayerControllerComponent>(ctx, params[1]);
-            return c ? IndexOf(c->GetPlayerController()) : -1;
+            return c ? EntityCell(c->GetPlayerController()) : -1;
         }
 
         template <void (CAttributeList::*SET)(const char*, float, HookChain)>
@@ -1535,7 +1490,7 @@ namespace sourcepawn
             auto* owner = static_cast<CBaseEntity*>(OptionalEntity(ctx, params[4], &ok));
             if (!ok)
                 return -1;
-            return IndexOf(T::EmitGrenade(pos, QAngle(ang.x, ang.y, ang.z), vel, owner, static_cast<uint32_t>(params[5]), ChainArg(params, 6)));
+            return EntityCell(T::EmitGrenade(pos, QAngle(ang.x, ang.y, ang.z), vel, owner, static_cast<uint32_t>(params[5]), ChainArg(params, 6)));
         }
 
         // CSmokeGrenadeProjectile.EmitGrenade(position, angles, velocity, team, owner, itemDefIndex, chain)
@@ -1549,7 +1504,7 @@ namespace sourcepawn
             auto* owner = static_cast<CBaseEntity*>(OptionalEntity(ctx, params[5], &ok));
             if (!ok)
                 return -1;
-            return IndexOf(CSmokeGrenadeProjectile::EmitGrenade(pos, QAngle(ang.x, ang.y, ang.z), vel, params[4], owner,
+            return EntityCell(CSmokeGrenadeProjectile::EmitGrenade(pos, QAngle(ang.x, ang.y, ang.z), vel, params[4], owner,
                                                                 static_cast<uint32_t>(params[6]), ChainArg(params, 7)));
         }
 
@@ -1571,14 +1526,14 @@ namespace sourcepawn
         {
             CCSGameRules* rules = ObjectOf<CCSGameRules>(ctx, params[1]);
             CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[2]);
-            return rules && pc ? IndexOf(rules->FindPickerEntity(pc)) : -1;
+            return rules && pc ? EntityCell(rules->FindPickerEntity(pc)) : -1;
         }
 
         cell_t N_RulesGetClientAimTarget(IPluginContext* ctx, const cell_t* params)
         {
             CCSGameRules* rules = ObjectOf<CCSGameRules>(ctx, params[1]);
             CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[2]);
-            return rules && pc ? IndexOf(rules->GetClientAimTarget(pc)) : -1;
+            return rules && pc ? EntityCell(rules->GetClientAimTarget(pc)) : -1;
         }
 
         // ---- CCSCustomHudLayout ---------------------------------------------------
@@ -1594,7 +1549,7 @@ namespace sourcepawn
         cell_t N_HudCreate(IPluginContext* ctx, const cell_t* params)
         {
             const char* target = LocalString(ctx, params[2]);
-            return IndexOf(CCSCustomHudLayout::Create(LocalString(ctx, params[1]), *target ? target : nullptr));
+            return EntityCell(CCSCustomHudLayout::Create(LocalString(ctx, params[1]), *target ? target : nullptr));
         }
 
         cell_t N_HudGetLayoutState(IPluginContext* ctx, const cell_t* params)
@@ -1652,14 +1607,14 @@ namespace sourcepawn
         cell_t N_EntsFindPickerEntity(IPluginContext* ctx, const cell_t* params)
         {
             CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]);
-            return pc ? IndexOf(entities::entitiesManager.FindPickerEntity(pc)) : -1;
+            return pc ? EntityCell(entities::entitiesManager.FindPickerEntity(pc)) : -1;
         }
 
         cell_t N_EntsFindEntityByClassname(IPluginContext* ctx, const cell_t* params)
         {
             bool ok;
             CEntityInstance* start = OptionalEntity(ctx, params[1], &ok);
-            return ok ? IndexOf(entities::entitiesManager.FindEntityByClassname(start, LocalString(ctx, params[2]))) : -1;
+            return ok ? EntityCell(entities::entitiesManager.FindEntityByClassname(start, LocalString(ctx, params[2]))) : -1;
         }
 
         // FindEntityByName(start, name, searching = NULL_ENTITY, activator = NULL_ENTITY, caller = NULL_ENTITY):
@@ -1676,12 +1631,12 @@ namespace sourcepawn
             }
             if (!ok[0] || !ok[1] || !ok[2] || !ok[3])
                 return -1;
-            return IndexOf(entities::entitiesManager.FindEntityByName(args[0], LocalString(ctx, params[2]), args[1], args[2], args[3]));
+            return EntityCell(entities::entitiesManager.FindEntityByName(args[0], LocalString(ctx, params[2]), args[1], args[2], args[3]));
         }
 
         cell_t N_EntsCreateEntityByName(IPluginContext* ctx, const cell_t* params)
         {
-            return IndexOf(entities::entitiesManager.CreateEntityByName(LocalString(ctx, params[1])));
+            return EntityCell(entities::entitiesManager.CreateEntityByName(LocalString(ctx, params[1])));
         }
 
         // AcceptInput(target, input, activator, caller, value)
@@ -1726,8 +1681,8 @@ namespace sourcepawn
                 if (!parentChanged)
                     return;
                 sp::CallArgs args;
-                args.PushCell(IndexOf(e));
-                args.PushCell(IndexOf(parent));
+                args.PushCell(EntityCell(e));
+                args.PushCell(EntityCell(parent));
                 Invoke(parentChanged, args);
             }
 
@@ -1737,7 +1692,7 @@ namespace sourcepawn
                 if (!fn)
                     return;
                 sp::CallArgs args;
-                args.PushCell(IndexOf(e));
+                args.PushCell(EntityCell(e));
                 Invoke(fn, args);
             }
         };
@@ -1757,8 +1712,8 @@ namespace sourcepawn
                     return Action::Ignore;
                 sp::CallArgs args;
                 args.PushString(output ? output : "");
-                args.PushCell(IndexOf(activator));
-                args.PushCell(IndexOf(caller));
+                args.PushCell(EntityCell(activator));
+                args.PushCell(EntityCell(caller));
                 args.PushFloat(delay);
                 args.PushCell(isPost ? 1 : 0);
                 cell_t res = 0;
@@ -1849,12 +1804,12 @@ namespace sourcepawn
             return id;
         }
 
-        // FindAllEntitiesByDesignerName(name) -> ArrayList of indices (UTIL_FindAllEntitiesByDesignerName).
+        // FindAllEntitiesByDesignerName(name) -> ArrayList of entities (UTIL_FindAllEntitiesByDesignerName).
         cell_t N_EntsFindAllEntitiesByDesignerName(IPluginContext* ctx, const cell_t* params)
         {
             std::vector<cell_t> found;
             for (CEntityInstance* e : UTIL_FindAllEntitiesByDesignerName<CEntityInstance>(LocalString(ctx, params[1])))
-                found.push_back(IndexOf(e));
+                found.push_back(EntityCell(e));
             return NewCellList(found, CallerId(ctx));
         }
 
@@ -1908,8 +1863,7 @@ namespace sourcepawn
             { "CEntityInstance.IsValid", N_EntIsValid },
             { "CEntityInstance.GetClassname", N_EntGetClassname },
             { "CEntityInstance.GetName", N_EntGetName },
-            { "CEntityInstance.GetRefEHandle", N_EntGetRefEHandle },
-            { "CEntityInstance.FromRefEHandle", N_EntFromRefEHandle },
+            { "CEntityInstance.GetEntityIndex", N_EntGetEntityIndex },
             // schema/classes.inc, from tools/sp_schemagen/methods.inc
             { "CBaseEntity.FromIndex", N_BaseFromIndex },
             { "CBaseEntity.CreateEntityByName", N_BaseCreateEntityByName },
@@ -2035,19 +1989,82 @@ namespace sourcepawn
         return ptr ? RefFor(Root::Raw, CEntityHandle(), ptr, {}) : 0;
     }
 
-    cell_t RefForHandle(CEntityHandle handle)
+    // An entity cell: the top bit (so it is never a plain index nor a Handle,
+    // which stay positive), 16 bits of the serial, 15 of the index. -1 is
+    // CEntityHandle's own invalid value and NULL_ENTITY.
+    namespace
+    {
+        constexpr uint32_t kEntityFlag = 1u << 31;
+        constexpr uint32_t kCellIndexMask = 0x7FFF;
+        constexpr uint32_t kCellSerialMask = 0xFFFF;
+    }
+
+    cell_t EntityCell(CEntityHandle handle)
     {
         if (!handle.IsValid())
             return -1;
-        return static_cast<cell_t>(kRefFlag | ((static_cast<uint32_t>(handle.GetSerialNumber()) & 0xFFFF) << 15)
-                                   | (static_cast<uint32_t>(handle.GetEntryIndex()) & 0x7FFF));
+        return static_cast<cell_t>(kEntityFlag | ((static_cast<uint32_t>(handle.GetSerialNumber()) & kCellSerialMask) << 15)
+                                   | (static_cast<uint32_t>(handle.GetEntryIndex()) & kCellIndexMask));
     }
 
-    CEntityHandle HandleForRef(cell_t ref)
+    cell_t EntityCell(CEntityInstance* inst)
     {
-        // A ref keeps 16 bits of the serial: the live entity at the index
-        // gives the whole handle when it is still the same one.
-        CEntityInstance* inst = FromRef(ref);
+        return inst ? EntityCell(inst->GetRefEHandle()) : -1;
+    }
+
+    bool IsEntityCell(cell_t value)
+    {
+        return value != -1 && (static_cast<uint32_t>(value) & kEntityFlag) != 0;
+    }
+
+    cell_t EntityCellIndex(cell_t value)
+    {
+        return IsEntityCell(value) ? static_cast<cell_t>(static_cast<uint32_t>(value) & kCellIndexMask) : -1;
+    }
+
+    CEntityInstance* EntityFromCell(cell_t value)
+    {
+        if (!IsEntityCell(value))
+            return nullptr;
+        const uint32_t raw = static_cast<uint32_t>(value);
+        CEntityInstance* inst = CBaseEntity::FromIndex<CEntityInstance>(static_cast<int>(raw & kCellIndexMask));
+        if (!inst || (static_cast<uint32_t>(inst->GetRefEHandle().GetSerialNumber()) & kCellSerialMask) != ((raw >> 15) & kCellSerialMask))
+            return nullptr;
+        return inst;
+    }
+
+    CEntityInstance* EntityArg(IPluginContext* ctx, cell_t value)
+    {
+        if (value == -1)
+        {
+            ctx->ThrowNativeError("Null entity");
+            return nullptr;
+        }
+        if (!IsEntityCell(value))
+        {
+            ctx->ThrowNativeError("%d is not an entity (entities are handles: CBaseEntity.FromIndex makes one from an index)", value);
+            return nullptr;
+        }
+        CEntityInstance* inst = EntityFromCell(value);
+        if (!inst)
+            ctx->ThrowNativeError("Entity %d (handle %x) no longer exists", EntityCellIndex(value), value);
+        return inst;
+    }
+
+    CEntityInstance* OptionalEntityArg(IPluginContext* ctx, cell_t value, bool* ok)
+    {
+        *ok = true;
+        if (value == -1)
+            return nullptr;
+        CEntityInstance* inst = EntityArg(ctx, value);
+        *ok = inst != nullptr;
+        return inst;
+    }
+
+    CEntityHandle HandleFromCell(cell_t value)
+    {
+        // A cell keeps 16 bits of the serial: the live entity gives the whole handle.
+        CEntityInstance* inst = EntityFromCell(value);
         return inst ? inst->GetRefEHandle() : CEntityHandle();
     }
 

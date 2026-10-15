@@ -20,7 +20,7 @@ methodmap ActorMapping_t < SchemaObject
 	public int m_sActorName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "ActorMapping_t", "m_sActorName", buffer, maxlen); }
 	property CBaseEntity m_hEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "ActorMapping_t", "m_hEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "ActorMapping_t", "m_hEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "ActorMapping_t", "m_hEntity", value); }
 	}
 }
 
@@ -116,7 +116,7 @@ methodmap CBaseEntity < CEntityInstance
 	public int m_target(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CBaseEntity", "m_target", buffer, maxlen); }
 	property CBaseFilter m_hDamageFilter {
 		public get() { return view_as<CBaseFilter>(Source2ModSchema.GetHandle(this, "CBaseEntity", "m_hDamageFilter")); }
-		public set(CBaseFilter value) { Source2ModSchema.SetHandle(this, "CBaseEntity", "m_hDamageFilter", view_as<int>(value)); }
+		public set(CBaseFilter value) { Source2ModSchema.SetHandle(this, "CBaseEntity", "m_hDamageFilter", value); }
 	}
 	public int m_iszDamageFilterName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CBaseEntity", "m_iszDamageFilterName", buffer, maxlen); }
 	property float m_flMoveDoneTime {
@@ -187,11 +187,11 @@ methodmap CBaseEntity < CEntityInstance
 	}
 	property CBaseEntity m_hEffectEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBaseEntity", "m_hEffectEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseEntity", "m_hEffectEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseEntity", "m_hEffectEntity", value); }
 	}
 	property CBaseEntity m_hOwnerEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBaseEntity", "m_hOwnerEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseEntity", "m_hOwnerEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseEntity", "m_hOwnerEntity", value); }
 	}
 	property int m_fEffects {
 		public get() { return Source2ModSchema.GetInt(this, "CBaseEntity", "m_fEffects"); }
@@ -199,7 +199,7 @@ methodmap CBaseEntity < CEntityInstance
 	}
 	property CBaseEntity m_hGroundEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBaseEntity", "m_hGroundEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseEntity", "m_hGroundEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseEntity", "m_hGroundEntity", value); }
 	}
 	property int m_nGroundBodyIndex {
 		public get() { return Source2ModSchema.GetInt(this, "CBaseEntity", "m_nGroundBodyIndex"); }
@@ -273,7 +273,7 @@ methodmap CBaseEntity < CEntityInstance
 	}
 	property CBaseEntity m_pBlocker {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBaseEntity", "m_pBlocker")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseEntity", "m_pBlocker", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseEntity", "m_pBlocker", value); }
 	}
 	property float m_flLocalTime {
 		public get() { return Source2ModSchema.GetFloat(this, "CBaseEntity", "m_flLocalTime"); }
@@ -292,6 +292,7 @@ methodmap CBaseEntity < CEntityInstance
 	}
 	// CBaseEntity's helpers, as in the SDK's CBaseEntity.h. `chain` is C++'s
 	// HookChain: HookChain_Default keeps the C++ default.
+	// The entity now at an index, NULL_ENTITY when none: an index into an entity.
 	public static native CBaseEntity FromIndex(int index);
 	public static native CBaseEntity CreateEntityByName(const char[] className);
 	public native void AcceptInput(const char[] input, CEntityInstance activator = NULL_ENTITY, CEntityInstance caller = NULL_ENTITY, const char[] value = "", Source2ModHookChain chain = HookChain_Default);
@@ -317,6 +318,7 @@ methodmap CBaseEntity < CEntityInstance
 	public native void SetCollisionGroup(int collisionGroup);
 	public native void CollisionRulesChanged();
 	public native void Remove(Source2ModHookChain chain = HookChain_Default);
+	// The entity index (GetEntityIndex): an entity into an index.
 	public native int GetIndex();
 	// ParticleAttachment_t (PATTACH_ABSORIGIN_FOLLOW = 1); recipients: a player mask, all players by default.
 	public native void DispatchParticleEffect(const char[] particle, int attachType = 1, int attachmentPoint = 0, bool resetAllParticles = false, const int recipients[2] = {-1, -1}, Source2ModHookChain chain = HookChain_Default);
@@ -606,7 +608,7 @@ methodmap CEconEntity < CBaseAnimGraph
 	}
 	property CBaseEntity m_hOldProvidee {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CEconEntity", "m_hOldProvidee")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEconEntity", "m_hOldProvidee", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEconEntity", "m_hOldProvidee", value); }
 	}
 	property int m_iOldOwnerClass {
 		public get() { return Source2ModSchema.GetInt(this, "CEconEntity", "m_iOldOwnerClass"); }
@@ -822,7 +824,7 @@ methodmap CCSWeaponBase < CBasePlayerWeapon
 	}
 	property CCSPlayerPawn m_hPrevOwner {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CCSWeaponBase", "m_hPrevOwner")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSWeaponBase", "m_hPrevOwner", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSWeaponBase", "m_hPrevOwner", value); }
 	}
 	property int m_nDropTick {
 		public get() { return Source2ModSchema.GetInt(this, "CCSWeaponBase", "m_nDropTick"); }
@@ -950,7 +952,7 @@ methodmap CAmbientGeneric < CPointEntity
 	public int m_sSourceEntName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CAmbientGeneric", "m_sSourceEntName", buffer, maxlen); }
 	property CBaseEntity m_hSoundSource {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CAmbientGeneric", "m_hSoundSource")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CAmbientGeneric", "m_hSoundSource", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CAmbientGeneric", "m_hSoundSource", value); }
 	}
 	property int m_nSoundSourceEntIndex {
 		public get() { return Source2ModSchema.GetInt(this, "CAmbientGeneric", "m_nSoundSourceEntIndex"); }
@@ -992,7 +994,7 @@ methodmap CAttributeManager < SchemaObject
 	}
 	property CBaseEntity m_hOuter {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CAttributeManager", "m_hOuter")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CAttributeManager", "m_hOuter", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CAttributeManager", "m_hOuter", value); }
 	}
 	property bool m_bPreventLoopback {
 		public get() { return Source2ModSchema.GetBool(this, "CAttributeManager", "m_bPreventLoopback"); }
@@ -1412,7 +1414,7 @@ methodmap CBaseToggle < CBaseModelEntity
 	}
 	property CBaseEntity m_hActivator {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBaseToggle", "m_hActivator")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseToggle", "m_hActivator", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseToggle", "m_hActivator", value); }
 	}
 	public void m_vecFinalDest(float vec[3]) { Source2ModSchema.GetVector(this, "CBaseToggle", "m_vecFinalDest", vec); }
 	public void Set_m_vecFinalDest(const float vec[3]) { Source2ModSchema.SetVector(this, "CBaseToggle", "m_vecFinalDest", vec); }
@@ -1464,11 +1466,11 @@ methodmap CBaseButton < CBaseToggle
 	}
 	property CBaseEntity m_hConstraint {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBaseButton", "m_hConstraint")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseButton", "m_hConstraint", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseButton", "m_hConstraint", value); }
 	}
 	property CBaseEntity m_hConstraintParent {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBaseButton", "m_hConstraintParent")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseButton", "m_hConstraintParent", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBaseButton", "m_hConstraintParent", value); }
 	}
 	property bool m_bForceNpcExclude {
 		public get() { return Source2ModSchema.GetBool(this, "CBaseButton", "m_bForceNpcExclude"); }
@@ -1477,7 +1479,7 @@ methodmap CBaseButton < CBaseToggle
 	public int m_sGlowEntity(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CBaseButton", "m_sGlowEntity", buffer, maxlen); }
 	property CBaseModelEntity m_glowEntity {
 		public get() { return view_as<CBaseModelEntity>(Source2ModSchema.GetHandle(this, "CBaseButton", "m_glowEntity")); }
-		public set(CBaseModelEntity value) { Source2ModSchema.SetHandle(this, "CBaseButton", "m_glowEntity", view_as<int>(value)); }
+		public set(CBaseModelEntity value) { Source2ModSchema.SetHandle(this, "CBaseButton", "m_glowEntity", value); }
 	}
 	property bool m_usable {
 		public get() { return Source2ModSchema.GetBool(this, "CBaseButton", "m_usable"); }
@@ -1538,7 +1540,7 @@ methodmap CBaseCSGrenade < CCSWeaponBase
 	}
 	property CCSWeaponBase m_hSwitchToWeaponAfterThrow {
 		public get() { return view_as<CCSWeaponBase>(Source2ModSchema.GetHandle(this, "CBaseCSGrenade", "m_hSwitchToWeaponAfterThrow")); }
-		public set(CCSWeaponBase value) { Source2ModSchema.SetHandle(this, "CBaseCSGrenade", "m_hSwitchToWeaponAfterThrow", view_as<int>(value)); }
+		public set(CCSWeaponBase value) { Source2ModSchema.SetHandle(this, "CBaseCSGrenade", "m_hSwitchToWeaponAfterThrow", value); }
 	}
 }
 
@@ -1580,7 +1582,7 @@ methodmap CBaseGrenade < CBaseAnimGraph
 	public int m_ExplosionSound(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CBaseGrenade", "m_ExplosionSound", buffer, maxlen); }
 	property CCSPlayerPawn m_hThrower {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CBaseGrenade", "m_hThrower")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CBaseGrenade", "m_hThrower", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CBaseGrenade", "m_hThrower", value); }
 	}
 	property float m_flNextAttack {
 		public get() { return Source2ModSchema.GetFloat(this, "CBaseGrenade", "m_flNextAttack"); }
@@ -1588,7 +1590,7 @@ methodmap CBaseGrenade < CBaseAnimGraph
 	}
 	property CCSPlayerPawn m_hOriginalThrower {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CBaseGrenade", "m_hOriginalThrower")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CBaseGrenade", "m_hOriginalThrower", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CBaseGrenade", "m_hOriginalThrower", value); }
 	}
 }
 
@@ -1855,7 +1857,7 @@ methodmap CBasePlayerController < CBaseEntity
 	}
 	property CBasePlayerPawn m_hPawn {
 		public get() { return view_as<CBasePlayerPawn>(Source2ModSchema.GetHandle(this, "CBasePlayerController", "m_hPawn")); }
-		public set(CBasePlayerPawn value) { Source2ModSchema.SetHandle(this, "CBasePlayerController", "m_hPawn", view_as<int>(value)); }
+		public set(CBasePlayerPawn value) { Source2ModSchema.SetHandle(this, "CBasePlayerController", "m_hPawn", value); }
 	}
 	property bool m_bKnownTeamMismatch {
 		public get() { return Source2ModSchema.GetBool(this, "CBasePlayerController", "m_bKnownTeamMismatch"); }
@@ -1867,7 +1869,7 @@ methodmap CBasePlayerController < CBaseEntity
 	}
 	property CBasePlayerController m_hSplitOwner {
 		public get() { return view_as<CBasePlayerController>(Source2ModSchema.GetHandle(this, "CBasePlayerController", "m_hSplitOwner")); }
-		public set(CBasePlayerController value) { Source2ModSchema.SetHandle(this, "CBasePlayerController", "m_hSplitOwner", view_as<int>(value)); }
+		public set(CBasePlayerController value) { Source2ModSchema.SetHandle(this, "CBasePlayerController", "m_hSplitOwner", value); }
 	}
 	property bool m_bIsHLTV {
 		public get() { return Source2ModSchema.GetBool(this, "CBasePlayerController", "m_bIsHLTV"); }
@@ -2015,11 +2017,11 @@ methodmap CBasePlayerPawn < CBaseCombatCharacter
 	}
 	property CBasePlayerController m_hController {
 		public get() { return view_as<CBasePlayerController>(Source2ModSchema.GetHandle(this, "CBasePlayerPawn", "m_hController")); }
-		public set(CBasePlayerController value) { Source2ModSchema.SetHandle(this, "CBasePlayerPawn", "m_hController", view_as<int>(value)); }
+		public set(CBasePlayerController value) { Source2ModSchema.SetHandle(this, "CBasePlayerPawn", "m_hController", value); }
 	}
 	property CBasePlayerController m_hDefaultController {
 		public get() { return view_as<CBasePlayerController>(Source2ModSchema.GetHandle(this, "CBasePlayerPawn", "m_hDefaultController")); }
-		public set(CBasePlayerController value) { Source2ModSchema.SetHandle(this, "CBasePlayerPawn", "m_hDefaultController", view_as<int>(value)); }
+		public set(CBasePlayerController value) { Source2ModSchema.SetHandle(this, "CBasePlayerPawn", "m_hDefaultController", value); }
 	}
 	property float m_fHltvReplayDelay {
 		public get() { return Source2ModSchema.GetFloat(this, "CBasePlayerPawn", "m_fHltvReplayDelay"); }
@@ -2238,7 +2240,7 @@ methodmap CBreakableProp < CBaseProp
 	public void Set_m_vDefBurstOffset(const float vec[3]) { Source2ModSchema.SetVector(this, "CBreakableProp", "m_vDefBurstOffset", vec); }
 	property CBaseEntity m_hBreaker {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBreakableProp", "m_hBreaker")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBreakableProp", "m_hBreaker", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBreakableProp", "m_hBreaker", value); }
 	}
 	property int m_PerformanceMode {
 		public get() { return Source2ModSchema.GetInt(this, "CBreakableProp", "m_PerformanceMode"); }
@@ -2277,7 +2279,7 @@ methodmap CBreakableProp < CBaseProp
 	public int m_explosionModifier(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CBreakableProp", "m_explosionModifier", buffer, maxlen); }
 	property CBasePlayerPawn m_hPhysicsAttacker {
 		public get() { return view_as<CBasePlayerPawn>(Source2ModSchema.GetHandle(this, "CBreakableProp", "m_hPhysicsAttacker")); }
-		public set(CBasePlayerPawn value) { Source2ModSchema.SetHandle(this, "CBreakableProp", "m_hPhysicsAttacker", view_as<int>(value)); }
+		public set(CBasePlayerPawn value) { Source2ModSchema.SetHandle(this, "CBreakableProp", "m_hPhysicsAttacker", value); }
 	}
 	property float m_flLastPhysicsInfluenceTime {
 		public get() { return Source2ModSchema.GetFloat(this, "CBreakableProp", "m_flLastPhysicsInfluenceTime"); }
@@ -2289,7 +2291,7 @@ methodmap CBreakableProp < CBaseProp
 	}
 	property CBaseEntity m_hLastAttacker {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBreakableProp", "m_hLastAttacker")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBreakableProp", "m_hLastAttacker", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBreakableProp", "m_hLastAttacker", value); }
 	}
 	public int m_iszPuntSound(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CBreakableProp", "m_iszPuntSound", buffer, maxlen); }
 	property bool m_bUsePuntSound {
@@ -2409,7 +2411,7 @@ methodmap CBasePropDoor < CDynamicProp
 	public void Set_m_closedAngles(const float vec[3]) { Source2ModSchema.SetVector(this, "CBasePropDoor", "m_closedAngles", vec); }
 	property CBaseEntity m_hBlocker {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBasePropDoor", "m_hBlocker")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBasePropDoor", "m_hBlocker", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBasePropDoor", "m_hBlocker", value); }
 	}
 	property bool m_bFirstBlocked {
 		public get() { return Source2ModSchema.GetBool(this, "CBasePropDoor", "m_bFirstBlocked"); }
@@ -2423,7 +2425,7 @@ methodmap CBasePropDoor < CDynamicProp
 	public void Set_m_vecLatchWorldPosition(const float vec[3]) { Source2ModSchema.SetVector(this, "CBasePropDoor", "m_vecLatchWorldPosition", vec); }
 	property CBaseEntity m_hActivator {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBasePropDoor", "m_hActivator")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBasePropDoor", "m_hActivator", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBasePropDoor", "m_hActivator", value); }
 	}
 	property float m_flSpeed {
 		public get() { return Source2ModSchema.GetFloat(this, "CBasePropDoor", "m_flSpeed"); }
@@ -2436,7 +2438,7 @@ methodmap CBasePropDoor < CDynamicProp
 	public int m_SlaveName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CBasePropDoor", "m_SlaveName", buffer, maxlen); }
 	property CBasePropDoor m_hMaster {
 		public get() { return view_as<CBasePropDoor>(Source2ModSchema.GetHandle(this, "CBasePropDoor", "m_hMaster")); }
-		public set(CBasePropDoor value) { Source2ModSchema.SetHandle(this, "CBasePropDoor", "m_hMaster", view_as<int>(value)); }
+		public set(CBasePropDoor value) { Source2ModSchema.SetHandle(this, "CBasePropDoor", "m_hMaster", value); }
 	}
 }
 
@@ -2449,7 +2451,7 @@ methodmap CBaseTrigger < CBaseToggle
 	public int m_iFilterName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CBaseTrigger", "m_iFilterName", buffer, maxlen); }
 	property CBaseFilter m_hFilter {
 		public get() { return view_as<CBaseFilter>(Source2ModSchema.GetHandle(this, "CBaseTrigger", "m_hFilter")); }
-		public set(CBaseFilter value) { Source2ModSchema.SetHandle(this, "CBaseTrigger", "m_hFilter", view_as<int>(value)); }
+		public set(CBaseFilter value) { Source2ModSchema.SetHandle(this, "CBaseTrigger", "m_hFilter", value); }
 	}
 	property bool m_bDisabled {
 		public get() { return Source2ModSchema.GetBool(this, "CBaseTrigger", "m_bDisabled"); }
@@ -2531,7 +2533,7 @@ methodmap CBeam < CBaseModelEntity
 	public void Set_m_vecEndPos(const float vec[3]) { Source2ModSchema.SetVector(this, "CBeam", "m_vecEndPos", vec); }
 	property CBaseEntity m_hEndEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBeam", "m_hEndEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBeam", "m_hEndEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBeam", "m_hEndEntity", value); }
 	}
 	property int m_nDissolveType {
 		public get() { return Source2ModSchema.GetInt(this, "CBeam", "m_nDissolveType"); }
@@ -2604,7 +2606,7 @@ methodmap CBombTarget < CBaseTrigger
 	public int m_szMountTarget(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CBombTarget", "m_szMountTarget", buffer, maxlen); }
 	property CBaseEntity m_hInstructorHint {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBombTarget", "m_hInstructorHint")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBombTarget", "m_hInstructorHint", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBombTarget", "m_hInstructorHint", value); }
 	}
 	property int m_nBombSiteDesignation {
 		public get() { return Source2ModSchema.GetInt(this, "CBombTarget", "m_nBombSiteDesignation"); }
@@ -2675,7 +2677,7 @@ methodmap CBreakable < CBaseModelEntity
 	}
 	property CBaseEntity m_hBreaker {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CBreakable", "m_hBreaker")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBreakable", "m_hBreaker", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CBreakable", "m_hBreaker", value); }
 	}
 	property int m_Explosion {
 		public get() { return Source2ModSchema.GetInt(this, "CBreakable", "m_Explosion"); }
@@ -2705,7 +2707,7 @@ methodmap CBreakable < CBaseModelEntity
 	}
 	property CBasePlayerPawn m_hPhysicsAttacker {
 		public get() { return view_as<CBasePlayerPawn>(Source2ModSchema.GetHandle(this, "CBreakable", "m_hPhysicsAttacker")); }
-		public set(CBasePlayerPawn value) { Source2ModSchema.SetHandle(this, "CBreakable", "m_hPhysicsAttacker", view_as<int>(value)); }
+		public set(CBasePlayerPawn value) { Source2ModSchema.SetHandle(this, "CBreakable", "m_hPhysicsAttacker", value); }
 	}
 	property float m_flLastPhysicsInfluenceTime {
 		public get() { return Source2ModSchema.GetFloat(this, "CBreakable", "m_flLastPhysicsInfluenceTime"); }
@@ -2853,7 +2855,7 @@ methodmap CCSBot < CBot
 	}
 	property CCSPlayerPawn m_leader {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CCSBot", "m_leader")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_leader", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_leader", value); }
 	}
 	property float m_followTimestamp {
 		public get() { return Source2ModSchema.GetFloat(this, "CCSBot", "m_followTimestamp"); }
@@ -2889,17 +2891,17 @@ methodmap CCSBot < CBot
 	}
 	property CBaseEntity m_taskEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CCSBot", "m_taskEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_taskEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_taskEntity", value); }
 	}
 	public void m_goalPosition(float vec[3]) { Source2ModSchema.GetVector(this, "CCSBot", "m_goalPosition", vec); }
 	public void Set_m_goalPosition(const float vec[3]) { Source2ModSchema.SetVector(this, "CCSBot", "m_goalPosition", vec); }
 	property CBaseEntity m_goalEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CCSBot", "m_goalEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_goalEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_goalEntity", value); }
 	}
 	property CBaseEntity m_avoid {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CCSBot", "m_avoid")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_avoid", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_avoid", value); }
 	}
 	property float m_avoidTimestamp {
 		public get() { return Source2ModSchema.GetFloat(this, "CCSBot", "m_avoidTimestamp"); }
@@ -3126,7 +3128,7 @@ methodmap CCSBot < CBot
 	}
 	property CCSPlayerPawn m_enemy {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CCSBot", "m_enemy")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_enemy", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_enemy", value); }
 	}
 	property bool m_isEnemyVisible {
 		public get() { return Source2ModSchema.GetBool(this, "CCSBot", "m_isEnemyVisible"); }
@@ -3168,7 +3170,7 @@ methodmap CCSBot < CBot
 	}
 	property CCSPlayerPawn m_bomber {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CCSBot", "m_bomber")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_bomber", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_bomber", value); }
 	}
 	property int m_nearbyFriendCount {
 		public get() { return Source2ModSchema.GetInt(this, "CCSBot", "m_nearbyFriendCount"); }
@@ -3176,18 +3178,18 @@ methodmap CCSBot < CBot
 	}
 	property CCSPlayerPawn m_closestVisibleFriend {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CCSBot", "m_closestVisibleFriend")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_closestVisibleFriend", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_closestVisibleFriend", value); }
 	}
 	property CCSPlayerPawn m_closestVisibleHumanFriend {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CCSBot", "m_closestVisibleHumanFriend")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_closestVisibleHumanFriend", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_closestVisibleHumanFriend", value); }
 	}
 	property IntervalTimer m_attentionInterval {
 		public get() { return view_as<IntervalTimer>(Source2ModSchema.GetObject(this, "CCSBot", "m_attentionInterval")); }
 	}
 	property CCSPlayerPawn m_attacker {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CCSBot", "m_attacker")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_attacker", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_attacker", value); }
 	}
 	property float m_attackedTimestamp {
 		public get() { return Source2ModSchema.GetFloat(this, "CCSBot", "m_attackedTimestamp"); }
@@ -3284,7 +3286,7 @@ methodmap CCSBot < CBot
 	}
 	property CCSPlayerPawn m_radioSubject {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CCSBot", "m_radioSubject")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_radioSubject", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSBot", "m_radioSubject", value); }
 	}
 	public void m_radioPosition(float vec[3]) { Source2ModSchema.GetVector(this, "CCSBot", "m_radioPosition", vec); }
 	public void Set_m_radioPosition(const float vec[3]) { Source2ModSchema.SetVector(this, "CCSBot", "m_radioPosition", vec); }
@@ -3333,7 +3335,7 @@ methodmap CCSCustomPlayerCamera < CBaseEntity
 {
 	property CCSPlayerPawnBase m_hPawn {
 		public get() { return view_as<CCSPlayerPawnBase>(Source2ModSchema.GetHandle(this, "CCSCustomPlayerCamera", "m_hPawn")); }
-		public set(CCSPlayerPawnBase value) { Source2ModSchema.SetHandle(this, "CCSCustomPlayerCamera", "m_hPawn", view_as<int>(value)); }
+		public set(CCSPlayerPawnBase value) { Source2ModSchema.SetHandle(this, "CCSCustomPlayerCamera", "m_hPawn", value); }
 	}
 	property int m_nCameraMode {
 		public get() { return Source2ModSchema.GetInt(this, "CCSCustomPlayerCamera", "m_nCameraMode"); }
@@ -3341,7 +3343,7 @@ methodmap CCSCustomPlayerCamera < CBaseEntity
 	}
 	property CBaseEntity m_hFollowEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CCSCustomPlayerCamera", "m_hFollowEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSCustomPlayerCamera", "m_hFollowEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSCustomPlayerCamera", "m_hFollowEntity", value); }
 	}
 	property bool m_bFollowEyes {
 		public get() { return Source2ModSchema.GetBool(this, "CCSCustomPlayerCamera", "m_bFollowEyes"); }
@@ -4082,7 +4084,7 @@ methodmap CCSGameRules < CTeamplayRules
 	}
 	property CBaseEntity m_hPlayerResource {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CCSGameRules", "m_hPlayerResource")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSGameRules", "m_hPlayerResource", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSGameRules", "m_hPlayerResource", value); }
 	}
 	property CRetakeGameRules m_RetakeRules {
 		public get() { return view_as<CRetakeGameRules>(Source2ModSchema.GetObject(this, "CCSGameRules", "m_RetakeRules")); }
@@ -4201,11 +4203,11 @@ methodmap CCSObservableElement < CBaseEntity
 	public int m_iszObservableModelEntity(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CCSObservableElement", "m_iszObservableModelEntity", buffer, maxlen); }
 	property CBaseEntity m_hObservableModelEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CCSObservableElement", "m_hObservableModelEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSObservableElement", "m_hObservableModelEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSObservableElement", "m_hObservableModelEntity", value); }
 	}
 	property CBaseEntity m_hObservableModelEntity2 {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CCSObservableElement", "m_hObservableModelEntity2")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSObservableElement", "m_hObservableModelEntity2", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSObservableElement", "m_hObservableModelEntity2", value); }
 	}
 	property int m_nTeamFilter {
 		public get() { return Source2ModSchema.GetInt(this, "CCSObservableElement", "m_nTeamFilter"); }
@@ -4271,7 +4273,7 @@ methodmap CCSPlayerPawnBase < CBasePlayerPawn
 	}
 	property CCSPlayerController m_hOriginalController {
 		public get() { return view_as<CCSPlayerController>(Source2ModSchema.GetHandle(this, "CCSPlayerPawnBase", "m_hOriginalController")); }
-		public set(CCSPlayerController value) { Source2ModSchema.SetHandle(this, "CCSPlayerPawnBase", "m_hOriginalController", view_as<int>(value)); }
+		public set(CCSPlayerController value) { Source2ModSchema.SetHandle(this, "CCSPlayerPawnBase", "m_hOriginalController", value); }
 	}
 	public native CCSPlayerController GetOriginalController();
 	public native bool CanMove();
@@ -4303,15 +4305,15 @@ methodmap CPlayer_CameraServices < CPlayerPawnComponent
 	}
 	property CColorCorrection m_hColorCorrectionCtrl {
 		public get() { return view_as<CColorCorrection>(Source2ModSchema.GetHandle(this, "CPlayer_CameraServices", "m_hColorCorrectionCtrl")); }
-		public set(CColorCorrection value) { Source2ModSchema.SetHandle(this, "CPlayer_CameraServices", "m_hColorCorrectionCtrl", view_as<int>(value)); }
+		public set(CColorCorrection value) { Source2ModSchema.SetHandle(this, "CPlayer_CameraServices", "m_hColorCorrectionCtrl", value); }
 	}
 	property CBaseEntity m_hViewEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPlayer_CameraServices", "m_hViewEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPlayer_CameraServices", "m_hViewEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPlayer_CameraServices", "m_hViewEntity", value); }
 	}
 	property CTonemapController2 m_hTonemapController {
 		public get() { return view_as<CTonemapController2>(Source2ModSchema.GetHandle(this, "CPlayer_CameraServices", "m_hTonemapController")); }
-		public set(CTonemapController2 value) { Source2ModSchema.SetHandle(this, "CPlayer_CameraServices", "m_hTonemapController", view_as<int>(value)); }
+		public set(CTonemapController2 value) { Source2ModSchema.SetHandle(this, "CPlayer_CameraServices", "m_hTonemapController", value); }
 	}
 	property float m_flOldPlayerZ {
 		public get() { return Source2ModSchema.GetFloat(this, "CPlayer_CameraServices", "m_flOldPlayerZ"); }
@@ -4343,11 +4345,11 @@ methodmap CCSPlayerBase_CameraServices < CPlayer_CameraServices
 	}
 	property CBaseEntity m_hZoomOwner {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CCSPlayerBase_CameraServices", "m_hZoomOwner")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSPlayerBase_CameraServices", "m_hZoomOwner", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSPlayerBase_CameraServices", "m_hZoomOwner", value); }
 	}
 	property CBaseEntity m_hLastFogTrigger {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CCSPlayerBase_CameraServices", "m_hLastFogTrigger")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSPlayerBase_CameraServices", "m_hLastFogTrigger", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSPlayerBase_CameraServices", "m_hLastFogTrigger", value); }
 	}
 }
 
@@ -4430,7 +4432,7 @@ methodmap CPlayer_ObserverServices < CPlayerPawnComponent
 	}
 	property CBaseEntity m_hObserverTarget {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPlayer_ObserverServices", "m_hObserverTarget")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPlayer_ObserverServices", "m_hObserverTarget", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPlayer_ObserverServices", "m_hObserverTarget", value); }
 	}
 	property bool m_bForcedObserverMode {
 		public get() { return Source2ModSchema.GetBool(this, "CPlayer_ObserverServices", "m_bForcedObserverMode"); }
@@ -4737,11 +4739,11 @@ methodmap CCSPlayerController < CBasePlayerController
 	}
 	property CCSPlayerPawn m_hPlayerPawn {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CCSPlayerController", "m_hPlayerPawn")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSPlayerController", "m_hPlayerPawn", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CCSPlayerController", "m_hPlayerPawn", value); }
 	}
 	property CCSObserverPawn m_hObserverPawn {
 		public get() { return view_as<CCSObserverPawn>(Source2ModSchema.GetHandle(this, "CCSPlayerController", "m_hObserverPawn")); }
-		public set(CCSObserverPawn value) { Source2ModSchema.SetHandle(this, "CCSPlayerController", "m_hObserverPawn", view_as<int>(value)); }
+		public set(CCSObserverPawn value) { Source2ModSchema.SetHandle(this, "CCSPlayerController", "m_hObserverPawn", value); }
 	}
 	property int m_DesiredObserverMode {
 		public get() { return Source2ModSchema.GetInt(this, "CCSPlayerController", "m_DesiredObserverMode"); }
@@ -4749,7 +4751,7 @@ methodmap CCSPlayerController < CBasePlayerController
 	}
 	property CBaseEntity m_hDesiredObserverTarget {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CCSPlayerController", "m_hDesiredObserverTarget")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSPlayerController", "m_hDesiredObserverTarget", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSPlayerController", "m_hDesiredObserverTarget", value); }
 	}
 	property bool m_bPawnIsAlive {
 		public get() { return Source2ModSchema.GetBool(this, "CCSPlayerController", "m_bPawnIsAlive"); }
@@ -4789,7 +4791,7 @@ methodmap CCSPlayerController < CBasePlayerController
 	}
 	property CCSPlayerController m_hOriginalControllerOfCurrentPawn {
 		public get() { return view_as<CCSPlayerController>(Source2ModSchema.GetHandle(this, "CCSPlayerController", "m_hOriginalControllerOfCurrentPawn")); }
-		public set(CCSPlayerController value) { Source2ModSchema.SetHandle(this, "CCSPlayerController", "m_hOriginalControllerOfCurrentPawn", view_as<int>(value)); }
+		public set(CCSPlayerController value) { Source2ModSchema.SetHandle(this, "CCSPlayerController", "m_hOriginalControllerOfCurrentPawn", value); }
 	}
 	property int m_iScore {
 		public get() { return Source2ModSchema.GetInt(this, "CCSPlayerController", "m_iScore"); }
@@ -4886,7 +4888,8 @@ methodmap CCSPlayerController < CBasePlayerController
 		public get() { return Source2ModSchema.GetBool(this, "CCSPlayerController", "m_bFireBulletsSeedSynchronized"); }
 		public set(bool value) { Source2ModSchema.SetBool(this, "CCSPlayerController", "m_bFireBulletsSeedSynchronized", value); }
 	}
-	public static native CCSPlayerController FromSlot(int slot);
+	// The controller in a player slot, NULL_ENTITY when the slot is empty.
+	public static native CCSPlayerController FromSlot(CPlayerSlot slot);
 	public static native CCSPlayerController FromPawn(CCSPlayerPawn pawn);
 	public static native CCSPlayerController FromUserId(int userId);
 	// The 64-bit SteamID as decimal text.
@@ -5187,7 +5190,7 @@ methodmap CCSPlayerPawn < CCSPlayerPawnBase
 	}
 	property CCSMinimapVolume m_hActiveMinimapVolume {
 		public get() { return view_as<CCSMinimapVolume>(Source2ModSchema.GetHandle(this, "CCSPlayerPawn", "m_hActiveMinimapVolume")); }
-		public set(CCSMinimapVolume value) { Source2ModSchema.SetHandle(this, "CCSPlayerPawn", "m_hActiveMinimapVolume", view_as<int>(value)); }
+		public set(CCSMinimapVolume value) { Source2ModSchema.SetHandle(this, "CCSPlayerPawn", "m_hActiveMinimapVolume", value); }
 	}
 	public void m_qDeathEyeAngles(float vec[3]) { Source2ModSchema.GetVector(this, "CCSPlayerPawn", "m_qDeathEyeAngles", vec); }
 	public void Set_m_qDeathEyeAngles(const float vec[3]) { Source2ModSchema.SetVector(this, "CCSPlayerPawn", "m_qDeathEyeAngles", vec); }
@@ -5449,7 +5452,7 @@ methodmap CCSPlayer_ActionTrackingServices < CPlayerPawnComponent
 {
 	property CBasePlayerWeapon m_hLastWeaponBeforeC4AutoSwitch {
 		public get() { return view_as<CBasePlayerWeapon>(Source2ModSchema.GetHandle(this, "CCSPlayer_ActionTrackingServices", "m_hLastWeaponBeforeC4AutoSwitch")); }
-		public set(CBasePlayerWeapon value) { Source2ModSchema.SetHandle(this, "CCSPlayer_ActionTrackingServices", "m_hLastWeaponBeforeC4AutoSwitch", view_as<int>(value)); }
+		public set(CBasePlayerWeapon value) { Source2ModSchema.SetHandle(this, "CCSPlayer_ActionTrackingServices", "m_hLastWeaponBeforeC4AutoSwitch", value); }
 	}
 	property bool m_bIsRescuing {
 		public get() { return Source2ModSchema.GetBool(this, "CCSPlayer_ActionTrackingServices", "m_bIsRescuing"); }
@@ -5512,11 +5515,11 @@ methodmap CCSPlayer_HostageServices < CPlayerPawnComponent
 {
 	property CBaseEntity m_hCarriedHostage {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CCSPlayer_HostageServices", "m_hCarriedHostage")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSPlayer_HostageServices", "m_hCarriedHostage", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSPlayer_HostageServices", "m_hCarriedHostage", value); }
 	}
 	property CBaseEntity m_hCarriedHostageProp {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CCSPlayer_HostageServices", "m_hCarriedHostageProp")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSPlayer_HostageServices", "m_hCarriedHostageProp", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSPlayer_HostageServices", "m_hCarriedHostageProp", value); }
 	}
 }
 
@@ -5752,7 +5755,7 @@ methodmap CCSPlayer_PingServices < CPlayerPawnComponent
 {
 	property CPlayerPing m_hPlayerPing {
 		public get() { return view_as<CPlayerPing>(Source2ModSchema.GetHandle(this, "CCSPlayer_PingServices", "m_hPlayerPing")); }
-		public set(CPlayerPing value) { Source2ModSchema.SetHandle(this, "CCSPlayer_PingServices", "m_hPlayerPing", view_as<int>(value)); }
+		public set(CPlayerPing value) { Source2ModSchema.SetHandle(this, "CCSPlayer_PingServices", "m_hPlayerPing", value); }
 	}
 }
 
@@ -5780,7 +5783,7 @@ methodmap CCSPlayer_UseServices < CPlayer_UseServices
 {
 	property CBaseEntity m_hLastKnownUseEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CCSPlayer_UseServices", "m_hLastKnownUseEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSPlayer_UseServices", "m_hLastKnownUseEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CCSPlayer_UseServices", "m_hLastKnownUseEntity", value); }
 	}
 	property float m_flLastUseTimeStamp {
 		public get() { return Source2ModSchema.GetFloat(this, "CCSPlayer_UseServices", "m_flLastUseTimeStamp"); }
@@ -5826,11 +5829,11 @@ methodmap CPlayer_WeaponServices < CPlayerPawnComponent
 {
 	property CBasePlayerWeapon m_hActiveWeapon {
 		public get() { return view_as<CBasePlayerWeapon>(Source2ModSchema.GetHandle(this, "CPlayer_WeaponServices", "m_hActiveWeapon")); }
-		public set(CBasePlayerWeapon value) { Source2ModSchema.SetHandle(this, "CPlayer_WeaponServices", "m_hActiveWeapon", view_as<int>(value)); }
+		public set(CBasePlayerWeapon value) { Source2ModSchema.SetHandle(this, "CPlayer_WeaponServices", "m_hActiveWeapon", value); }
 	}
 	property CBasePlayerWeapon m_hLastWeapon {
 		public get() { return view_as<CBasePlayerWeapon>(Source2ModSchema.GetHandle(this, "CPlayer_WeaponServices", "m_hLastWeapon")); }
-		public set(CBasePlayerWeapon value) { Source2ModSchema.SetHandle(this, "CPlayer_WeaponServices", "m_hLastWeapon", view_as<int>(value)); }
+		public set(CBasePlayerWeapon value) { Source2ModSchema.SetHandle(this, "CPlayer_WeaponServices", "m_hLastWeapon", value); }
 	}
 	property bool m_bPreventWeaponPickup {
 		public get() { return Source2ModSchema.GetBool(this, "CPlayer_WeaponServices", "m_bPreventWeaponPickup"); }
@@ -5851,7 +5854,7 @@ methodmap CCSPlayer_WeaponServices < CPlayer_WeaponServices
 	}
 	property CBasePlayerWeapon m_hSavedWeapon {
 		public get() { return view_as<CBasePlayerWeapon>(Source2ModSchema.GetHandle(this, "CCSPlayer_WeaponServices", "m_hSavedWeapon")); }
-		public set(CBasePlayerWeapon value) { Source2ModSchema.SetHandle(this, "CCSPlayer_WeaponServices", "m_hSavedWeapon", view_as<int>(value)); }
+		public set(CBasePlayerWeapon value) { Source2ModSchema.SetHandle(this, "CCSPlayer_WeaponServices", "m_hSavedWeapon", value); }
 	}
 	property int m_nTimeToMelee {
 		public get() { return Source2ModSchema.GetInt(this, "CCSPlayer_WeaponServices", "m_nTimeToMelee"); }
@@ -5919,7 +5922,7 @@ methodmap CSprite < CBaseModelEntity
 {
 	property CBaseEntity m_hAttachedToEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSprite", "m_hAttachedToEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSprite", "m_hAttachedToEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSprite", "m_hAttachedToEntity", value); }
 	}
 	property float m_flSpriteFramerate {
 		public get() { return Source2ModSchema.GetFloat(this, "CSprite", "m_flSpriteFramerate"); }
@@ -6443,7 +6446,7 @@ methodmap CChicken < CDynamicProp
 	}
 	property CBaseEntity m_fleeFrom {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CChicken", "m_fleeFrom")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CChicken", "m_fleeFrom", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CChicken", "m_fleeFrom", value); }
 	}
 	property CountdownTimer m_moveRateThrottleTimer {
 		public get() { return view_as<CountdownTimer>(Source2ModSchema.GetObject(this, "CChicken", "m_moveRateThrottleTimer")); }
@@ -6456,11 +6459,11 @@ methodmap CChicken < CDynamicProp
 	}
 	property CCSPlayerPawn m_leader {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CChicken", "m_leader")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CChicken", "m_leader", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CChicken", "m_leader", value); }
 	}
 	property CCSPlayerController m_owner {
 		public get() { return view_as<CCSPlayerController>(Source2ModSchema.GetHandle(this, "CChicken", "m_owner")); }
-		public set(CCSPlayerController value) { Source2ModSchema.SetHandle(this, "CChicken", "m_owner", view_as<int>(value)); }
+		public set(CCSPlayerController value) { Source2ModSchema.SetHandle(this, "CChicken", "m_owner", value); }
 	}
 	property CountdownTimer m_reuseTimer {
 		public get() { return view_as<CountdownTimer>(Source2ModSchema.GetObject(this, "CChicken", "m_reuseTimer")); }
@@ -6497,7 +6500,7 @@ methodmap CChoreoComponent < SchemaObject
 {
 	property CBaseModelEntity m_hOwner {
 		public get() { return view_as<CBaseModelEntity>(Source2ModSchema.GetHandle(this, "CChoreoComponent", "m_hOwner")); }
-		public set(CBaseModelEntity value) { Source2ModSchema.SetHandle(this, "CChoreoComponent", "m_hOwner", view_as<int>(value)); }
+		public set(CBaseModelEntity value) { Source2ModSchema.SetHandle(this, "CChoreoComponent", "m_hOwner", value); }
 	}
 	property int m_nExernalChoreoGraphCount {
 		public get() { return Source2ModSchema.GetInt(this, "CChoreoComponent", "m_nExernalChoreoGraphCount"); }
@@ -6740,19 +6743,19 @@ methodmap CDamageRecord < SchemaObject
 {
 	property CCSPlayerPawn m_PlayerDamager {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CDamageRecord", "m_PlayerDamager")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CDamageRecord", "m_PlayerDamager", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CDamageRecord", "m_PlayerDamager", value); }
 	}
 	property CCSPlayerPawn m_PlayerRecipient {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CDamageRecord", "m_PlayerRecipient")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CDamageRecord", "m_PlayerRecipient", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CDamageRecord", "m_PlayerRecipient", value); }
 	}
 	property CCSPlayerController m_hPlayerControllerDamager {
 		public get() { return view_as<CCSPlayerController>(Source2ModSchema.GetHandle(this, "CDamageRecord", "m_hPlayerControllerDamager")); }
-		public set(CCSPlayerController value) { Source2ModSchema.SetHandle(this, "CDamageRecord", "m_hPlayerControllerDamager", view_as<int>(value)); }
+		public set(CCSPlayerController value) { Source2ModSchema.SetHandle(this, "CDamageRecord", "m_hPlayerControllerDamager", value); }
 	}
 	property CCSPlayerController m_hPlayerControllerRecipient {
 		public get() { return view_as<CCSPlayerController>(Source2ModSchema.GetHandle(this, "CDamageRecord", "m_hPlayerControllerRecipient")); }
-		public set(CCSPlayerController value) { Source2ModSchema.SetHandle(this, "CDamageRecord", "m_hPlayerControllerRecipient", view_as<int>(value)); }
+		public set(CCSPlayerController value) { Source2ModSchema.SetHandle(this, "CDamageRecord", "m_hPlayerControllerRecipient", value); }
 	}
 	public int m_szPlayerDamagerName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CDamageRecord", "m_szPlayerDamagerName", buffer, maxlen); }
 	public int m_szPlayerRecipientName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CDamageRecord", "m_szPlayerRecipientName", buffer, maxlen); }
@@ -6839,7 +6842,7 @@ methodmap CDestructiblePartsComponent < SchemaObject
 {
 	property CBaseModelEntity m_hOwner {
 		public get() { return view_as<CBaseModelEntity>(Source2ModSchema.GetHandle(this, "CDestructiblePartsComponent", "m_hOwner")); }
-		public set(CBaseModelEntity value) { Source2ModSchema.SetHandle(this, "CDestructiblePartsComponent", "m_hOwner", view_as<int>(value)); }
+		public set(CBaseModelEntity value) { Source2ModSchema.SetHandle(this, "CDestructiblePartsComponent", "m_hOwner", value); }
 	}
 	property CAnimGraphControllerPtr m_pAnimGraphDestructibleGraphController {
 		public get() { return view_as<CAnimGraphControllerPtr>(Source2ModSchema.GetObject(this, "CDestructiblePartsComponent", "m_pAnimGraphDestructibleGraphController")); }
@@ -7080,7 +7083,7 @@ methodmap CEntityFlame < CBaseEntity
 {
 	property CBaseEntity m_hEntAttached {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CEntityFlame", "m_hEntAttached")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEntityFlame", "m_hEntAttached", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEntityFlame", "m_hEntAttached", value); }
 	}
 	property bool m_bCheapEffect {
 		public get() { return Source2ModSchema.GetBool(this, "CEntityFlame", "m_bCheapEffect"); }
@@ -7108,7 +7111,7 @@ methodmap CEntityFlame < CBaseEntity
 	}
 	property CBaseEntity m_hAttacker {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CEntityFlame", "m_hAttacker")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEntityFlame", "m_hAttacker", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEntityFlame", "m_hAttacker", value); }
 	}
 	property float m_flDirectDamagePerSecond {
 		public get() { return Source2ModSchema.GetFloat(this, "CEntityFlame", "m_flDirectDamagePerSecond"); }
@@ -7168,7 +7171,7 @@ methodmap CEnvBeam < CBeam
 	public int m_iFilterName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CEnvBeam", "m_iFilterName", buffer, maxlen); }
 	property CBaseEntity m_hFilter {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CEnvBeam", "m_hFilter")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEnvBeam", "m_hFilter", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEnvBeam", "m_hFilter", value); }
 	}
 	public int m_iszDecal(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CEnvBeam", "m_iszDecal", buffer, maxlen); }
 }
@@ -7478,11 +7481,11 @@ methodmap CEnvEntityMaker < CPointEntity
 	public void Set_m_vecEntityMaxs(const float vec[3]) { Source2ModSchema.SetVector(this, "CEnvEntityMaker", "m_vecEntityMaxs", vec); }
 	property CBaseEntity m_hCurrentInstance {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CEnvEntityMaker", "m_hCurrentInstance")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEnvEntityMaker", "m_hCurrentInstance", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEnvEntityMaker", "m_hCurrentInstance", value); }
 	}
 	property CBaseEntity m_hCurrentBlocker {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CEnvEntityMaker", "m_hCurrentBlocker")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEnvEntityMaker", "m_hCurrentBlocker", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEnvEntityMaker", "m_hCurrentBlocker", value); }
 	}
 	public void m_vecBlockerOrigin(float vec[3]) { Source2ModSchema.GetVector(this, "CEnvEntityMaker", "m_vecBlockerOrigin", vec); }
 	public void Set_m_vecBlockerOrigin(const float vec[3]) { Source2ModSchema.SetVector(this, "CEnvEntityMaker", "m_vecBlockerOrigin", vec); }
@@ -7531,7 +7534,7 @@ methodmap CEnvExplosion < CModelPointEntity
 	}
 	property CBaseEntity m_hInflictor {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CEnvExplosion", "m_hInflictor")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEnvExplosion", "m_hInflictor", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEnvExplosion", "m_hInflictor", value); }
 	}
 	property int m_iCustomDamageType {
 		public get() { return Source2ModSchema.GetInt(this, "CEnvExplosion", "m_iCustomDamageType"); }
@@ -7562,7 +7565,7 @@ methodmap CEnvExplosion < CModelPointEntity
 	public int m_iszEntityIgnoreName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CEnvExplosion", "m_iszEntityIgnoreName", buffer, maxlen); }
 	property CBaseEntity m_hEntityIgnore {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CEnvExplosion", "m_hEntityIgnore")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEnvExplosion", "m_hEntityIgnore", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEnvExplosion", "m_hEntityIgnore", value); }
 	}
 }
 
@@ -7706,7 +7709,7 @@ methodmap CEnvLaser < CBeam
 	public int m_iszLaserTarget(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CEnvLaser", "m_iszLaserTarget", buffer, maxlen); }
 	property CSprite m_pSprite {
 		public get() { return view_as<CSprite>(Source2ModSchema.GetHandle(this, "CEnvLaser", "m_pSprite")); }
-		public set(CSprite value) { Source2ModSchema.SetHandle(this, "CEnvLaser", "m_pSprite", view_as<int>(value)); }
+		public set(CSprite value) { Source2ModSchema.SetHandle(this, "CEnvLaser", "m_pSprite", value); }
 	}
 	public int m_iszSpriteName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CEnvLaser", "m_iszSpriteName", buffer, maxlen); }
 	public void m_firePosition(float vec[3]) { Source2ModSchema.GetVector(this, "CEnvLaser", "m_firePosition", vec); }
@@ -7965,7 +7968,7 @@ methodmap CEnvSoundscape < CBaseEntity
 	}
 	property CEnvSoundscape m_hProxySoundscape {
 		public get() { return view_as<CEnvSoundscape>(Source2ModSchema.GetHandle(this, "CEnvSoundscape", "m_hProxySoundscape")); }
-		public set(CEnvSoundscape value) { Source2ModSchema.SetHandle(this, "CEnvSoundscape", "m_hProxySoundscape", view_as<int>(value)); }
+		public set(CEnvSoundscape value) { Source2ModSchema.SetHandle(this, "CEnvSoundscape", "m_hProxySoundscape", value); }
 	}
 	property bool m_bDisabled {
 		public get() { return Source2ModSchema.GetBool(this, "CEnvSoundscape", "m_bDisabled"); }
@@ -8326,7 +8329,7 @@ methodmap CEnvWindShared < SchemaObject
 	public void Set_m_location(const float vec[3]) { Source2ModSchema.SetVector(this, "CEnvWindShared", "m_location", vec); }
 	property CBaseEntity m_hEntOwner {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CEnvWindShared", "m_hEntOwner")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEnvWindShared", "m_hEntOwner", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEnvWindShared", "m_hEntOwner", value); }
 	}
 }
 
@@ -8535,7 +8538,7 @@ methodmap CFish < CBaseAnimGraph
 {
 	property CFishPool m_pool {
 		public get() { return view_as<CFishPool>(Source2ModSchema.GetHandle(this, "CFish", "m_pool")); }
-		public set(CFishPool value) { Source2ModSchema.SetHandle(this, "CFish", "m_pool", view_as<int>(value)); }
+		public set(CFishPool value) { Source2ModSchema.SetHandle(this, "CFish", "m_pool", value); }
 	}
 	property int m_id {
 		public get() { return Source2ModSchema.GetInt(this, "CFish", "m_id"); }
@@ -8835,7 +8838,7 @@ methodmap CFuncMonitor < CFuncBrush
 	public int m_brushModelName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CFuncMonitor", "m_brushModelName", buffer, maxlen); }
 	property CBaseEntity m_hTargetCamera {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CFuncMonitor", "m_hTargetCamera")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncMonitor", "m_hTargetCamera", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncMonitor", "m_hTargetCamera", value); }
 	}
 	property bool m_bEnabled {
 		public get() { return Source2ModSchema.GetBool(this, "CFuncMonitor", "m_bEnabled"); }
@@ -8897,11 +8900,11 @@ methodmap CFuncMover < CBaseModelEntity
 	public int m_iszPathName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CFuncMover", "m_iszPathName", buffer, maxlen); }
 	property CPathMover m_hPathMover {
 		public get() { return view_as<CPathMover>(Source2ModSchema.GetHandle(this, "CFuncMover", "m_hPathMover")); }
-		public set(CPathMover value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hPathMover", view_as<int>(value)); }
+		public set(CPathMover value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hPathMover", value); }
 	}
 	property CPathMover m_hPrevPathMover {
 		public get() { return view_as<CPathMover>(Source2ModSchema.GetHandle(this, "CFuncMover", "m_hPrevPathMover")); }
-		public set(CPathMover value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hPrevPathMover", view_as<int>(value)); }
+		public set(CPathMover value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hPrevPathMover", value); }
 	}
 	public int m_iszPathNodeStart(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CFuncMover", "m_iszPathNodeStart", buffer, maxlen); }
 	public int m_iszPathNodeEnd(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CFuncMover", "m_iszPathNodeEnd", buffer, maxlen); }
@@ -8987,7 +8990,7 @@ methodmap CFuncMover < CBaseModelEntity
 	}
 	property CMoverPathNode m_hStopAtNode {
 		public get() { return view_as<CMoverPathNode>(Source2ModSchema.GetHandle(this, "CFuncMover", "m_hStopAtNode")); }
-		public set(CMoverPathNode value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hStopAtNode", view_as<int>(value)); }
+		public set(CMoverPathNode value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hStopAtNode", value); }
 	}
 	property float m_flPathLocationToBeginStop {
 		public get() { return Source2ModSchema.GetFloat(this, "CFuncMover", "m_flPathLocationToBeginStop"); }
@@ -9052,7 +9055,7 @@ methodmap CFuncMover < CBaseModelEntity
 	public int m_iszOrientationMatchEntityName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CFuncMover", "m_iszOrientationMatchEntityName", buffer, maxlen); }
 	property CBaseEntity m_hOrientationMatchEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CFuncMover", "m_hOrientationMatchEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hOrientationMatchEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hOrientationMatchEntity", value); }
 	}
 	public void m_vLerpToNewPosStartWS(float vec[3]) { Source2ModSchema.GetVector(this, "CFuncMover", "m_vLerpToNewPosStartWS", vec); }
 	public void Set_m_vLerpToNewPosStartWS(const float vec[3]) { Source2ModSchema.SetVector(this, "CFuncMover", "m_vLerpToNewPosStartWS", vec); }
@@ -9070,7 +9073,7 @@ methodmap CFuncMover < CBaseModelEntity
 	}
 	property CPathMover m_hTransitionSourcePath {
 		public get() { return view_as<CPathMover>(Source2ModSchema.GetHandle(this, "CFuncMover", "m_hTransitionSourcePath")); }
-		public set(CPathMover value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hTransitionSourcePath", view_as<int>(value)); }
+		public set(CPathMover value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hTransitionSourcePath", value); }
 	}
 	property float m_flTransitionSourceT {
 		public get() { return Source2ModSchema.GetFloat(this, "CFuncMover", "m_flTransitionSourceT"); }
@@ -9111,7 +9114,7 @@ methodmap CFuncMover < CBaseModelEntity
 	}
 	property CBaseEntity m_hFollowEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CFuncMover", "m_hFollowEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hFollowEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hFollowEntity", value); }
 	}
 	property float m_flFollowDistance {
 		public get() { return Source2ModSchema.GetFloat(this, "CFuncMover", "m_flFollowDistance"); }
@@ -9132,7 +9135,7 @@ methodmap CFuncMover < CBaseModelEntity
 	public int m_strOrientationFaceEntityName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CFuncMover", "m_strOrientationFaceEntityName", buffer, maxlen); }
 	property CBaseEntity m_hOrientationFaceEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CFuncMover", "m_hOrientationFaceEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hOrientationFaceEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hOrientationFaceEntity", value); }
 	}
 	property bool m_bNextNodeReturnsCurrent {
 		public get() { return Source2ModSchema.GetBool(this, "CFuncMover", "m_bNextNodeReturnsCurrent"); }
@@ -9148,7 +9151,7 @@ methodmap CFuncMover < CBaseModelEntity
 	}
 	property CFuncMover m_hFollowMover {
 		public get() { return view_as<CFuncMover>(Source2ModSchema.GetHandle(this, "CFuncMover", "m_hFollowMover")); }
-		public set(CFuncMover value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hFollowMover", view_as<int>(value)); }
+		public set(CFuncMover value) { Source2ModSchema.SetHandle(this, "CFuncMover", "m_hFollowMover", value); }
 	}
 	public int m_iszFollowEntityName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CFuncMover", "m_iszFollowEntityName", buffer, maxlen); }
 	public int m_iszFollowMoverEntityName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CFuncMover", "m_iszFollowMoverEntityName", buffer, maxlen); }
@@ -9239,7 +9242,7 @@ methodmap CFuncMoverRouter < CLogicalEntity
 	}
 	property CPathMover m_hPathMover {
 		public get() { return view_as<CPathMover>(Source2ModSchema.GetHandle(this, "CFuncMoverRouter", "m_hPathMover")); }
-		public set(CPathMover value) { Source2ModSchema.SetHandle(this, "CFuncMoverRouter", "m_hPathMover", view_as<int>(value)); }
+		public set(CPathMover value) { Source2ModSchema.SetHandle(this, "CFuncMoverRouter", "m_hPathMover", value); }
 	}
 	public int m_iszPathMoverName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CFuncMoverRouter", "m_iszPathMoverName", buffer, maxlen); }
 }
@@ -9373,7 +9376,7 @@ methodmap CFuncRotator < CBaseModelEntity
 	}
 	property CBaseEntity m_hRotatorTarget {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CFuncRotator", "m_hRotatorTarget")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncRotator", "m_hRotatorTarget", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncRotator", "m_hRotatorTarget", value); }
 	}
 	public int m_strRotatorTarget(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CFuncRotator", "m_strRotatorTarget", buffer, maxlen); }
 	property int m_nTickRotateRan {
@@ -9509,7 +9512,7 @@ methodmap CFuncTrackTrain < CBaseModelEntity
 {
 	property CPathTrack m_ppath {
 		public get() { return view_as<CPathTrack>(Source2ModSchema.GetHandle(this, "CFuncTrackTrain", "m_ppath")); }
-		public set(CPathTrack value) { Source2ModSchema.SetHandle(this, "CFuncTrackTrain", "m_ppath", view_as<int>(value)); }
+		public set(CPathTrack value) { Source2ModSchema.SetHandle(this, "CFuncTrackTrain", "m_ppath", value); }
 	}
 	property float m_length {
 		public get() { return Source2ModSchema.GetFloat(this, "CFuncTrackTrain", "m_length"); }
@@ -9651,15 +9654,15 @@ methodmap CFuncTrackChange < CFuncPlatRot
 {
 	property CPathTrack m_trackTop {
 		public get() { return view_as<CPathTrack>(Source2ModSchema.GetHandle(this, "CFuncTrackChange", "m_trackTop")); }
-		public set(CPathTrack value) { Source2ModSchema.SetHandle(this, "CFuncTrackChange", "m_trackTop", view_as<int>(value)); }
+		public set(CPathTrack value) { Source2ModSchema.SetHandle(this, "CFuncTrackChange", "m_trackTop", value); }
 	}
 	property CPathTrack m_trackBottom {
 		public get() { return view_as<CPathTrack>(Source2ModSchema.GetHandle(this, "CFuncTrackChange", "m_trackBottom")); }
-		public set(CPathTrack value) { Source2ModSchema.SetHandle(this, "CFuncTrackChange", "m_trackBottom", view_as<int>(value)); }
+		public set(CPathTrack value) { Source2ModSchema.SetHandle(this, "CFuncTrackChange", "m_trackBottom", value); }
 	}
 	property CFuncTrackTrain m_train {
 		public get() { return view_as<CFuncTrackTrain>(Source2ModSchema.GetHandle(this, "CFuncTrackChange", "m_train")); }
-		public set(CFuncTrackTrain value) { Source2ModSchema.SetHandle(this, "CFuncTrackChange", "m_train", view_as<int>(value)); }
+		public set(CFuncTrackTrain value) { Source2ModSchema.SetHandle(this, "CFuncTrackChange", "m_train", value); }
 	}
 	public int m_trackTopName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CFuncTrackChange", "m_trackTopName", buffer, maxlen); }
 	public int m_trackBottomName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CFuncTrackChange", "m_trackBottomName", buffer, maxlen); }
@@ -9686,7 +9689,7 @@ methodmap CFuncTrain < CBasePlatTrain
 {
 	property CBaseEntity m_hCurrentTarget {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CFuncTrain", "m_hCurrentTarget")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncTrain", "m_hCurrentTarget", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncTrain", "m_hCurrentTarget", value); }
 	}
 	property bool m_activated {
 		public get() { return Source2ModSchema.GetBool(this, "CFuncTrain", "m_activated"); }
@@ -9694,7 +9697,7 @@ methodmap CFuncTrain < CBasePlatTrain
 	}
 	property CBaseEntity m_hEnemy {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CFuncTrain", "m_hEnemy")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncTrain", "m_hEnemy", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CFuncTrain", "m_hEnemy", value); }
 	}
 	property float m_flBlockDamage {
 		public get() { return Source2ModSchema.GetFloat(this, "CFuncTrain", "m_flBlockDamage"); }
@@ -9754,11 +9757,11 @@ methodmap CGameChoreoServices < IChoreoServices
 {
 	property CBaseModelEntity m_hOwner {
 		public get() { return view_as<CBaseModelEntity>(Source2ModSchema.GetHandle(this, "CGameChoreoServices", "m_hOwner")); }
-		public set(CBaseModelEntity value) { Source2ModSchema.SetHandle(this, "CGameChoreoServices", "m_hOwner", view_as<int>(value)); }
+		public set(CBaseModelEntity value) { Source2ModSchema.SetHandle(this, "CGameChoreoServices", "m_hOwner", value); }
 	}
 	property CScriptedSequence m_hScriptedSequence {
 		public get() { return view_as<CScriptedSequence>(Source2ModSchema.GetHandle(this, "CGameChoreoServices", "m_hScriptedSequence")); }
-		public set(CScriptedSequence value) { Source2ModSchema.SetHandle(this, "CGameChoreoServices", "m_hScriptedSequence", view_as<int>(value)); }
+		public set(CScriptedSequence value) { Source2ModSchema.SetHandle(this, "CGameChoreoServices", "m_hScriptedSequence", value); }
 	}
 	property int m_scriptState {
 		public get() { return Source2ModSchema.GetInt(this, "CGameChoreoServices", "m_scriptState"); }
@@ -9909,11 +9912,11 @@ methodmap CPhysConstraint < CLogicalEntity
 	public int m_nameAttach2(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPhysConstraint", "m_nameAttach2", buffer, maxlen); }
 	property CBaseEntity m_hAttach1 {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPhysConstraint", "m_hAttach1")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysConstraint", "m_hAttach1", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysConstraint", "m_hAttach1", value); }
 	}
 	property CBaseEntity m_hAttach2 {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPhysConstraint", "m_hAttach2")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysConstraint", "m_hAttach2", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysConstraint", "m_hAttach2", value); }
 	}
 	public int m_nameAttachment1(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPhysConstraint", "m_nameAttachment1", buffer, maxlen); }
 	public int m_nameAttachment2(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPhysConstraint", "m_nameAttachment2", buffer, maxlen); }
@@ -10131,7 +10134,7 @@ methodmap CLogicPlayerProxyBase < CLogicalEntity
 {
 	property CBaseEntity m_hPlayer {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CLogicPlayerProxyBase", "m_hPlayer")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicPlayerProxyBase", "m_hPlayer", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicPlayerProxyBase", "m_hPlayer", value); }
 	}
 }
 
@@ -10257,7 +10260,7 @@ methodmap CGunTarget < CBaseToggle
 	}
 	property CBaseEntity m_hTargetEnt {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CGunTarget", "m_hTargetEnt")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CGunTarget", "m_hTargetEnt", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CGunTarget", "m_hTargetEnt", value); }
 	}
 }
 
@@ -10278,7 +10281,7 @@ methodmap CHandleTest < CBaseEntity
 {
 	property CBaseEntity m_Handle {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CHandleTest", "m_Handle")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CHandleTest", "m_Handle", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CHandleTest", "m_Handle", value); }
 	}
 	property bool m_bSendHandle {
 		public get() { return Source2ModSchema.GetBool(this, "CHandleTest", "m_bSendHandle"); }
@@ -10338,11 +10341,11 @@ methodmap CHostage < CHostageExpresserShim
 	}
 	property CBaseEntity m_leader {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CHostage", "m_leader")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CHostage", "m_leader", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CHostage", "m_leader", value); }
 	}
 	property CCSPlayerPawnBase m_lastLeader {
 		public get() { return view_as<CCSPlayerPawnBase>(Source2ModSchema.GetHandle(this, "CHostage", "m_lastLeader")); }
-		public set(CCSPlayerPawnBase value) { Source2ModSchema.SetHandle(this, "CHostage", "m_lastLeader", view_as<int>(value)); }
+		public set(CCSPlayerPawnBase value) { Source2ModSchema.SetHandle(this, "CHostage", "m_lastLeader", value); }
 	}
 	property CountdownTimer m_reuseTimer {
 		public get() { return view_as<CountdownTimer>(Source2ModSchema.GetObject(this, "CHostage", "m_reuseTimer")); }
@@ -10390,7 +10393,7 @@ methodmap CHostage < CHostageExpresserShim
 	}
 	property CCSPlayerPawn m_hHostageGrabber {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CHostage", "m_hHostageGrabber")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CHostage", "m_hHostageGrabber", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CHostage", "m_hHostageGrabber", value); }
 	}
 	property float m_fLastGrabTime {
 		public get() { return Source2ModSchema.GetFloat(this, "CHostage", "m_fLastGrabTime"); }
@@ -10476,7 +10479,7 @@ methodmap CInfoChoreoAnchorPosition < SchemaObject
 	}
 	property CBaseEntity m_hParent {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CInfoChoreoAnchorPosition", "m_hParent")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CInfoChoreoAnchorPosition", "m_hParent", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CInfoChoreoAnchorPosition", "m_hParent", value); }
 	}
 	property int m_nShapeType {
 		public get() { return Source2ModSchema.GetInt(this, "CInfoChoreoAnchorPosition", "m_nShapeType"); }
@@ -10532,7 +10535,7 @@ methodmap CInfoDynamicShadowHint < CPointEntity
 	}
 	property CBaseEntity m_hLight {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CInfoDynamicShadowHint", "m_hLight")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CInfoDynamicShadowHint", "m_hLight", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CInfoDynamicShadowHint", "m_hLight", value); }
 	}
 }
 
@@ -10740,39 +10743,39 @@ methodmap CSceneEntity < CPointEntity
 	public int m_iszTarget8(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CSceneEntity", "m_iszTarget8", buffer, maxlen); }
 	property CBaseEntity m_hTarget1 {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSceneEntity", "m_hTarget1")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget1", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget1", value); }
 	}
 	property CBaseEntity m_hTarget2 {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSceneEntity", "m_hTarget2")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget2", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget2", value); }
 	}
 	property CBaseEntity m_hTarget3 {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSceneEntity", "m_hTarget3")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget3", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget3", value); }
 	}
 	property CBaseEntity m_hTarget4 {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSceneEntity", "m_hTarget4")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget4", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget4", value); }
 	}
 	property CBaseEntity m_hTarget5 {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSceneEntity", "m_hTarget5")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget5", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget5", value); }
 	}
 	property CBaseEntity m_hTarget6 {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSceneEntity", "m_hTarget6")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget6", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget6", value); }
 	}
 	property CBaseEntity m_hTarget7 {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSceneEntity", "m_hTarget7")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget7", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget7", value); }
 	}
 	property CBaseEntity m_hTarget8 {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSceneEntity", "m_hTarget8")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget8", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hTarget8", value); }
 	}
 	property CBaseEntity m_hLocatorOrigin {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSceneEntity", "m_hLocatorOrigin")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hLocatorOrigin", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hLocatorOrigin", value); }
 	}
 	public int m_sTargetAttachment(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CSceneEntity", "m_sTargetAttachment", buffer, maxlen); }
 	property bool m_bIsPlayingBack {
@@ -10869,7 +10872,7 @@ methodmap CSceneEntity < CPointEntity
 	}
 	property CSceneEntity m_hInterruptScene {
 		public get() { return view_as<CSceneEntity>(Source2ModSchema.GetHandle(this, "CSceneEntity", "m_hInterruptScene")); }
-		public set(CSceneEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hInterruptScene", view_as<int>(value)); }
+		public set(CSceneEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hInterruptScene", value); }
 	}
 	property int m_nInterruptCount {
 		public get() { return Source2ModSchema.GetInt(this, "CSceneEntity", "m_nInterruptCount"); }
@@ -10901,11 +10904,11 @@ methodmap CSceneEntity < CPointEntity
 	public int m_iszSequenceName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CSceneEntity", "m_iszSequenceName", buffer, maxlen); }
 	property CBaseModelEntity m_hActor {
 		public get() { return view_as<CBaseModelEntity>(Source2ModSchema.GetHandle(this, "CSceneEntity", "m_hActor")); }
-		public set(CBaseModelEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hActor", view_as<int>(value)); }
+		public set(CBaseModelEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hActor", value); }
 	}
 	property CBaseEntity m_hActivator {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSceneEntity", "m_hActivator")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hActivator", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSceneEntity", "m_hActivator", value); }
 	}
 	property int m_BusyActor {
 		public get() { return Source2ModSchema.GetInt(this, "CSceneEntity", "m_BusyActor"); }
@@ -10921,7 +10924,7 @@ methodmap CInstancedSceneEntity < CSceneEntity
 {
 	property CBaseEntity m_hOwner {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CInstancedSceneEntity", "m_hOwner")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CInstancedSceneEntity", "m_hOwner", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CInstancedSceneEntity", "m_hOwner", value); }
 	}
 	property bool m_bHadOwner {
 		public get() { return Source2ModSchema.GetBool(this, "CInstancedSceneEntity", "m_bHadOwner"); }
@@ -10941,7 +10944,7 @@ methodmap CInstancedSceneEntity < CSceneEntity
 	}
 	property CBaseEntity m_hTarget {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CInstancedSceneEntity", "m_hTarget")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CInstancedSceneEntity", "m_hTarget", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CInstancedSceneEntity", "m_hTarget", value); }
 	}
 }
 
@@ -10951,7 +10954,7 @@ methodmap CInstructorEventEntity < CPointEntity
 	public int m_iszHintTargetEntity(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CInstructorEventEntity", "m_iszHintTargetEntity", buffer, maxlen); }
 	property CBasePlayerPawn m_hTargetPlayer {
 		public get() { return view_as<CBasePlayerPawn>(Source2ModSchema.GetHandle(this, "CInstructorEventEntity", "m_hTargetPlayer")); }
-		public set(CBasePlayerPawn value) { Source2ModSchema.SetHandle(this, "CInstructorEventEntity", "m_hTargetPlayer", view_as<int>(value)); }
+		public set(CBasePlayerPawn value) { Source2ModSchema.SetHandle(this, "CInstructorEventEntity", "m_hTargetPlayer", value); }
 	}
 }
 
@@ -11014,11 +11017,11 @@ methodmap CItemDogtags < CItem
 {
 	property CCSPlayerPawn m_OwningPlayer {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CItemDogtags", "m_OwningPlayer")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CItemDogtags", "m_OwningPlayer", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CItemDogtags", "m_OwningPlayer", value); }
 	}
 	property CCSPlayerPawn m_KillingPlayer {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CItemDogtags", "m_KillingPlayer")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CItemDogtags", "m_KillingPlayer", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CItemDogtags", "m_KillingPlayer", value); }
 	}
 }
 
@@ -11065,7 +11068,7 @@ methodmap CItemGeneric < CItem
 	public int m_pPickupFilterName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CItemGeneric", "m_pPickupFilterName", buffer, maxlen); }
 	property CBaseFilter m_hPickupFilter {
 		public get() { return view_as<CBaseFilter>(Source2ModSchema.GetHandle(this, "CItemGeneric", "m_hPickupFilter")); }
-		public set(CBaseFilter value) { Source2ModSchema.SetHandle(this, "CItemGeneric", "m_hPickupFilter", view_as<int>(value)); }
+		public set(CBaseFilter value) { Source2ModSchema.SetHandle(this, "CItemGeneric", "m_hPickupFilter", value); }
 	}
 	public int m_pAllowPickupScriptFunction(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CItemGeneric", "m_pAllowPickupScriptFunction", buffer, maxlen); }
 	property float m_flPickupRadius {
@@ -11089,7 +11092,7 @@ methodmap CItemGeneric < CItem
 	}
 	property CItemGenericTriggerHelper m_hTriggerHelper {
 		public get() { return view_as<CItemGenericTriggerHelper>(Source2ModSchema.GetHandle(this, "CItemGeneric", "m_hTriggerHelper")); }
-		public set(CItemGenericTriggerHelper value) { Source2ModSchema.SetHandle(this, "CItemGeneric", "m_hTriggerHelper", view_as<int>(value)); }
+		public set(CItemGenericTriggerHelper value) { Source2ModSchema.SetHandle(this, "CItemGeneric", "m_hTriggerHelper", value); }
 	}
 }
 
@@ -11097,7 +11100,7 @@ methodmap CItemGenericTriggerHelper < CBaseModelEntity
 {
 	property CItemGeneric m_hParentItem {
 		public get() { return view_as<CItemGeneric>(Source2ModSchema.GetHandle(this, "CItemGenericTriggerHelper", "m_hParentItem")); }
-		public set(CItemGeneric value) { Source2ModSchema.SetHandle(this, "CItemGenericTriggerHelper", "m_hParentItem", view_as<int>(value)); }
+		public set(CItemGeneric value) { Source2ModSchema.SetHandle(this, "CItemGenericTriggerHelper", "m_hParentItem", value); }
 	}
 }
 
@@ -11137,7 +11140,7 @@ methodmap CKeepUpright < CPointEntity
 	public int m_nameAttach(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CKeepUpright", "m_nameAttach", buffer, maxlen); }
 	property CBaseEntity m_attachedObject {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CKeepUpright", "m_attachedObject")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CKeepUpright", "m_attachedObject", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CKeepUpright", "m_attachedObject", value); }
 	}
 	property float m_angularLimit {
 		public get() { return Source2ModSchema.GetFloat(this, "CKeepUpright", "m_angularLimit"); }
@@ -11501,7 +11504,7 @@ methodmap CLogicActivityEvent < CLogicalEntity
 	public int m_iszSourceEntityName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CLogicActivityEvent", "m_iszSourceEntityName", buffer, maxlen); }
 	property CBaseEntity m_hSource {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CLogicActivityEvent", "m_hSource")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicActivityEvent", "m_hSource", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicActivityEvent", "m_hSource", value); }
 	}
 }
 
@@ -11660,11 +11663,11 @@ methodmap CLogicLineToEntity < CLogicalEntity
 	public int m_SourceName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CLogicLineToEntity", "m_SourceName", buffer, maxlen); }
 	property CBaseEntity m_StartEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CLogicLineToEntity", "m_StartEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicLineToEntity", "m_StartEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicLineToEntity", "m_StartEntity", value); }
 	}
 	property CBaseEntity m_EndEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CLogicLineToEntity", "m_EndEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicLineToEntity", "m_EndEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicLineToEntity", "m_EndEntity", value); }
 	}
 }
 
@@ -11675,19 +11678,19 @@ methodmap CLogicMeasureMovement < CLogicalEntity
 	public int m_strTargetReference(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CLogicMeasureMovement", "m_strTargetReference", buffer, maxlen); }
 	property CBaseEntity m_hMeasureTarget {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CLogicMeasureMovement", "m_hMeasureTarget")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicMeasureMovement", "m_hMeasureTarget", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicMeasureMovement", "m_hMeasureTarget", value); }
 	}
 	property CBaseEntity m_hMeasureReference {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CLogicMeasureMovement", "m_hMeasureReference")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicMeasureMovement", "m_hMeasureReference", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicMeasureMovement", "m_hMeasureReference", value); }
 	}
 	property CBaseEntity m_hTarget {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CLogicMeasureMovement", "m_hTarget")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicMeasureMovement", "m_hTarget", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicMeasureMovement", "m_hTarget", value); }
 	}
 	property CBaseEntity m_hTargetReference {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CLogicMeasureMovement", "m_hTargetReference")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicMeasureMovement", "m_hTargetReference", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicMeasureMovement", "m_hTargetReference", value); }
 	}
 	property float m_flScale {
 		public get() { return Source2ModSchema.GetFloat(this, "CLogicMeasureMovement", "m_flScale"); }
@@ -11703,7 +11706,7 @@ methodmap CLogicNPCCounter < CBaseEntity
 {
 	property CBaseEntity m_hSource {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CLogicNPCCounter", "m_hSource")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicNPCCounter", "m_hSource", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CLogicNPCCounter", "m_hSource", value); }
 	}
 	public int m_iszSourceEntityName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CLogicNPCCounter", "m_iszSourceEntityName", buffer, maxlen); }
 	property float m_flDistanceMax {
@@ -12310,7 +12313,7 @@ methodmap CPathNode < CPointEntity
 	public int m_strPathNodeParameter(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPathNode", "m_strPathNodeParameter", buffer, maxlen); }
 	property CPathWithDynamicNodes m_hPath {
 		public get() { return view_as<CPathWithDynamicNodes>(Source2ModSchema.GetHandle(this, "CPathNode", "m_hPath")); }
-		public set(CPathWithDynamicNodes value) { Source2ModSchema.SetHandle(this, "CPathNode", "m_hPath", view_as<int>(value)); }
+		public set(CPathWithDynamicNodes value) { Source2ModSchema.SetHandle(this, "CPathNode", "m_hPath", value); }
 	}
 }
 
@@ -12620,11 +12623,11 @@ methodmap CPathKeyFrame < CLogicalEntity
 	}
 	property CPathKeyFrame m_pNextKey {
 		public get() { return view_as<CPathKeyFrame>(Source2ModSchema.GetHandle(this, "CPathKeyFrame", "m_pNextKey")); }
-		public set(CPathKeyFrame value) { Source2ModSchema.SetHandle(this, "CPathKeyFrame", "m_pNextKey", view_as<int>(value)); }
+		public set(CPathKeyFrame value) { Source2ModSchema.SetHandle(this, "CPathKeyFrame", "m_pNextKey", value); }
 	}
 	property CPathKeyFrame m_pPrevKey {
 		public get() { return view_as<CPathKeyFrame>(Source2ModSchema.GetHandle(this, "CPathKeyFrame", "m_pPrevKey")); }
-		public set(CPathKeyFrame value) { Source2ModSchema.SetHandle(this, "CPathKeyFrame", "m_pPrevKey", view_as<int>(value)); }
+		public set(CPathKeyFrame value) { Source2ModSchema.SetHandle(this, "CPathKeyFrame", "m_pPrevKey", value); }
 	}
 	property float m_flMoveSpeed {
 		public get() { return Source2ModSchema.GetFloat(this, "CPathKeyFrame", "m_flMoveSpeed"); }
@@ -12661,7 +12664,7 @@ methodmap CPathMover < CPathWithDynamicNodes
 	public int m_iszMoverSpawnerName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPathMover", "m_iszMoverSpawnerName", buffer, maxlen); }
 	property CFuncMoverRouter m_hMoverRouter {
 		public get() { return view_as<CFuncMoverRouter>(Source2ModSchema.GetHandle(this, "CPathMover", "m_hMoverRouter")); }
-		public set(CFuncMoverRouter value) { Source2ModSchema.SetHandle(this, "CPathMover", "m_hMoverRouter", view_as<int>(value)); }
+		public set(CFuncMoverRouter value) { Source2ModSchema.SetHandle(this, "CPathMover", "m_hMoverRouter", value); }
 	}
 	public int m_iszMoverRouterName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPathMover", "m_iszMoverRouterName", buffer, maxlen); }
 	property float m_flSampleSpacing {
@@ -12682,7 +12685,7 @@ methodmap CPathMoverEntitySpawner < CLogicalEntity
 	}
 	property CPathMover m_hPathMover {
 		public get() { return view_as<CPathMover>(Source2ModSchema.GetHandle(this, "CPathMoverEntitySpawner", "m_hPathMover")); }
-		public set(CPathMover value) { Source2ModSchema.SetHandle(this, "CPathMoverEntitySpawner", "m_hPathMover", view_as<int>(value)); }
+		public set(CPathMover value) { Source2ModSchema.SetHandle(this, "CPathMoverEntitySpawner", "m_hPathMover", value); }
 	}
 	property float m_flSpawnFrequencySeconds {
 		public get() { return Source2ModSchema.GetFloat(this, "CPathMoverEntitySpawner", "m_flSpawnFrequencySeconds"); }
@@ -12769,15 +12772,15 @@ methodmap CPathTrack < CPointEntity
 {
 	property CPathTrack m_pnext {
 		public get() { return view_as<CPathTrack>(Source2ModSchema.GetHandle(this, "CPathTrack", "m_pnext")); }
-		public set(CPathTrack value) { Source2ModSchema.SetHandle(this, "CPathTrack", "m_pnext", view_as<int>(value)); }
+		public set(CPathTrack value) { Source2ModSchema.SetHandle(this, "CPathTrack", "m_pnext", value); }
 	}
 	property CPathTrack m_pprevious {
 		public get() { return view_as<CPathTrack>(Source2ModSchema.GetHandle(this, "CPathTrack", "m_pprevious")); }
-		public set(CPathTrack value) { Source2ModSchema.SetHandle(this, "CPathTrack", "m_pprevious", view_as<int>(value)); }
+		public set(CPathTrack value) { Source2ModSchema.SetHandle(this, "CPathTrack", "m_pprevious", value); }
 	}
 	property CPathTrack m_paltpath {
 		public get() { return view_as<CPathTrack>(Source2ModSchema.GetHandle(this, "CPathTrack", "m_paltpath")); }
-		public set(CPathTrack value) { Source2ModSchema.SetHandle(this, "CPathTrack", "m_paltpath", view_as<int>(value)); }
+		public set(CPathTrack value) { Source2ModSchema.SetHandle(this, "CPathTrack", "m_paltpath", value); }
 	}
 	property float m_flSpeed {
 		public get() { return Source2ModSchema.GetFloat(this, "CPathTrack", "m_flSpeed"); }
@@ -12958,7 +12961,7 @@ methodmap CPhysForce < CPointEntity
 	}
 	property CBaseEntity m_attachedObject {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPhysForce", "m_attachedObject")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysForce", "m_attachedObject", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysForce", "m_attachedObject", value); }
 	}
 	property bool m_wasRestored {
 		public get() { return Source2ModSchema.GetBool(this, "CPhysForce", "m_wasRestored"); }
@@ -13109,11 +13112,11 @@ methodmap CPhysMotor < CLogicalEntity
 	public int m_nameAnchor(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPhysMotor", "m_nameAnchor", buffer, maxlen); }
 	property CBaseEntity m_hAttachedObject {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPhysMotor", "m_hAttachedObject")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysMotor", "m_hAttachedObject", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysMotor", "m_hAttachedObject", value); }
 	}
 	property CBaseEntity m_hAnchorObject {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPhysMotor", "m_hAnchorObject")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysMotor", "m_hAnchorObject", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysMotor", "m_hAnchorObject", value); }
 	}
 	property float m_spinUp {
 		public get() { return Source2ModSchema.GetFloat(this, "CPhysMotor", "m_spinUp"); }
@@ -13273,7 +13276,7 @@ methodmap CPhysWheelConstraint < CPhysConstraint
 	}
 	property CBaseEntity m_hSteeringMimicsEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPhysWheelConstraint", "m_hSteeringMimicsEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysWheelConstraint", "m_hSteeringMimicsEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysWheelConstraint", "m_hSteeringMimicsEntity", value); }
 	}
 }
 
@@ -13285,11 +13288,11 @@ methodmap CPhysicsEntitySolver < CLogicalEntity
 {
 	property CBaseEntity m_hMovingEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPhysicsEntitySolver", "m_hMovingEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysicsEntitySolver", "m_hMovingEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysicsEntitySolver", "m_hMovingEntity", value); }
 	}
 	property CBaseEntity m_hPhysicsBlocker {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPhysicsEntitySolver", "m_hPhysicsBlocker")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysicsEntitySolver", "m_hPhysicsBlocker", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPhysicsEntitySolver", "m_hPhysicsBlocker", value); }
 	}
 	property float m_separationDuration {
 		public get() { return Source2ModSchema.GetFloat(this, "CPhysicsEntitySolver", "m_separationDuration"); }
@@ -13564,7 +13567,7 @@ methodmap CPlantedC4 < CBaseAnimGraph
 	}
 	property CCSPlayerPawn m_hBombDefuser {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CPlantedC4", "m_hBombDefuser")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CPlantedC4", "m_hBombDefuser", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CPlantedC4", "m_hBombDefuser", value); }
 	}
 	property int m_iProgressBarTime {
 		public get() { return Source2ModSchema.GetInt(this, "CPlantedC4", "m_iProgressBarTime"); }
@@ -13590,7 +13593,7 @@ methodmap CPlatTrigger < CBaseModelEntity
 {
 	property CFuncPlat m_pPlatform {
 		public get() { return view_as<CFuncPlat>(Source2ModSchema.GetHandle(this, "CPlatTrigger", "m_pPlatform")); }
-		public set(CFuncPlat value) { Source2ModSchema.SetHandle(this, "CPlatTrigger", "m_pPlatform", view_as<int>(value)); }
+		public set(CFuncPlat value) { Source2ModSchema.SetHandle(this, "CPlatTrigger", "m_pPlatform", value); }
 	}
 }
 
@@ -13598,11 +13601,11 @@ methodmap CPlayerPing < CBaseEntity
 {
 	property CCSPlayerPawn m_hPlayer {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CPlayerPing", "m_hPlayer")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CPlayerPing", "m_hPlayer", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CPlayerPing", "m_hPlayer", value); }
 	}
 	property CBaseEntity m_hPingedEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPlayerPing", "m_hPingedEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPlayerPing", "m_hPingedEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPlayerPing", "m_hPingedEntity", value); }
 	}
 	property int m_iType {
 		public get() { return Source2ModSchema.GetInt(this, "CPlayerPing", "m_iType"); }
@@ -13713,11 +13716,11 @@ methodmap CPointAngleSensor < CPointEntity
 	public int m_nLookAtName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPointAngleSensor", "m_nLookAtName", buffer, maxlen); }
 	property CBaseEntity m_hTargetEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointAngleSensor", "m_hTargetEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointAngleSensor", "m_hTargetEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointAngleSensor", "m_hTargetEntity", value); }
 	}
 	property CBaseEntity m_hLookAtEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointAngleSensor", "m_hLookAtEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointAngleSensor", "m_hLookAtEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointAngleSensor", "m_hLookAtEntity", value); }
 	}
 	property float m_flDuration {
 		public get() { return Source2ModSchema.GetFloat(this, "CPointAngleSensor", "m_flDuration"); }
@@ -13741,7 +13744,7 @@ methodmap CPointAngularVelocitySensor < CPointEntity
 {
 	property CBaseEntity m_hTargetEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointAngularVelocitySensor", "m_hTargetEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointAngularVelocitySensor", "m_hTargetEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointAngularVelocitySensor", "m_hTargetEntity", value); }
 	}
 	property float m_flThreshold {
 		public get() { return Source2ModSchema.GetFloat(this, "CPointAngularVelocitySensor", "m_flThreshold"); }
@@ -13910,7 +13913,7 @@ methodmap CPointClientUIDialog < CBaseClientUIEntity
 {
 	property CBaseEntity m_hActivator {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointClientUIDialog", "m_hActivator")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointClientUIDialog", "m_hActivator", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointClientUIDialog", "m_hActivator", value); }
 	}
 	property bool m_bStartEnabled {
 		public get() { return Source2ModSchema.GetBool(this, "CPointClientUIDialog", "m_bStartEnabled"); }
@@ -14036,20 +14039,20 @@ methodmap CPointCommentaryNode < CBaseAnimGraph
 	public int m_iszViewTarget(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPointCommentaryNode", "m_iszViewTarget", buffer, maxlen); }
 	property CBaseEntity m_hViewTarget {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointCommentaryNode", "m_hViewTarget")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointCommentaryNode", "m_hViewTarget", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointCommentaryNode", "m_hViewTarget", value); }
 	}
 	property CBaseEntity m_hViewTargetAngles {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointCommentaryNode", "m_hViewTargetAngles")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointCommentaryNode", "m_hViewTargetAngles", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointCommentaryNode", "m_hViewTargetAngles", value); }
 	}
 	public int m_iszViewPosition(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPointCommentaryNode", "m_iszViewPosition", buffer, maxlen); }
 	property CBaseEntity m_hViewPosition {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointCommentaryNode", "m_hViewPosition")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointCommentaryNode", "m_hViewPosition", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointCommentaryNode", "m_hViewPosition", value); }
 	}
 	property CBaseEntity m_hViewPositionMover {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointCommentaryNode", "m_hViewPositionMover")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointCommentaryNode", "m_hViewPositionMover", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointCommentaryNode", "m_hViewPositionMover", value); }
 	}
 	property bool m_bPreventMovement {
 		public get() { return Source2ModSchema.GetBool(this, "CPointCommentaryNode", "m_bPreventMovement"); }
@@ -14119,17 +14122,17 @@ methodmap CPointEntityFinder < CBaseEntity
 {
 	property CBaseEntity m_hEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointEntityFinder", "m_hEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointEntityFinder", "m_hEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointEntityFinder", "m_hEntity", value); }
 	}
 	public int m_iFilterName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPointEntityFinder", "m_iFilterName", buffer, maxlen); }
 	property CBaseFilter m_hFilter {
 		public get() { return view_as<CBaseFilter>(Source2ModSchema.GetHandle(this, "CPointEntityFinder", "m_hFilter")); }
-		public set(CBaseFilter value) { Source2ModSchema.SetHandle(this, "CPointEntityFinder", "m_hFilter", view_as<int>(value)); }
+		public set(CBaseFilter value) { Source2ModSchema.SetHandle(this, "CPointEntityFinder", "m_hFilter", value); }
 	}
 	public int m_iRefName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPointEntityFinder", "m_iRefName", buffer, maxlen); }
 	property CBaseEntity m_hReference {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointEntityFinder", "m_hReference")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointEntityFinder", "m_hReference", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointEntityFinder", "m_hReference", value); }
 	}
 	property int m_FindMethod {
 		public get() { return Source2ModSchema.GetInt(this, "CPointEntityFinder", "m_FindMethod"); }
@@ -14150,7 +14153,7 @@ methodmap CPointGiveAmmo < CPointEntity
 {
 	property CBaseEntity m_pActivator {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointGiveAmmo", "m_pActivator")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointGiveAmmo", "m_pActivator", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointGiveAmmo", "m_pActivator", value); }
 	}
 }
 
@@ -14175,7 +14178,7 @@ methodmap CPointHurt < CPointEntity
 	public int m_strTarget(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPointHurt", "m_strTarget", buffer, maxlen); }
 	property CBaseEntity m_pActivator {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointHurt", "m_pActivator")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointHurt", "m_pActivator", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointHurt", "m_pActivator", value); }
 	}
 }
 
@@ -14184,7 +14187,7 @@ methodmap CPointOrient < CBaseEntity
 	public int m_iszSpawnTargetName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPointOrient", "m_iszSpawnTargetName", buffer, maxlen); }
 	property CBaseEntity m_hTarget {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointOrient", "m_hTarget")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointOrient", "m_hTarget", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointOrient", "m_hTarget", value); }
 	}
 	property bool m_bActive {
 		public get() { return Source2ModSchema.GetBool(this, "CPointOrient", "m_bActive"); }
@@ -14223,7 +14226,7 @@ methodmap CPointPrefab < CServerOnlyPointEntity
 	}
 	property CPointPrefab m_associatedRelayEntity {
 		public get() { return view_as<CPointPrefab>(Source2ModSchema.GetHandle(this, "CPointPrefab", "m_associatedRelayEntity")); }
-		public set(CPointPrefab value) { Source2ModSchema.SetHandle(this, "CPointPrefab", "m_associatedRelayEntity", view_as<int>(value)); }
+		public set(CPointPrefab value) { Source2ModSchema.SetHandle(this, "CPointPrefab", "m_associatedRelayEntity", value); }
 	}
 }
 
@@ -14235,7 +14238,7 @@ methodmap CPointProximitySensor < CPointEntity
 	}
 	property CBaseEntity m_hTargetEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointProximitySensor", "m_hTargetEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointProximitySensor", "m_hTargetEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointProximitySensor", "m_hTargetEntity", value); }
 	}
 }
 
@@ -14268,7 +14271,7 @@ methodmap CPointPush < CPointEntity
 	public int m_iszFilterName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPointPush", "m_iszFilterName", buffer, maxlen); }
 	property CBaseFilter m_hFilter {
 		public get() { return view_as<CBaseFilter>(Source2ModSchema.GetHandle(this, "CPointPush", "m_hFilter")); }
-		public set(CBaseFilter value) { Source2ModSchema.SetHandle(this, "CPointPush", "m_hFilter", view_as<int>(value)); }
+		public set(CBaseFilter value) { Source2ModSchema.SetHandle(this, "CPointPush", "m_hFilter", value); }
 	}
 }
 
@@ -14333,11 +14336,11 @@ methodmap CPointValueRemapper < CBaseEntity
 	public int m_iszRemapLineEndName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CPointValueRemapper", "m_iszRemapLineEndName", buffer, maxlen); }
 	property CBaseEntity m_hRemapLineStart {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointValueRemapper", "m_hRemapLineStart")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointValueRemapper", "m_hRemapLineStart", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointValueRemapper", "m_hRemapLineStart", value); }
 	}
 	property CBaseEntity m_hRemapLineEnd {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointValueRemapper", "m_hRemapLineEnd")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointValueRemapper", "m_hRemapLineEnd", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointValueRemapper", "m_hRemapLineEnd", value); }
 	}
 	property float m_flMaximumChangePerSecond {
 		public get() { return Source2ModSchema.GetFloat(this, "CPointValueRemapper", "m_flMaximumChangePerSecond"); }
@@ -14415,7 +14418,7 @@ methodmap CPointValueRemapper < CBaseEntity
 	public void Set_m_vecPreviousTestPoint(const float vec[3]) { Source2ModSchema.SetVector(this, "CPointValueRemapper", "m_vecPreviousTestPoint", vec); }
 	property CBasePlayerPawn m_hUsingPlayer {
 		public get() { return view_as<CBasePlayerPawn>(Source2ModSchema.GetHandle(this, "CPointValueRemapper", "m_hUsingPlayer")); }
-		public set(CBasePlayerPawn value) { Source2ModSchema.SetHandle(this, "CPointValueRemapper", "m_hUsingPlayer", view_as<int>(value)); }
+		public set(CBasePlayerPawn value) { Source2ModSchema.SetHandle(this, "CPointValueRemapper", "m_hUsingPlayer", value); }
 	}
 	property float m_flCustomOutputValue {
 		public get() { return Source2ModSchema.GetFloat(this, "CPointValueRemapper", "m_flCustomOutputValue"); }
@@ -14432,7 +14435,7 @@ methodmap CPointVelocitySensor < CPointEntity
 {
 	property CBaseEntity m_hTargetEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPointVelocitySensor", "m_hTargetEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointVelocitySensor", "m_hTargetEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPointVelocitySensor", "m_hTargetEntity", value); }
 	}
 	public void m_vecAxis(float vec[3]) { Source2ModSchema.GetVector(this, "CPointVelocitySensor", "m_vecAxis", vec); }
 	public void Set_m_vecAxis(const float vec[3]) { Source2ModSchema.SetVector(this, "CPointVelocitySensor", "m_vecAxis", vec); }
@@ -14688,7 +14691,7 @@ methodmap CPropDoorRotating < CBasePropDoor
 	}
 	property CEntityBlocker m_hEntityBlocker {
 		public get() { return view_as<CEntityBlocker>(Source2ModSchema.GetHandle(this, "CPropDoorRotating", "m_hEntityBlocker")); }
-		public set(CEntityBlocker value) { Source2ModSchema.SetHandle(this, "CPropDoorRotating", "m_hEntityBlocker", view_as<int>(value)); }
+		public set(CEntityBlocker value) { Source2ModSchema.SetHandle(this, "CPropDoorRotating", "m_hEntityBlocker", value); }
 	}
 }
 
@@ -14718,7 +14721,7 @@ methodmap CPulseGraphInstance_ServerEntity < CBasePulseGraphInstance
 {
 	property CBaseEntity m_hOwner {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CPulseGraphInstance_ServerEntity", "m_hOwner")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPulseGraphInstance_ServerEntity", "m_hOwner", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CPulseGraphInstance_ServerEntity", "m_hOwner", value); }
 	}
 	property bool m_bActivated {
 		public get() { return Source2ModSchema.GetBool(this, "CPulseGraphInstance_ServerEntity", "m_bActivated"); }
@@ -14863,15 +14866,15 @@ methodmap CRagdollProp < CBaseAnimGraph
 	}
 	property CBaseEntity m_hDamageEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CRagdollProp", "m_hDamageEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CRagdollProp", "m_hDamageEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CRagdollProp", "m_hDamageEntity", value); }
 	}
 	property CBaseEntity m_hKiller {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CRagdollProp", "m_hKiller")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CRagdollProp", "m_hKiller", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CRagdollProp", "m_hKiller", value); }
 	}
 	property CBasePlayerPawn m_hPhysicsAttacker {
 		public get() { return view_as<CBasePlayerPawn>(Source2ModSchema.GetHandle(this, "CRagdollProp", "m_hPhysicsAttacker")); }
-		public set(CBasePlayerPawn value) { Source2ModSchema.SetHandle(this, "CRagdollProp", "m_hPhysicsAttacker", view_as<int>(value)); }
+		public set(CBasePlayerPawn value) { Source2ModSchema.SetHandle(this, "CRagdollProp", "m_hPhysicsAttacker", value); }
 	}
 	property float m_flLastPhysicsInfluenceTime {
 		public get() { return Source2ModSchema.GetFloat(this, "CRagdollProp", "m_flLastPhysicsInfluenceTime"); }
@@ -15003,7 +15006,7 @@ methodmap CRetakeGameRules < SchemaObject
 	}
 	property CCSPlayerPawn m_hBombPlanter {
 		public get() { return view_as<CCSPlayerPawn>(Source2ModSchema.GetHandle(this, "CRetakeGameRules", "m_hBombPlanter")); }
-		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CRetakeGameRules", "m_hBombPlanter", view_as<int>(value)); }
+		public set(CCSPlayerPawn value) { Source2ModSchema.SetHandle(this, "CRetakeGameRules", "m_hBombPlanter", value); }
 	}
 }
 
@@ -15085,11 +15088,11 @@ methodmap CRopeKeyframe < CBaseModelEntity
 	}
 	property CBaseEntity m_hStartPoint {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CRopeKeyframe", "m_hStartPoint")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CRopeKeyframe", "m_hStartPoint", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CRopeKeyframe", "m_hStartPoint", value); }
 	}
 	property CBaseEntity m_hEndPoint {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CRopeKeyframe", "m_hEndPoint")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CRopeKeyframe", "m_hEndPoint", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CRopeKeyframe", "m_hEndPoint", value); }
 	}
 }
 
@@ -15360,7 +15363,7 @@ methodmap CTriggerPush < CBaseTrigger
 	public int m_iszPathSimpleName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CTriggerPush", "m_iszPathSimpleName", buffer, maxlen); }
 	property CPathSimple m_PathSimple {
 		public get() { return view_as<CPathSimple>(Source2ModSchema.GetHandle(this, "CTriggerPush", "m_PathSimple")); }
-		public set(CPathSimple value) { Source2ModSchema.SetHandle(this, "CTriggerPush", "m_PathSimple", view_as<int>(value)); }
+		public set(CPathSimple value) { Source2ModSchema.SetHandle(this, "CTriggerPush", "m_PathSimple", value); }
 	}
 	property int m_splinePushType {
 		public get() { return Source2ModSchema.GetInt(this, "CTriggerPush", "m_splinePushType"); }
@@ -15570,11 +15573,11 @@ methodmap CScriptedSequence < CBaseEntity
 	}
 	property CBaseEntity m_hTargetEnt {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CScriptedSequence", "m_hTargetEnt")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CScriptedSequence", "m_hTargetEnt", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CScriptedSequence", "m_hTargetEnt", value); }
 	}
 	property CScriptedSequence m_hNextCine {
 		public get() { return view_as<CScriptedSequence>(Source2ModSchema.GetHandle(this, "CScriptedSequence", "m_hNextCine")); }
-		public set(CScriptedSequence value) { Source2ModSchema.SetHandle(this, "CScriptedSequence", "m_hNextCine", view_as<int>(value)); }
+		public set(CScriptedSequence value) { Source2ModSchema.SetHandle(this, "CScriptedSequence", "m_hNextCine", value); }
 	}
 	property bool m_bThinking {
 		public get() { return Source2ModSchema.GetBool(this, "CScriptedSequence", "m_bThinking"); }
@@ -15594,7 +15597,7 @@ methodmap CScriptedSequence < CBaseEntity
 	}
 	property CBaseAnimGraph m_hForcedTarget {
 		public get() { return view_as<CBaseAnimGraph>(Source2ModSchema.GetHandle(this, "CScriptedSequence", "m_hForcedTarget")); }
-		public set(CBaseAnimGraph value) { Source2ModSchema.SetHandle(this, "CScriptedSequence", "m_hForcedTarget", view_as<int>(value)); }
+		public set(CBaseAnimGraph value) { Source2ModSchema.SetHandle(this, "CScriptedSequence", "m_hForcedTarget", value); }
 	}
 	property bool m_bDontCancelOtherSequences {
 		public get() { return Source2ModSchema.GetBool(this, "CScriptedSequence", "m_bDontCancelOtherSequences"); }
@@ -15622,7 +15625,7 @@ methodmap CScriptedSequence < CBaseEntity
 	}
 	property CBaseEntity m_hInteractionMainEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CScriptedSequence", "m_hInteractionMainEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CScriptedSequence", "m_hInteractionMainEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CScriptedSequence", "m_hInteractionMainEntity", value); }
 	}
 	property int m_iPlayerDeathBehavior {
 		public get() { return Source2ModSchema.GetInt(this, "CScriptedSequence", "m_iPlayerDeathBehavior"); }
@@ -15724,7 +15727,7 @@ methodmap CSkyCameraVolume < CBaseEntity
 	public void Set_m_vBoxMaxs(const float vec[3]) { Source2ModSchema.SetVector(this, "CSkyCameraVolume", "m_vBoxMaxs", vec); }
 	property CSkyCameraVolumeTarget m_hTarget {
 		public get() { return view_as<CSkyCameraVolumeTarget>(Source2ModSchema.GetHandle(this, "CSkyCameraVolume", "m_hTarget")); }
-		public set(CSkyCameraVolumeTarget value) { Source2ModSchema.SetHandle(this, "CSkyCameraVolume", "m_hTarget", view_as<int>(value)); }
+		public set(CSkyCameraVolumeTarget value) { Source2ModSchema.SetHandle(this, "CSkyCameraVolume", "m_hTarget", value); }
 	}
 	property int m_nPriority {
 		public get() { return Source2ModSchema.GetInt(this, "CSkyCameraVolume", "m_nPriority"); }
@@ -15771,7 +15774,7 @@ methodmap CSkyboxReference < CBaseEntity
 	}
 	property CSkyCamera m_hSkyCamera {
 		public get() { return view_as<CSkyCamera>(Source2ModSchema.GetHandle(this, "CSkyboxReference", "m_hSkyCamera")); }
-		public set(CSkyCamera value) { Source2ModSchema.SetHandle(this, "CSkyboxReference", "m_hSkyCamera", view_as<int>(value)); }
+		public set(CSkyCamera value) { Source2ModSchema.SetHandle(this, "CSkyboxReference", "m_hSkyCamera", value); }
 	}
 }
 
@@ -15890,7 +15893,7 @@ methodmap CSoundEventEntity < CBaseEntity
 	public int m_iszSoundName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CSoundEventEntity", "m_iszSoundName", buffer, maxlen); }
 	property CBaseEntity m_hSource {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSoundEventEntity", "m_hSource")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSoundEventEntity", "m_hSource", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSoundEventEntity", "m_hSource", value); }
 	}
 	property int m_nEntityIndexSelection {
 		public get() { return Source2ModSchema.GetInt(this, "CSoundEventEntity", "m_nEntityIndexSelection"); }
@@ -16005,7 +16008,7 @@ methodmap CSoundOpvarSetPointBase < CBaseEntity
 	}
 	property CBaseEntity m_hSource {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSoundOpvarSetPointBase", "m_hSource")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSoundOpvarSetPointBase", "m_hSource", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSoundOpvarSetPointBase", "m_hSource", value); }
 	}
 	public int m_iszSourceEntityName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CSoundOpvarSetPointBase", "m_iszSourceEntityName", buffer, maxlen); }
 	public void m_vLastPosition(float vec[3]) { Source2ModSchema.GetVector(this, "CSoundOpvarSetPointBase", "m_vLastPosition", vec); }
@@ -16093,7 +16096,7 @@ methodmap CSoundOpvarSetPointEntity < CSoundOpvarSetPointBase
 	}
 	property CBaseEntity m_hDynamicEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSoundOpvarSetPointEntity", "m_hDynamicEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSoundOpvarSetPointEntity", "m_hDynamicEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSoundOpvarSetPointEntity", "m_hDynamicEntity", value); }
 	}
 	public int m_iszDynamicEntityName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CSoundOpvarSetPointEntity", "m_iszDynamicEntityName", buffer, maxlen); }
 	property float m_flPathingDistanceNormFactor {
@@ -16334,7 +16337,7 @@ methodmap CSplineConstraint < CPhysConstraint
 	public void Set_m_vAnchorOffsetRestore(const float vec[3]) { Source2ModSchema.SetVector(this, "CSplineConstraint", "m_vAnchorOffsetRestore", vec); }
 	property CBaseEntity m_hSplineEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CSplineConstraint", "m_hSplineEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSplineConstraint", "m_hSplineEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CSplineConstraint", "m_hSplineEntity", value); }
 	}
 	property IPhysicsBody m_pSplineBody {
 		public get() { return view_as<IPhysicsBody>(Source2ModSchema.GetObject(this, "CSplineConstraint", "m_pSplineBody")); }
@@ -16418,11 +16421,11 @@ methodmap CTankTrainAI < CPointEntity
 {
 	property CFuncTrackTrain m_hTrain {
 		public get() { return view_as<CFuncTrackTrain>(Source2ModSchema.GetHandle(this, "CTankTrainAI", "m_hTrain")); }
-		public set(CFuncTrackTrain value) { Source2ModSchema.SetHandle(this, "CTankTrainAI", "m_hTrain", view_as<int>(value)); }
+		public set(CFuncTrackTrain value) { Source2ModSchema.SetHandle(this, "CTankTrainAI", "m_hTrain", value); }
 	}
 	property CBaseEntity m_hTargetEntity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CTankTrainAI", "m_hTargetEntity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTankTrainAI", "m_hTargetEntity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTankTrainAI", "m_hTargetEntity", value); }
 	}
 	property int m_soundPlaying {
 		public get() { return Source2ModSchema.GetInt(this, "CTankTrainAI", "m_soundPlaying"); }
@@ -16474,7 +16477,7 @@ methodmap CTestPulseIO__EntityHandleIntArgs_t < SchemaObject
 {
 	property CBaseEntity handleA {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CTestPulseIO__EntityHandleIntArgs_t", "handleA")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTestPulseIO__EntityHandleIntArgs_t", "handleA", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTestPulseIO__EntityHandleIntArgs_t", "handleA", value); }
 	}
 	property int valueB {
 		public get() { return Source2ModSchema.GetInt(this, "CTestPulseIO__EntityHandleIntArgs_t", "valueB"); }
@@ -16604,7 +16607,7 @@ methodmap CTonemapTrigger < CBaseTrigger
 	public int m_tonemapControllerName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CTonemapTrigger", "m_tonemapControllerName", buffer, maxlen); }
 	property CBaseEntity m_hTonemapController {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CTonemapTrigger", "m_hTonemapController")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTonemapTrigger", "m_hTonemapController", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTonemapTrigger", "m_hTonemapController", value); }
 	}
 }
 
@@ -16676,7 +16679,7 @@ methodmap CTriggerFan < CBaseTrigger
 	}
 	property CInfoFan m_hInfoFan {
 		public get() { return view_as<CInfoFan>(Source2ModSchema.GetHandle(this, "CTriggerFan", "m_hInfoFan")); }
-		public set(CInfoFan value) { Source2ModSchema.SetHandle(this, "CTriggerFan", "m_hInfoFan", view_as<int>(value)); }
+		public set(CInfoFan value) { Source2ModSchema.SetHandle(this, "CTriggerFan", "m_hInfoFan", value); }
 	}
 	property float m_flForce {
 		public get() { return Source2ModSchema.GetFloat(this, "CTriggerFan", "m_flForce"); }
@@ -16780,7 +16783,7 @@ methodmap CTriggerLerpObject < CBaseTrigger
 	public int m_iszLerpTarget(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CTriggerLerpObject", "m_iszLerpTarget", buffer, maxlen); }
 	property CBaseEntity m_hLerpTarget {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CTriggerLerpObject", "m_hLerpTarget")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTriggerLerpObject", "m_hLerpTarget", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTriggerLerpObject", "m_hLerpTarget", value); }
 	}
 	public int m_iszLerpTargetAttachment(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CTriggerLerpObject", "m_iszLerpTargetAttachment", buffer, maxlen); }
 	property float m_flLerpDuration {
@@ -16807,7 +16810,7 @@ methodmap CTriggerLerpObject < CBaseTrigger
 	}
 	property CBaseEntity m_hEntityToWaitForDisconnect {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CTriggerLerpObject", "m_hEntityToWaitForDisconnect")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTriggerLerpObject", "m_hEntityToWaitForDisconnect", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTriggerLerpObject", "m_hEntityToWaitForDisconnect", value); }
 	}
 }
 
@@ -16815,7 +16818,7 @@ methodmap CTriggerLook < CTriggerOnce
 {
 	property CBaseEntity m_hLookTarget {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CTriggerLook", "m_hLookTarget")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTriggerLook", "m_hLookTarget", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTriggerLook", "m_hLookTarget", value); }
 	}
 	property float m_flFieldOfView {
 		public get() { return Source2ModSchema.GetFloat(this, "CTriggerLook", "m_flFieldOfView"); }
@@ -16924,7 +16927,7 @@ methodmap CTriggerProximity < CBaseTrigger
 {
 	property CBaseEntity m_hMeasureTarget {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CTriggerProximity", "m_hMeasureTarget")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTriggerProximity", "m_hMeasureTarget", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CTriggerProximity", "m_hMeasureTarget", value); }
 	}
 	public int m_iszMeasureTarget(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CTriggerProximity", "m_iszMeasureTarget", buffer, maxlen); }
 	property float m_fRadius {
@@ -17002,7 +17005,7 @@ methodmap CTriggerSoundscape < CBaseTrigger
 {
 	property CEnvSoundscapeTriggerable m_hSoundscape {
 		public get() { return view_as<CEnvSoundscapeTriggerable>(Source2ModSchema.GetHandle(this, "CTriggerSoundscape", "m_hSoundscape")); }
-		public set(CEnvSoundscapeTriggerable value) { Source2ModSchema.SetHandle(this, "CTriggerSoundscape", "m_hSoundscape", view_as<int>(value)); }
+		public set(CEnvSoundscapeTriggerable value) { Source2ModSchema.SetHandle(this, "CTriggerSoundscape", "m_hSoundscape", value); }
 	}
 	public int m_SoundscapeName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CTriggerSoundscape", "m_SoundscapeName", buffer, maxlen); }
 }
@@ -17029,7 +17032,7 @@ methodmap CTriggerVolume < CBaseModelEntity
 	public int m_iFilterName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CTriggerVolume", "m_iFilterName", buffer, maxlen); }
 	property CBaseFilter m_hFilter {
 		public get() { return view_as<CBaseFilter>(Source2ModSchema.GetHandle(this, "CTriggerVolume", "m_hFilter")); }
-		public set(CBaseFilter value) { Source2ModSchema.SetHandle(this, "CTriggerVolume", "m_hFilter", view_as<int>(value)); }
+		public set(CBaseFilter value) { Source2ModSchema.SetHandle(this, "CTriggerVolume", "m_hFilter", value); }
 	}
 }
 
@@ -17328,7 +17331,7 @@ methodmap DestructiblePartDamageRequest_t < SchemaObject
 	}
 	property CBaseEntity m_hAttacker {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "DestructiblePartDamageRequest_t", "m_hAttacker")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "DestructiblePartDamageRequest_t", "m_hAttacker", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "DestructiblePartDamageRequest_t", "m_hAttacker", value); }
 	}
 	public void m_vWsBreakDamageOrigin(float vec[3]) { Source2ModSchema.GetVector(this, "DestructiblePartDamageRequest_t", "m_vWsBreakDamageOrigin", vec); }
 	public void Set_m_vWsBreakDamageOrigin(const float vec[3]) { Source2ModSchema.SetVector(this, "DestructiblePartDamageRequest_t", "m_vWsBreakDamageOrigin", vec); }
@@ -17340,11 +17343,11 @@ methodmap DynamicVolumeDef_t < SchemaObject
 {
 	property CBaseEntity m_source {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "DynamicVolumeDef_t", "m_source")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "DynamicVolumeDef_t", "m_source", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "DynamicVolumeDef_t", "m_source", value); }
 	}
 	property CBaseEntity m_target {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "DynamicVolumeDef_t", "m_target")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "DynamicVolumeDef_t", "m_target", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "DynamicVolumeDef_t", "m_target", value); }
 	}
 	property int m_nHullIdx {
 		public get() { return Source2ModSchema.GetInt(this, "DynamicVolumeDef_t", "m_nHullIdx"); }
@@ -17452,7 +17455,7 @@ methodmap FuncMoverMovementSummary_t < SchemaObject
 	}
 	property CPathMover hPathMover {
 		public get() { return view_as<CPathMover>(Source2ModSchema.GetHandle(this, "FuncMoverMovementSummary_t", "hPathMover")); }
-		public set(CPathMover value) { Source2ModSchema.SetHandle(this, "FuncMoverMovementSummary_t", "hPathMover", view_as<int>(value)); }
+		public set(CPathMover value) { Source2ModSchema.SetHandle(this, "FuncMoverMovementSummary_t", "hPathMover", value); }
 	}
 }
 
@@ -17560,7 +17563,7 @@ methodmap PhysicsRagdollPose_t < SchemaObject
 {
 	property CBaseEntity m_hOwner {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "PhysicsRagdollPose_t", "m_hOwner")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "PhysicsRagdollPose_t", "m_hOwner", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "PhysicsRagdollPose_t", "m_hOwner", value); }
 	}
 	property bool m_bSetFromDebugHistory {
 		public get() { return Source2ModSchema.GetBool(this, "PhysicsRagdollPose_t", "m_bSetFromDebugHistory"); }
@@ -17592,7 +17595,7 @@ methodmap RelationshipOverride_t < Relationship_t
 {
 	property CBaseEntity entity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "RelationshipOverride_t", "entity")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "RelationshipOverride_t", "entity", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "RelationshipOverride_t", "entity", value); }
 	}
 	property int classType {
 		public get() { return Source2ModSchema.GetInt(this, "RelationshipOverride_t", "classType"); }
@@ -17646,7 +17649,7 @@ methodmap SellbackPurchaseEntry_t < SchemaObject
 	}
 	property CBaseEntity m_hItem {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "SellbackPurchaseEntry_t", "m_hItem")); }
-		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "SellbackPurchaseEntry_t", "m_hItem", view_as<int>(value)); }
+		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "SellbackPurchaseEntry_t", "m_hItem", value); }
 	}
 }
 

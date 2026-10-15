@@ -59,24 +59,12 @@ namespace sourcepawn
             return static_cast<cell_t>(written);
         }
 
-        cell_t IndexOf(CEntityInstance* inst)
+        /// An entity argument that may be NULL_ENTITY.
+        bool OptionalEntity(IPluginContext* ctx, cell_t entity, CBaseEntity** out)
         {
-            return inst ? static_cast<cell_t>(inst->GetEntityIndex().Get()) : -1;
-        }
-
-        /// An entity argument that may be NULL_ENTITY: nullptr for a negative index.
-        bool OptionalEntity(IPluginContext* ctx, cell_t index, CBaseEntity** out)
-        {
-            *out = nullptr;
-            if (index < 0)
-                return true;
-            *out = index < 32768 ? CBaseEntity::FromIndex<CBaseEntity>(index) : nullptr;
-            if (!*out)
-            {
-                ctx->ThrowNativeError("Entity %d is invalid", index);
-                return false;
-            }
-            return true;
+            bool ok;
+            *out = static_cast<CBaseEntity*>(OptionalEntityArg(ctx, entity, &ok));
+            return ok;
         }
 
         Vector ReadVector(IPluginContext* ctx, cell_t addr)
@@ -395,7 +383,7 @@ namespace sourcepawn
         cell_t N_ResultHitEntity(IPluginContext* ctx, const cell_t* params)
         {
             const TraceResult* r = ResultOf(ctx, params[1]);
-            return r ? IndexOf(r->HitEntity()) : -1;
+            return r ? EntityCell(r->HitEntity()) : -1;
         }
 
         cell_t NewResult(IPluginContext* ctx, TraceResult&& result)
@@ -498,7 +486,7 @@ namespace sourcepawn
                 if (!m_fn)
                     return true;
                 sp::CallArgs args;
-                args.PushCell(IndexOf(entity));
+                args.PushCell(EntityCell(entity));
                 args.PushCell(m_data);
                 cell_t res = 1;
                 Invoke(m_fn, args, &res);
