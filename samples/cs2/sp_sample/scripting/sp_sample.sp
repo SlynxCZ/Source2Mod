@@ -582,9 +582,10 @@ public void Source2Mod_OnGameFrame(bool simulating, bool firstTick, bool lastTic
 	// forward costs nothing per frame.
 }
 
-// Something Source2Mod has no callback for: swallowing a client command
-// before the engine sees it. For that the plugin hooks the engine itself --
-// a virtual function of CSource2GameClients, like cpp_sample's KHOOK_VIRTUALs. A plugin with hooks of its own needs a
+// Two things Source2Mod has no callback for: turning a connection away, and
+// swallowing a client command before the engine sees it. For those the
+// plugin hooks the engine itself -- virtual functions of CSource2GameClients,
+// like cpp_sample's KHOOK_VIRTUALs. A plugin with hooks of its own needs a
 // gamedata update whenever the game moves them; prefer what Source2Mod has.
 
 void SetupRawEngineHooks()
@@ -596,9 +597,25 @@ void SetupRawEngineHooks()
 		return;
 
 	// A member function's first parameter is `this`; every other index
-	// counts from there. ClientConnect (this + six arguments, the last one on
-	// the stack) is out of reach: script hooks see register arguments only,
-	// so turning connections away stays with cpp_sample's KHOOK_VIRTUAL.
+	// counts from there.
+
+	// bool ClientConnect(CPlayerSlot, const char *name, uint64 xuid,
+	//                    const char *networkId, bool unk1, CBufferString *rejectReason)
+	// -- five slots before ClientCommand, in the order of isource2server.h.
+	// With `this` that is seven arguments; the ones past the registers come
+	// off the stack, which script hooks read and pass on like the rest.
+	Source2ModHook connect = Source2ModHook.FromVirtual("server", "CSource2GameClients", commandIndex - 5, Source2ModType_Bool);
+	if (connect != null)
+	{
+		connect.AddParam(Source2ModType_Pointer);        // this
+		connect.AddParam(Source2ModType_Int32);          // CPlayerSlot
+		connect.AddParam(Source2ModType_String);         // name
+		connect.AddParam(Source2ModType_Int64);          // xuid
+		connect.AddParam(Source2ModType_String);         // networkId
+		connect.AddParam(Source2ModType_Bool);           // unk1
+		connect.AddParam(Source2ModType_BufferString);   // rejectReason
+		connect.Enable(Hook_ClientConnect);
+	}
 
 	// void ClientCommand(CPlayerSlot, const CCommand &args)
 	Source2ModHook command = Source2ModHook.FromVirtual("server", "CSource2GameClients", commandIndex, Source2ModType_Void);
@@ -609,6 +626,29 @@ void SetupRawEngineHooks()
 		command.AddParam(Source2ModType_Command);        // const CCommand &
 		command.Enable(Hook_ClientCommand);
 	}
+}
+
+public Source2ModAction Hook_ClientConnect(Source2ModHookParams params, Source2ModHookReturn ret, bool post)
+{
+	char name[128], networkId[64], xuid[32];
+	params.GetString(3, name, sizeof(name));
+	params.GetString(4, xuid, sizeof(xuid));
+	params.GetString(5, networkId, sizeof(networkId));
+	Source2ModApi.Log("Hook_ClientConnect(%d, \"%s\", %s, \"%s\", %d)", params.GetInt(2), name, xuid, networkId, params.GetBool(6));
+
+	// A hook on a function that returns something returns the value alongside
+	// the action. With Override the original still runs but the value set
+	// here is what the caller gets -- here: refuse the connection and hand
+	// back the reason. Try it by connecting with "sp_rejected" as your name.
+	if (Source2ModUtils.Equal(name, "sp_rejected"))
+	{
+		params.SetBufferString(7, "Rejected by the sample plugin.");
+		ret.SetBool(false);
+		return Action_Override;
+	}
+
+	// Ignore leaves the return value alone: the original's is what counts.
+	return Action_Ignore;
 }
 
 public Source2ModAction Hook_ClientCommand(Source2ModHookParams params, Source2ModHookReturn ret, bool post)
