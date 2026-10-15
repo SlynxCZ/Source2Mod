@@ -2039,9 +2039,35 @@ void SetupScripts()
 	Source2ModCommands.RegisterConCommand("sp_script_ping", Cmd_ScriptPing);
 }
 
+bool IsHexDigit(char c)
+{
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
 public void OnScriptMessage(const char[] channel, const char[] payload)
 {
-	LogMessage("Script message on %s: %s", channel, payload);
+	// The script encodes its payload (encodeURIComponent) so that a ';' or a
+	// newline cannot split the command line; undo that here.
+	char text[512], hex[3];
+	int length = 0;
+	for (int i = 0; payload[i] != '\0' && length < sizeof(text) - 1; i++)
+	{
+		if (payload[i] == '%' && IsHexDigit(payload[i + 1]) && IsHexDigit(payload[i + 2]))
+		{
+			hex[0] = payload[i + 1];
+			hex[1] = payload[i + 2];
+			hex[2] = '\0';
+			text[length++] = view_as<char>(StringToInt(hex, 16));
+			i += 2;
+		}
+		else
+		{
+			text[length++] = payload[i];
+		}
+	}
+	text[length] = '\0';
+
+	LogMessage("Script message on %s: %s", channel, text);
 }
 
 public void Cmd_Script(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)

@@ -13,7 +13,9 @@
 
 #include <cstdio>
 #include <cstdarg>
+#include <cctype>
 #include <cstdlib>
+#include <string>
 #include <vector>
 #include "plugin.h"
 
@@ -1723,7 +1725,24 @@ void SamplePlugin::SetupScripts()
     // Everything a script sends on "cpp_sample", a frame or more later.
     HOOK_SCRIPT_MESSAGE("cpp_sample", [](const char *pszChannel, const char *pszPayload)
     {
-        SOURCE2MOD_LOG(&g_Plugin, "Script message on %s: %s\n", pszChannel, pszPayload);
+        // The script encodes its payload (encodeURIComponent) so that a ';' or
+        // a newline cannot split the command line; undo that here.
+        std::string text;
+        for (const char *p = pszPayload; *p; ++p)
+        {
+            if (p[0] == '%' && isxdigit((unsigned char)p[1]) && isxdigit((unsigned char)p[2]))
+            {
+                const std::string hex(p + 1, 2);
+                text += static_cast<char>(std::stoi(hex, nullptr, 16));
+                p += 2;
+            }
+            else
+            {
+                text += *p;
+            }
+        }
+
+        SOURCE2MOD_LOG(&g_Plugin, "Script message on %s: %s\n", pszChannel, text.c_str());
     });
 
     // sample_script: runs the source above as a point_script named
