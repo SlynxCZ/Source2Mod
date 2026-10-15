@@ -95,6 +95,102 @@ namespace utils
             }
             return out;
         }
+
+        /// The usual pattern mistakes, found without compiling: std::regex
+        /// reports them by throwing, and in the game process that exception
+        /// comes out of the game's own (newer) libstdc++, whose regex_error a
+        /// catch built against ours does not always match -- so a bad pattern
+        /// from a plugin aborted the server. Empty when nothing is wrong.
+        std::string CheckPattern(const std::string& p)
+        {
+            int parens = 0;
+            bool inClass = false;
+            bool canRepeat = false;   // something before a quantifier
+            for (size_t i = 0; i < p.size(); i++)
+            {
+                const char c = p[i];
+                if (c == '\\')
+                {
+                    if (i + 1 >= p.size())
+                        return "Pattern ends with a lone backslash";
+                    i++;
+                    canRepeat = true;
+                    continue;
+                }
+                if (inClass)
+                {
+                    if (c == ']')
+                        inClass = false;
+                    continue;
+                }
+                switch (c)
+                {
+                case '[':
+                    inClass = true;
+                    if (i + 1 < p.size() && p[i + 1] == '^')
+                        i++;
+                    if (i + 1 < p.size() && p[i + 1] == ']')
+                        i++;
+                    canRepeat = true;
+                    break;
+                case '(':
+                    parens++;
+                    if (i + 2 < p.size() && p[i + 1] == '?')
+                    {
+                        const char k = p[i + 2];
+                        if (k != ':' && k != '=' && k != '!')
+                            return "Unknown group kind \"(?" + std::string(1, k) + "\"";
+                        i += 2;
+                    }
+                    canRepeat = false;
+                    break;
+                case ')':
+                    if (--parens < 0)
+                        return "Unmatched ')'";
+                    canRepeat = true;
+                    break;
+                case '|':
+                    canRepeat = false;
+                    break;
+                case '*':
+                case '+':
+                case '?':
+                    if (!canRepeat)
+                        return std::string("Nothing to repeat before '") + c + "'";
+                    if (i + 1 < p.size() && p[i + 1] == '?')
+                        i++;
+                    canRepeat = false;
+                    break;
+                case '{':
+                {
+                    const size_t close = p.find('}', i);
+                    if (close == std::string::npos)
+                        return "Unmatched '{'";
+                    const std::string body = p.substr(i + 1, close - i - 1);
+                    if (body.empty() || body.find_first_not_of("0123456789,") != std::string::npos || body[0] == ',')
+                        return "Bad repetition {" + body + "}";
+                    if (!canRepeat)
+                        return "Nothing to repeat before '{'";
+                    i = close;
+                    canRepeat = false;
+                    break;
+                }
+                case '}':
+                case ']':
+                    // A lone } or ] is a literal in ECMAScript.
+                    canRepeat = true;
+                    break;
+                default:
+                    canRepeat = true;
+                    break;
+                }
+            }
+            if (inClass)
+                return "Unmatched '['";
+            if (parens > 0)
+                return "Unmatched '('";
+            return {};
+        }
     }
 
     // ---- regex ----------------------------------------------------------------------
@@ -106,8 +202,15 @@ namespace utils
         if (offset > subject.size())
             return 0;
         std::smatch m;
-        if (!std::regex_search(subject.begin() + offset, subject.end(), m, m_re))
+        try
+        {
+            if (!std::regex_search(subject.begin() + offset, subject.end(), m, m_re))
+                return 0;
+        }
+        catch (...)   // error_complexity / error_stack on a pathological text
+        {
             return 0;
+        }
         Found f;
         for (const auto& sub : m)
             f.groups.push_back(sub.str());
@@ -120,13 +223,20 @@ namespace utils
     {
         m_matches.clear();
         const std::string subject = text ? text : "";
-        for (auto it = std::sregex_iterator(subject.begin(), subject.end(), m_re); it != std::sregex_iterator(); ++it)
+        try
         {
-            Found f;
-            for (const auto& sub : *it)
-                f.groups.push_back(sub.str());
-            f.end = it->position(0) + it->length(0);
-            m_matches.push_back(std::move(f));
+            for (auto it = std::sregex_iterator(subject.begin(), subject.end(), m_re); it != std::sregex_iterator(); ++it)
+            {
+                Found f;
+                for (const auto& sub : *it)
+                    f.groups.push_back(sub.str());
+                f.end = it->position(0) + it->length(0);
+                m_matches.push_back(std::move(f));
+            }
+        }
+        catch (...)
+        {
+            m_matches.clear();
         }
         return static_cast<int>(m_matches.size());
     }
@@ -270,6 +380,12 @@ namespace utils
             syntax |= std::regex::icase;
         if (flags & SOURCE2MOD_REGEX_MULTILINE)
             AddMultiline<std::regex>(syntax);
+        if (const std::string problem = CheckPattern(p); !problem.empty())
+        {
+            if (error)
+                *error = problem;
+            return nullptr;
+        }
         if (flags & SOURCE2MOD_REGEX_DOTALL)
             p = DotAll(p);
         try
@@ -280,6 +396,12 @@ namespace utils
         {
             if (error)
                 *error = e.what();
+            return nullptr;
+        }
+        catch (...)   // see CheckPattern: the typed catch may not match in the game
+        {
+            if (error)
+                *error = "Invalid regular expression";
             return nullptr;
         }
     }

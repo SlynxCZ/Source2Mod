@@ -41,7 +41,7 @@ namespace sourcepawn
         bool OptionalFunction(IPluginContext* ctx, cell_t id, IPluginFunction*& fn)
         {
             fn = nullptr;
-            if (id == -1)
+            if (id == -1 || id == 0)   // INVALID_FUNCTION arrives as 0
                 return true;
             fn = ctx->GetFunctionById(static_cast<funcid_t>(id));
             if (!fn)
