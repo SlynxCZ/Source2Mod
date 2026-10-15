@@ -1,0 +1,15 @@
+{
+    "default": {
+        "driver": "sqlite",
+        "database": "source2mod"
+    },
+    "example_mysql": {
+        "driver": "mysql",
+        "host": "127.0.0.1",
+        "user": "root",
+        "pass": "",
+        "database": "source2mod",
+        "port": 3306,
+        "timeout": 60
+    }
+}

@@ -89,3 +89,11 @@ The gamedata validator (tools/gamedata_validator) is modelled on their
 gamedata-validator (https://github.com/swiftly-solution/gamedata-validator),
 and the sound system's reverse engineering started from what SwiftlyS2
 had already worked out.
+
+## sql_mm
+
+The SQLite driver of ISource2ModSQL (src/core/sqlite.cpp) follows the
+approach of zer0k-z's sql_mm (https://github.com/zer0k-z/sql_mm,
+GPL-3.0): an SQLite file behind the same asynchronous connection,
+query and transaction calls as MySQL, results read on a worker thread
+and handed back on the main one.

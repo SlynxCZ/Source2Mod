@@ -34,6 +34,12 @@
  * Project: Source2Mod
  */
 #include "mysql.h"
+#include "sqlite.h"
+#include "paths.h"
+
+#include <nlohmann/json.hpp>
+#include <sqlite3.h>
+#include <fstream>
 
 #include "pluginapi.h"
 #include "utils/log.h"
@@ -952,6 +958,13 @@ namespace mysql
 
     ISource2ModSQLConnection* MySQLManager::CreateConnection(PluginId owner, Source2ModSQLConnectionInfo info)
     {
+        if (info.driver == SOURCE2MOD_SQL_DRIVER_SQLITE)
+        {
+            auto connection = new SQLiteConnection(owner, info);
+            m_vecSqliteConnections.push_back(connection);
+            return connection;
+        }
+
         auto connection = new MySQLConnection(owner, info);
         m_vecMysqlConnections.push_back(connection);
 
@@ -1044,6 +1057,21 @@ namespace mysql
 
     void MySQLManager::RunServerlessOp(ServerlessOp *op)
     {
+        if (op->m_Info.m_eDriver == SOURCE2MOD_SQL_DRIVER_SQLITE)
+        {
+            sqlite3 *db = SqliteOpen(op->m_Info, &op->m_sError, &op->m_nErrorCode);
+            if (!db)
+                return;
+
+            std::string query;
+            if (SqliteFormatQuery(op->m_sQuery, op->m_vecParams, &query, &op->m_sError))
+                op->m_bSuccess = SqliteRun(db, query, &op->m_vecSets, &op->m_InsertId, &op->m_AffectedRows,
+                                           &op->m_sError, &op->m_nErrorCode);
+
+            sqlite3_close(db);
+            return;
+        }
+
         MYSQL *mysql = OpenConnection(op->m_Info, &op->m_sError, &op->m_nErrorCode);
         if (!mysql)
         {
@@ -1097,7 +1125,9 @@ namespace mysql
 
             if (!op->m_bSuccess)
             {
-                FP_WARN("Serverless MySQL query failed ({}): {}", op->m_Info.m_sDatabase, op->m_sError);
+                FP_WARN("Serverless {} query failed ({}): {}",
+                        op->m_Info.m_eDriver == SOURCE2MOD_SQL_DRIVER_SQLITE ? "SQLite" : "MySQL",
+                        op->m_Info.m_sDatabase, op->m_sError);
             }
 
             // Gone if the plugin that asked unloaded while this was in the
@@ -1192,6 +1222,16 @@ namespace mysql
             connection->RunFrame();
         }
 
+        const std::vector<SQLiteConnection*> sqlite = m_vecSqliteConnections;
+
+        for (auto *connection : sqlite)
+        {
+            if (std::find(m_vecSqliteConnections.begin(), m_vecSqliteConnections.end(), connection) == m_vecSqliteConnections.end())
+                continue;
+
+            connection->RunFrame();
+        }
+
         RunServerlessFrame();
     }
 
@@ -1222,6 +1262,87 @@ namespace mysql
 
         for (auto* connection : going)
             connection->Destroy();
+
+        std::vector<SQLiteConnection*> goingSqlite;
+
+        for (auto* connection : m_vecSqliteConnections)
+        {
+            if (connection->Owner() == id)
+                goingSqlite.push_back(connection);
+        }
+
+        for (auto* connection : goingSqlite)
+            connection->Destroy();
+    }
+
+    bool MySQLManager::GetNamedConnection(const char* name, Source2ModSQLConnectionInfo& info)
+    {
+        if (!m_bNamedLoaded)
+        {
+            m_bNamedLoaded = true;
+
+            // { "default": { "driver": "sqlite", "database": "source2mod" },
+            //   "stats": { "driver": "mysql", "host": ..., "user": ..., "pass": ..., "database": ...,
+            //              "port": 3306, "timeout": 60 } }
+            const std::string path = std::string(paths::pathsManager.ConfigsDirectory()) + "/databases.json";
+            std::ifstream file(path);
+            if (file)
+            {
+                const auto json = nlohmann::json::parse(file, nullptr, false, true);
+                if (!json.is_object())
+                    FP_ERROR("SQL: {} is not a JSON object", path);
+                else
+                {
+                    for (const auto& [key, value] : json.items())
+                    {
+                        if (!value.is_object())
+                            continue;
+
+                        OwnedConnectionInfo named;
+                        named.m_sHost = value.value("host", "");
+                        named.m_sUser = value.value("user", "");
+                        named.m_sPass = value.value("pass", "");
+                        named.m_sDatabase = value.value("database", "");
+                        named.m_nPort = value.value("port", 3306);
+                        named.m_nTimeout = value.value("timeout", 60);
+                        named.m_eDriver = value.value("driver", "mysql") == "sqlite" ? SOURCE2MOD_SQL_DRIVER_SQLITE
+                                                                                     : SOURCE2MOD_SQL_DRIVER_MYSQL;
+                        m_vecNamed.emplace_back(key, std::move(named));
+                    }
+                }
+            }
+        }
+
+        const std::string wanted = (name && *name) ? name : "default";
+        for (const auto& [key, named] : m_vecNamed)
+        {
+            if (key != wanted)
+                continue;
+
+            info.host = named.m_sHost.c_str();
+            info.user = named.m_sUser.c_str();
+            info.pass = named.m_sPass.c_str();
+            info.database = named.m_sDatabase.c_str();
+            info.port = named.m_nPort;
+            info.timeout = named.m_nTimeout;
+            info.driver = named.m_eDriver;
+            return true;
+        }
+
+        // No "default" configured: a local SQLite file, as SourceMod does.
+        if (wanted == "default")
+        {
+            info.host = "";
+            info.user = "";
+            info.pass = "";
+            info.database = "source2mod";
+            info.port = 0;
+            info.timeout = 60;
+            info.driver = SOURCE2MOD_SQL_DRIVER_SQLITE;
+            return true;
+        }
+
+        return false;
     }
 
     void MySQLManager::Shutdown()
@@ -1232,6 +1353,12 @@ namespace mysql
         // Joins each worker thread and cancels what it had not got to. Not
         // Destroy(), which would look for these in the vector just emptied.
         for (auto* connection : connections)
+            delete connection;
+
+        auto sqlite = std::move(m_vecSqliteConnections);
+        m_vecSqliteConnections.clear();
+
+        for (auto* connection : sqlite)
             delete connection;
 
         std::unique_ptr<std::thread> thread;

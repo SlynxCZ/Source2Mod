@@ -25,6 +25,7 @@
 #include "core/http.h"
 #include "core/json.h"
 #include "core/mysql.h"
+#include "core/sqlite.h"
 #include "core/scheduler.h"
 
 #include <sp_callable.h>
@@ -560,7 +561,9 @@ namespace sourcepawn
                 scheduler::schedulerManager.NextFrame(0, [c]()
                 {
                     auto& all = mysql::mysqlManager.m_vecMysqlConnections;
-                    if (std::find(all.begin(), all.end(), c) != all.end())
+                    auto& sqlite = mysql::mysqlManager.m_vecSqliteConnections;
+                    if (std::find(all.begin(), all.end(), c) != all.end() ||
+                        std::find(sqlite.begin(), sqlite.end(), c) != sqlite.end())
                         c->Destroy();
                 });
             }
@@ -808,28 +811,64 @@ namespace sourcepawn
             info.database = LocalString(ctx, params[4]);
             info.port = params[5];
             info.timeout = params[6];
+            if (params[0] >= 7)
+                info.driver = params[7] == SOURCE2MOD_SQL_DRIVER_SQLITE ? SOURCE2MOD_SQL_DRIVER_SQLITE : SOURCE2MOD_SQL_DRIVER_MYSQL;
             return info;
         }
 
-        // CreateConnection(host, user, pass, database, port, timeout)
-        cell_t N_MySQLCreateConnection(IPluginContext* ctx, const cell_t* params)
+        cell_t NewConnection(IPluginContext* ctx, const Source2ModSQLConnectionInfo& info)
         {
             auto* c = new Conn();
-            c->connection = mysql::mysqlManager.CreateConnection(0, InfoArgs(ctx, params));
+            c->connection = mysql::mysqlManager.CreateConnection(0, info);
             const cell_t h = Handles().Create(ConnType(), c, CallerId(ctx));
             if (!h)
                 delete c;
             return h;
         }
 
-        cell_t N_MySQLCreateServerless(IPluginContext* ctx, const cell_t* params)
+        cell_t NewServerless(IPluginContext* ctx, const Source2ModSQLConnectionInfo& info)
         {
             auto* s = new Serverless();
-            s->serverless = mysql::mysqlManager.CreateServerless(0, InfoArgs(ctx, params));
+            s->serverless = mysql::mysqlManager.CreateServerless(0, info);
             const cell_t h = Handles().Create(ServerlessType(), s, CallerId(ctx));
             if (!h)
                 delete s;
             return h;
+        }
+
+        // CreateConnection(host, user, pass, database, port, timeout, driver)
+        cell_t N_MySQLCreateConnection(IPluginContext* ctx, const cell_t* params)
+        {
+            return NewConnection(ctx, InfoArgs(ctx, params));
+        }
+
+        cell_t N_MySQLCreateServerless(IPluginContext* ctx, const cell_t* params)
+        {
+            return NewServerless(ctx, InfoArgs(ctx, params));
+        }
+
+        // CreateNamedConnection(name): configs/databases.json; 0 for a name not there.
+        cell_t N_SQLCreateNamedConnection(IPluginContext* ctx, const cell_t* params)
+        {
+            Source2ModSQLConnectionInfo info{};
+            if (!mysql::mysqlManager.GetNamedConnection(LocalString(ctx, params[1]), info))
+                return 0;
+            return NewConnection(ctx, info);
+        }
+
+        cell_t N_SQLCreateNamedServerless(IPluginContext* ctx, const cell_t* params)
+        {
+            Source2ModSQLConnectionInfo info{};
+            if (!mysql::mysqlManager.GetNamedConnection(LocalString(ctx, params[1]), info))
+                return 0;
+            return NewServerless(ctx, info);
+        }
+
+        // GetDriver()
+        cell_t N_ConnGetDriver(IPluginContext* ctx, const cell_t* params)
+        {
+            Conn* c = ConnOf(ctx, params[1]);
+            return c ? c->connection->GetDriver() : 0;
         }
 
         // Connect(callback, data)
@@ -933,7 +972,8 @@ namespace sourcepawn
             if (!c)
                 return 0;
             // mysql_real_escape_string needs the connection's character set.
-            if (!static_cast<mysql::MySQLConnection*>(c->connection)->GetDatabase())
+            if (c->connection->GetDriver() == SOURCE2MOD_SQL_DRIVER_MYSQL &&
+                !static_cast<mysql::MySQLConnection*>(c->connection)->GetDatabase())
                 return ctx->ThrowNativeError("Escape needs a connected connection");
             const std::string escaped = c->connection->Escape(LocalString(ctx, params[2]));
             return ToBuffer(ctx, params[3], params[4], escaped.c_str());
@@ -1067,10 +1107,13 @@ namespace sourcepawn
             { "ISource2ModSQLConnection.Query", N_ConnQuery },
             { "ISource2ModSQLConnection.ExecuteTransaction", N_ConnExecuteTransaction },
             { "ISource2ModSQLConnection.Escape", N_ConnEscape },
+            { "ISource2ModSQLConnection.GetDriver", N_ConnGetDriver },
             { "ISource2ModSQLServerless.Query", N_ServerlessQuery },
             { "ISource2ModSQLServerless.QueryWithParams", N_ServerlessQueryWithParams },
             { "Source2ModSQL.CreateConnection", N_MySQLCreateConnection },
             { "Source2ModSQL.CreateServerless", N_MySQLCreateServerless },
+            { "Source2ModSQL.CreateNamedConnection", N_SQLCreateNamedConnection },
+            { "Source2ModSQL.CreateNamedServerless", N_SQLCreateNamedServerless },
             { nullptr, nullptr },
         };
     }

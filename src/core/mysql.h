@@ -55,6 +55,7 @@
 
 namespace mysql {
     class CMySQLStoredQuery;
+    class SQLiteConnection;
     class MySQLConnection;
     class ServerlessHandle;
     struct ServerlessOp;
@@ -76,7 +77,8 @@ namespace mysql {
               m_sPass(info.pass ? info.pass : ""),
               m_sDatabase(info.database ? info.database : ""),
               m_nPort(info.port),
-              m_nTimeout(info.timeout)
+              m_nTimeout(info.timeout),
+              m_eDriver(info.driver)
         {
         }
 
@@ -87,6 +89,7 @@ namespace mysql {
 
         int m_nPort = 3306;
         int m_nTimeout = 60;
+        ESource2ModSQLDriver m_eDriver = SOURCE2MOD_SQL_DRIVER_MYSQL;
     };
 
     /// One result set, copied out of libmysql row by row.
@@ -350,7 +353,7 @@ namespace mysql {
     public:
         ISource2ModSQLConnection* CreateConnection(PluginId owner, Source2ModSQLConnectionInfo info) override;
         ISource2ModSQLServerless* CreateServerless(PluginId owner, Source2ModSQLConnectionInfo info) override;
-        bool GetNamedConnection(const char* name, Source2ModSQLConnectionInfo& info) override { return false; }
+        bool GetNamedConnection(const char* name, Source2ModSQLConnectionInfo& info) override;
 
     public:
         /// Everything that has to happen on the main thread: each connection's
@@ -376,6 +379,7 @@ namespace mysql {
         void DestroyServerless(ServerlessHandle *handle);
 
         std::vector<MySQLConnection*> m_vecMysqlConnections;
+        std::vector<SQLiteConnection*> m_vecSqliteConnections;
 
     private:
         /// One thread for every serverless query there is, whatever plugin it
@@ -408,6 +412,11 @@ namespace mysql {
         std::mutex m_ServerlessDoneLock;
         std::condition_variable m_ServerlessEvent;
         bool m_bServerlessTerminate = false;
+
+        /// configs/databases.json, read on first use: name -> details, the
+        /// strings kept here so the infos handed out can point at them.
+        std::vector<std::pair<std::string, OwnedConnectionInfo>> m_vecNamed;
+        bool m_bNamedLoaded = false;
     };
 
     extern MySQLManager mysqlManager;
