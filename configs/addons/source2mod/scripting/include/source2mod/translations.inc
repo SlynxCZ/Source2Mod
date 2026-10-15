@@ -10,7 +10,10 @@
  * Lookups never fail: a phrase without the target's language falls back to
  * the server's language, then English, then the phrase name itself.
  *
- * Targets are player slots; SOURCE2MOD_LANG_SERVER is the server.
+ * Targets are player slots; SOURCE2MOD_LANG_SERVER is the server. Format's
+ * %t uses the format target (SetFormatTarget, the server by default); %T takes
+ * the phrase, then the target's slot as an int (slot.Get(), -1 = server), then
+ * the phrase's arguments. A phrase not there (yet) prints as its name.
  */
 
 #if defined _source2mod_translations_included

@@ -87,6 +87,7 @@ bool CCoreConfig::Init(char* conf_error, int conf_error_size)
         AccessDeniedMessage = m_json.value("AccessDeniedMessage", AccessDeniedMessage);
         GeoIPDatabase = m_json.value("GeoIPDatabase", GeoIPDatabase);
         ClientPrefsDatabase = m_json.value("ClientPrefsDatabase", ClientPrefsDatabase);
+        ServerLang = m_json.value("ServerLang", ServerLang);
     }
     catch (const std::exception& ex)
     {

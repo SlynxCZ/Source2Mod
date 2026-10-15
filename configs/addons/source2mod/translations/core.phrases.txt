@@ -1,0 +1,29 @@
+// The core's own phrases: menu navigation and votes.
+"Phrases"
+{
+	"Back"
+	{
+		"en"		"Back"
+	}
+	"Next"
+	{
+		"en"		"Next"
+	}
+	"Previous"
+	{
+		"en"		"Previous"
+	}
+	"Exit"
+	{
+		"en"		"Exit"
+	}
+	"Vote Count"
+	{
+		"#format"	"{1:i},{2:i}"
+		"en"		"Votes: {1}/{2}"
+	}
+	"No Vote"
+	{
+		"en"		"No Vote"
+	}
+}

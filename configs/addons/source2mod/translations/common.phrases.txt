@@ -1,0 +1,175 @@
+// Phrases plugins share (LoadTranslations("common.phrases")): targeting,
+// votes, menus. Names follow SourceMod's common.phrases so its plugins find
+// them. Another language goes in translations/<code>/common.phrases.txt.
+"Phrases"
+{
+	"Yes"
+	{
+		"en"		"Yes"
+	}
+	"No"
+	{
+		"en"		"No"
+	}
+	"Back"
+	{
+		"en"		"Back"
+	}
+	"Next"
+	{
+		"en"		"Next"
+	}
+	"Previous"
+	{
+		"en"		"Previous"
+	}
+	"Exit"
+	{
+		"en"		"Exit"
+	}
+	"_s"
+	{
+		"#format"	"{1:s}"
+		"en"		"{1}"
+	}
+	"No matching client"
+	{
+		"en"		"No matching client was found."
+	}
+	"No matching clients"
+	{
+		"en"		"No matching clients were found."
+	}
+	"More than one client matched"
+	{
+		"en"		"More than one client matched the given pattern."
+	}
+	"Player no longer available"
+	{
+		"en"		"The player you selected is no longer available."
+	}
+	"Unable to target"
+	{
+		"en"		"You cannot target this player."
+	}
+	"Cannot target bot"
+	{
+		"en"		"Cannot perform this command on a bot."
+	}
+	"Target must be alive"
+	{
+		"en"		"This command can only be used on alive players."
+	}
+	"Target must be dead"
+	{
+		"en"		"This command can only be used on dead players."
+	}
+	"Target is not in game"
+	{
+		"en"		"The given player is not fully in-game yet."
+	}
+	"all players"
+	{
+		"en"		"all players"
+	}
+	"all alive players"
+	{
+		"en"		"all alive players"
+	}
+	"all dead players"
+	{
+		"en"		"all dead players"
+	}
+	"all humans"
+	{
+		"en"		"all humans"
+	}
+	"all bots"
+	{
+		"en"		"all bots"
+	}
+	"all spectators"
+	{
+		"en"		"all spectators"
+	}
+	"all terrorists"
+	{
+		"en"		"all terrorists"
+	}
+	"all counter-terrorists"
+	{
+		"en"		"all counter-terrorists"
+	}
+	"all but yourself"
+	{
+		"en"		"all but yourself"
+	}
+	"yourself"
+	{
+		"en"		"yourself"
+	}
+	"the target you aim at"
+	{
+		"en"		"the target you aim at"
+	}
+	"Vote Count"
+	{
+		"#format"	"{1:i},{2:i}"
+		"en"		"Votes: {1}/{2}"
+	}
+	"Vote in Progress"
+	{
+		"en"		"A vote is already in progress."
+	}
+	"Vote Delay Seconds"
+	{
+		"#format"	"{1:i}"
+		"en"		"You must wait {1} seconds before starting another vote."
+	}
+	"Vote Delay Minutes"
+	{
+		"#format"	"{1:i}"
+		"en"		"You must wait {1} minutes before starting another vote."
+	}
+	"Vote Failed"
+	{
+		"#format"	"{1:i},{2:i},{3:i}"
+		"en"		"Vote failed. {1}% vote required. (Received {2}% of {3} votes)"
+	}
+	"Vote Successful"
+	{
+		"#format"	"{1:i},{2:i}"
+		"en"		"Vote successful. (Received {1}% of {2} votes)"
+	}
+	"Cancelled Vote"
+	{
+		"en"		"Cancelled the vote."
+	}
+	"Vote Select"
+	{
+		"#format"	"{1:s},{2:s}"
+		"en"		"{1} voted for {2}."
+	}
+	"Unknown command"
+	{
+		"#format"	"{1:s}"
+		"en"		"Unknown command: {1}"
+	}
+	"Invalid Amount"
+	{
+		"en"		"Invalid amount."
+	}
+	"Unable to find cvar"
+	{
+		"#format"	"{1:s}"
+		"en"		"Unable to find cvar: {1}"
+	}
+	"No Access"
+	{
+		"en"		"You do not have access to this command."
+	}
+	"Usage"
+	{
+		"en"		"Usage"
+	}
+}

@@ -19,6 +19,7 @@
 #include "core/events.h"
 #include "core/pluginmanager.h"
 #include "core/scheduler.h"
+#include "core/translations.h"
 #include "core/shared.h"
 #include "utils/log.h"
 
@@ -177,6 +178,63 @@ namespace sourcepawn
 
     // ---- format -------------------------------------------------------------------
 
+    namespace
+    {
+        // Whom %t translates for: a player slot, -1 for the server.
+        int g_formatTarget = -1;
+
+        bool FormatInto(IPluginContext* ctx, const char* fmt, const cell_t* params, int& arg, std::string& result, int depth);
+    }
+
+    void SetFormatTarget(int slot)
+    {
+        g_formatTarget = slot;
+    }
+
+    bool TranslateInto(IPluginContext* ctx, const cell_t* params, int& arg, int target, const char* name, std::string& result, int depth)
+    {
+        ScriptPlugin* plugin = ScriptPlugin::FromContext(ctx);
+        auto& tr = translations::translationsManager;
+        const translations::Phrase* phrase = plugin ? tr.Find(plugin->Id(), name) : nullptr;
+        const std::string* text = phrase ? tr.TextFor(*phrase, CPlayerSlot(target)) : nullptr;
+        // A phrase not there (yet: a script may push it later) shows as its name.
+        if (!text)
+        {
+            result += name;
+            return true;
+        }
+
+        const int count = phrase->format.empty() ? 0 : static_cast<int>(phrase->format.size()) - 1;
+        const int first = arg;
+        if (first + count - 1 > params[0])
+        {
+            ctx->ReportError("Translation \"%s\" needs %d more argument(s)", name, first + count - 1 - params[0]);
+            return false;
+        }
+        arg += count;
+
+        for (const char* p = text->c_str(); *p; ++p)
+        {
+            if (*p == '{' && isdigit(static_cast<unsigned char>(p[1])))
+            {
+                char* end = nullptr;
+                const long index = std::strtol(p + 1, &end, 10);
+                if (*end == '}' && index >= 1 && index <= count)
+                {
+                    const std::string spec = "%" + (phrase->format[index].empty() ? std::string("s") : phrase->format[index]);
+                    const cell_t one[2] = { 1, params[first + index - 1] };
+                    int a = 1;
+                    if (!FormatInto(ctx, spec.c_str(), one, a, result, depth + 1))
+                        return false;
+                    p = end;
+                    continue;
+                }
+            }
+            result += *p;
+        }
+        return true;
+    }
+
     bool FormatParams(IPluginContext* ctx, const cell_t* params, int fmtParam, char* out, size_t maxlen, size_t* written)
     {
         if (maxlen)
@@ -186,9 +244,32 @@ namespace sourcepawn
         if (ctx->LocalToString(params[fmtParam], &fmt) != SP_ERROR_NONE || !fmt)
             return false;
 
-        const int numParams = params[0];
         int arg = fmtParam + 1;
         std::string result;
+        if (!FormatInto(ctx, fmt, params, arg, result, 0))
+            return false;
+
+        if (maxlen)
+        {
+            const size_t n = std::min(result.size(), maxlen - 1);
+            memcpy(out, result.data(), n);
+            out[n] = '\0';
+            if (written)
+                *written = n;
+        }
+        return true;
+    }
+
+    namespace
+    {
+    bool FormatInto(IPluginContext* ctx, const char* fmt, const cell_t* params, int& arg, std::string& result, int depth)
+    {
+        if (depth > 8)
+        {
+            ctx->ReportError("Translations nest too deeply");
+            return false;
+        }
+        const int numParams = params[0];
 
         for (const char* p = fmt; *p; ++p)
         {
@@ -285,8 +366,29 @@ namespace sourcepawn
                 }
                 case 't':
                 case 'T':
-                    ctx->ReportError("Translations (%%%c) are not supported yet", c);
-                    return false;
+                {
+                    // %t: the phrase for the format target; %T: phrase, then the
+                    // target's player slot (-1 = the server).
+                    const char* name = Str(ctx, params[arg]);
+                    int target = g_formatTarget;
+                    ++arg;
+                    if (c == 'T')
+                    {
+                        if (arg > numParams)
+                        {
+                            ctx->ReportError("String formatted incorrectly - parameter %d (total %d)", arg, numParams);
+                            return false;
+                        }
+                        cell_t* t = nullptr;
+                        if (ctx->LocalToPhysAddr(params[arg], &t) != SP_ERROR_NONE)
+                            return false;
+                        target = *t;
+                        ++arg;
+                    }
+                    if (!TranslateInto(ctx, params, arg, target, name, result, depth))
+                        return false;
+                    continue;
+                }
                 default:
                     ctx->ReportError("Invalid format specifier '%c'", c);
                     return false;
@@ -295,16 +397,8 @@ namespace sourcepawn
             result += piece;
             ++arg;
         }
-
-        if (maxlen)
-        {
-            const size_t n = std::min(result.size(), maxlen - 1);
-            memcpy(out, result.data(), n);
-            out[n] = '\0';
-            if (written)
-                *written = n;
-        }
         return true;
+    }
     }
 
     namespace
@@ -1350,7 +1444,7 @@ namespace sourcepawn
         static const std::vector<sp_nativeinfo_t> s_all = []
         {
             std::vector<sp_nativeinfo_t> all;
-            for (const sp_nativeinfo_t* table : { g_natives, GetAdtNatives(), GetConVarNatives(), GetPluginSysNatives(), GetEntityNatives(), GetApiNatives(), GetNetSoundNatives(), GetGameHookNatives(), GetGameConfigNatives(), GetRawHookNatives(), GetWorldNatives(), GetNetNatives(), GetUiNatives(), GetMathNatives(), GetFeatureNatives(), GetMapNatives(), GetGeoIPNatives(), GetCookieNatives() })
+            for (const sp_nativeinfo_t* table : { g_natives, GetAdtNatives(), GetConVarNatives(), GetPluginSysNatives(), GetEntityNatives(), GetApiNatives(), GetNetSoundNatives(), GetGameHookNatives(), GetGameConfigNatives(), GetRawHookNatives(), GetWorldNatives(), GetNetNatives(), GetUiNatives(), GetMathNatives(), GetFeatureNatives(), GetMapNatives(), GetGeoIPNatives(), GetCookieNatives(), GetTranslationNatives() })
                 for (const sp_nativeinfo_t* n = table; n->name; ++n)
                     all.push_back(*n);
             all.push_back({ nullptr, nullptr });

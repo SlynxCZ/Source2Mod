@@ -62,6 +62,7 @@ namespace sourcepawn
     const sp_nativeinfo_t* GetMapNatives();          // natives_maps.cpp
     const sp_nativeinfo_t* GetGeoIPNatives();        // natives_geoip.cpp
     const sp_nativeinfo_t* GetCookieNatives();       // natives_cookies.cpp
+    const sp_nativeinfo_t* GetTranslationNatives();  // natives_translations.cpp
 
     /// A float operator native the x64 JIT cannot inline: bound with SP_NTVFLAG_EPHEMERAL.
     bool IsEphemeralMathNative(const char* name);
@@ -73,6 +74,16 @@ namespace sourcepawn
      * and returns false on a bad format or a missing argument.
      */
     bool FormatParams(SourcePawn::IPluginContext* ctx, const cell_t* params, int fmtParam, char* out, size_t maxlen, size_t* written = nullptr);
+
+    /// Whom Format's %t translates for (a player slot, -1 = the server).
+    void SetFormatTarget(int slot);
+
+    /**
+     * The translated text of phrase `name` for `target` into `result`, its
+     * {n} placeholders formatted from params[arg...] (arg moves past them) by
+     * the phrase's #format specs. A phrase not there shows as its name.
+     */
+    bool TranslateInto(SourcePawn::IPluginContext* ctx, const cell_t* params, int& arg, int target, const char* name, std::string& result, int depth = 0);
 
     /// A string argument; "" when the address is bad.
     const char* LocalString(SourcePawn::IPluginContext* ctx, cell_t addr);

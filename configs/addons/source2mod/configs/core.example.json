@@ -11,5 +11,6 @@
   "SteamAuthMode": "auto",
   "AccessDeniedMessage": "You do not have access to this command.",
   "GeoIPDatabase": "geoip/GeoLite2-City.mmdb",
-  "ClientPrefsDatabase": "data/clientprefs.sq3"
+  "ClientPrefsDatabase": "data/clientprefs.sq3",
+  "ServerLang": "en"
 }

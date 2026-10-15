@@ -73,6 +73,8 @@ public:
     /// What a player refused a command is told, unless a plugin set its own
     /// handler (ISource2ModPermissions::SetAccessDeniedHandler).
     std::string AccessDeniedMessage = "You do not have access to this command.";
+    /// The server's language code (configs/languages.cfg), SourceMod's ServerLang.
+    std::string ServerLang = "en";
 
     /// The GeoLite2 database (.mmdb) GeoIP lookups read; relative paths are
     /// under addons/source2mod. Not shipped -- see ISource2ModGeoIP.h.

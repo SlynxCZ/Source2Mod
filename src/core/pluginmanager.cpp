@@ -41,6 +41,7 @@
 #include "core/gamehooks.h"
 #include "core/http.h"
 #include "core/menus.h"
+#include "core/translations.h"
 #include "core/mysql.h"
 #include "core/networkmessages.h"
 #include "core/permissions.h"
@@ -358,6 +359,7 @@ bool PluginManager::AddPlugin(const char* fullPath, LibHandle lib, const void* m
         gamehooks::gameHooksManager.RemoveAllForPlugin(failedId);
         permissions::permissionsManager.RemoveAllForPlugin(failedId);
         cookies::cookiesManager.RemoveAllForPlugin(failedId);
+        translations::translationsManager.RemoveAllForPlugin(failedId);
         sourcepawn::RemoveAllForPlugin(failedId);
 
         m_plugins.pop_back();
@@ -480,6 +482,7 @@ bool PluginManager::ReloadPlugin(int id)
         gamehooks::gameHooksManager.RemoveAllForPlugin(id);
         permissions::permissionsManager.RemoveAllForPlugin(id);
         cookies::cookiesManager.RemoveAllForPlugin(id);
+        translations::translationsManager.RemoveAllForPlugin(id);
         sourcepawn::RemoveAllForPlugin(id);
 
         CloseLibNextFrame(**it, path);
@@ -543,6 +546,7 @@ bool PluginManager::UnloadPlugin(PluginId id)
         gamehooks::gameHooksManager.RemoveAllForPlugin(id);
         permissions::permissionsManager.RemoveAllForPlugin(id);
         cookies::cookiesManager.RemoveAllForPlugin(id);
+        translations::translationsManager.RemoveAllForPlugin(id);
         sourcepawn::RemoveAllForPlugin(id);
 
         CloseLibNextFrame(*p);
@@ -673,6 +677,7 @@ void PluginManager::UnloadAll()
         gamehooks::gameHooksManager.RemoveAllForPlugin(p->id);
         permissions::permissionsManager.RemoveAllForPlugin(p->id);
         cookies::cookiesManager.RemoveAllForPlugin(p->id);
+        translations::translationsManager.RemoveAllForPlugin(p->id);
         sourcepawn::RemoveAllForPlugin(p->id);
     }
 
