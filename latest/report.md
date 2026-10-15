@@ -1,14 +1,15 @@
 # Gamedata validation
 
-CS2 build **25815307** · Linux manifest `8144769780027006476` · Windows manifest `571072184844314041` · 2026-10-14T16:47:56+00:00
+CS2 build **25947352** · Linux manifest `5513399157532729905` · Windows manifest `8766757721818354077` · 2026-10-15T15:49:59+00:00
 
 | | Windows | Linux |
 |---|---|---|
-| Signatures | 🟢 65 | 🟢 65 |
+| Signatures | 🟢 66 | 🟢 65 🔴 1 |
 | Offsets | 🟢 37 ⚪ 4 | 🟢 37 ⚪ 4 |
 
-## Everything resolves
+## Needs attention
 
+- 🔴 **FilterWorkshopCommands** (linux): no match
 
 <details><summary>All entries (Windows, Linux)</summary>
 
@@ -96,6 +97,7 @@ CS2 build **25815307** · Linux manifest `8144769780027006476` · Windows manife
 - ⚪⚪ `CTakeDamageInfo::HitGroup`
 - 🟢🟢 `Cmd_ExecuteCommand`
 - 🟢🟢 `DispatchParticleEffect`
+- 🟢🔴 `FilterWorkshopCommands`
 - 🟢🟢 `GetWeaponCSDataFromKey`
 - 🟢🟢 `ICvar::DispatchConCommand` — W 20/46 · L 20/46
 - 🟢🟢 `IGameEventManager2::FireEvent` — W 7/16 · L 8/17

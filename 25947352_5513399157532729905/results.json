@@ -1,0 +1,1700 @@
+{
+  "generated_at": "2026-10-15T15:49:59+00:00",
+  "build": {
+    "buildid": "25947352",
+    "linux_manifest": "5513399157532729905",
+    "windows_manifest": "8766757721818354077"
+  },
+  "entries": [
+    {
+      "name": "BotNavIgnore1",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x1802b68aa",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0xc055a1",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CAttributeList::SetOrAddAttributeValueByName",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x181067910",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x1ca1f00",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBaseEntity::CollisionRulesChanged",
+      "kind": "offset",
+      "windows": {
+        "value": 188,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 238,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 187,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 239,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBaseEntity::DispatchSpawn",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ca27e0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x17fdc80",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBaseEntity::EndTouch",
+      "kind": "offset",
+      "windows": {
+        "value": 152,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 238,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 151,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 239,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBaseEntity::StartTouch",
+      "kind": "offset",
+      "windows": {
+        "value": 150,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 238,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 149,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 239,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBaseEntity::TakeDamageOld",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x1803e67b0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0xd5af00",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBaseEntity::Teleport",
+      "kind": "offset",
+      "windows": {
+        "value": 165,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 238,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 164,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 239,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBaseEntity::Touch",
+      "kind": "offset",
+      "windows": {
+        "value": 151,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 238,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 150,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 239,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBaseModelEntity::SetModel",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180b6dfb0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x1639040",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBasePlayerController::OnSimulateUserCommands",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180b5ea20",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x1683770",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBasePlayerController::SetPawn",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180b6e6b0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x164e9e0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBasePlayerPawn::CommitSuicide",
+      "kind": "offset",
+      "windows": {
+        "value": 387,
+        "class": "CBasePlayerPawn",
+        "library": "server",
+        "vtable_size": 400,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 387,
+        "class": "CBasePlayerPawn",
+        "library": "server",
+        "vtable_size": 401,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBasePlayerPawn::SnapViewAngles",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180d0a330",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x188bdc0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSGameRules::GoToIntermission",
+      "kind": "offset",
+      "windows": {
+        "value": 129,
+        "class": "CCSGameRules",
+        "library": "server",
+        "vtable_size": 130,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 130,
+        "class": "CCSGameRules",
+        "library": "server",
+        "vtable_size": 131,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSGameRules::TerminateRound",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x18095d500",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x13e5dc0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayerController::ChangeTeam",
+      "kind": "offset",
+      "windows": {
+        "value": 105,
+        "class": "CCSPlayerController",
+        "library": "server",
+        "vtable_size": 277,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 104,
+        "class": "CCSPlayerController",
+        "library": "server",
+        "vtable_size": 279,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayerController::ProcessUserCmd",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180b60700",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x16820d0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayerController::Respawn",
+      "kind": "offset",
+      "windows": {
+        "value": 274,
+        "class": "CCSPlayerController",
+        "library": "server",
+        "vtable_size": 277,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 276,
+        "class": "CCSPlayerController",
+        "library": "server",
+        "vtable_size": 279,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayerController::SetClan",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180a931b0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x153cc30",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayerController::SwitchTeam",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180a94a50",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x157e280",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayerLegacyJump::CheckJumpButton",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ab3ef0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15abfc0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayerLegacyJump::OnJump",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ab4630",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15ab170",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayerModernJump::CheckJumpButton",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ab40a0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15b6500",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayerModernJump::OnJump",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ade8a0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15b5b20",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayerPawn::PostThink",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x1801db7b0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0xaeeb80",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayerPawnBase::CanMove",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ab2a70",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x1592290",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_ItemServices::CanAcquire",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ab1860",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x159d340",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_ItemServices::DropActivePlayerWeapon",
+      "kind": "offset",
+      "windows": {
+        "value": 26,
+        "class": "CCSPlayer_ItemServices",
+        "library": "server",
+        "vtable_size": 28,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 27,
+        "class": "CCSPlayer_ItemServices",
+        "library": "server",
+        "vtable_size": 29,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_ItemServices::GiveNamedItem",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ab0830",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x1584900",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_ItemServices::RemoveWeapons",
+      "kind": "offset",
+      "windows": {
+        "value": 27,
+        "class": "CCSPlayer_ItemServices",
+        "library": "server",
+        "vtable_size": 28,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 28,
+        "class": "CCSPlayer_ItemServices",
+        "library": "server",
+        "vtable_size": 29,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::AirAccelerate",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180aaf660",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x158c760",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::AirMove",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180adb690",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15d79c0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::CanUnduck",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ab2d90",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x158a6d0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::CategorizePosition",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ab3410",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15a75c0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::CheckFalling",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ab3a80",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15b6b30",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::CheckParameters",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ab5150",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15a4230",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::CheckVelocity",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ab5cf0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15d48e0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::CheckWater",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ab64d0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x1587ab0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::Duck",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180aba100",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15b26c0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::Friction",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180abd550",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x158ce20",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::FullWalkMove",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ad4c70",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15d8070",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::GroundAccelerate",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180aaef70",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x158d290",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::LadderMove",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180acd390",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15ae490",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::MoveInit",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ad5020",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15b1f30",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::PlayerMove",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ad4580",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15d8320",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::ProcessMovement",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ad7a20",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15d87a0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::SetupMove",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ada510",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15d35e0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::TryPlayerMove",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180adf030",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x158f6e0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::WalkMove",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ae29c0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15d6830",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_MovementServices::WaterMove",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180ae3a70",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x159bbc0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_WeaponServices::BumpWeapon",
+      "kind": "offset",
+      "windows": {
+        "value": 29,
+        "class": "CCSPlayer_WeaponServices",
+        "library": "server",
+        "vtable_size": 45,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 30,
+        "class": "CCSPlayer_WeaponServices",
+        "library": "server",
+        "vtable_size": 48,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_WeaponServices::CanUse",
+      "kind": "offset",
+      "windows": {
+        "value": 27,
+        "class": "CCSPlayer_WeaponServices",
+        "library": "server",
+        "vtable_size": 45,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 28,
+        "class": "CCSPlayer_WeaponServices",
+        "library": "server",
+        "vtable_size": 48,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_WeaponServices::Destroy",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180afcc00",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15da6d0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_WeaponServices::DropWeapon",
+      "kind": "offset",
+      "windows": {
+        "value": 28,
+        "class": "CCSPlayer_WeaponServices",
+        "library": "server",
+        "vtable_size": 45,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 29,
+        "class": "CCSPlayer_WeaponServices",
+        "library": "server",
+        "vtable_size": 48,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_WeaponServices::HandleDropWeapon",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180b03210",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x15f3470",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPlayer_WeaponServices::SelectItem",
+      "kind": "offset",
+      "windows": {
+        "value": 30,
+        "class": "CCSPlayer_WeaponServices",
+        "library": "server",
+        "vtable_size": 45,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 31,
+        "class": "CCSPlayer_WeaponServices",
+        "library": "server",
+        "vtable_size": 48,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CCSPointScriptEntity::ScriptComponent",
+      "kind": "offset",
+      "windows": {
+        "status": "unchecked",
+        "detail": "field offset",
+        "value": 1216
+      },
+      "linux": {
+        "status": "unchecked",
+        "detail": "field offset",
+        "value": 1952
+      }
+    },
+    {
+      "name": "CDecoyProjectile::EmitGrenade",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x1809aebe0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x145dba0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CEntityIOOutput::FireOutputInternal",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x18138aa60",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x228e670",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CEntityIdentity::AcceptInput",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x1813a4af0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x22810f0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CEntityInstance::AcceptInput",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x1813a14f0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x22847e0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CEntitySystem::AddEntityIOEvent",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x181373a80",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x22d5680",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CFlashbangProjectile::EmitGrenade",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x18039d860",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0xd25f30",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CGameEntitySystem::FindEntityByClassName",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180bf45d0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x1715ab0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CGameEntitySystem::FindEntityByName",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180bf4b00",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x1715ae0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CGameRules::FindPickerEntity",
+      "kind": "offset",
+      "windows": {
+        "value": 25,
+        "class": "CGameRules",
+        "library": "server",
+        "vtable_size": 118,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 26,
+        "class": "CGameRules",
+        "library": "server",
+        "vtable_size": 119,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CGameRules::GetViewVectors",
+      "kind": "offset",
+      "windows": {
+        "value": 32,
+        "class": "CGameRules",
+        "library": "server",
+        "vtable_size": 118,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 33,
+        "class": "CGameRules",
+        "library": "server",
+        "vtable_size": 119,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CGameSceneNode::GetSkeletonInstance",
+      "kind": "offset",
+      "windows": {
+        "value": 12,
+        "class": "CGameSceneNode",
+        "library": "server",
+        "vtable_size": 31,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 13,
+        "class": "CGameSceneNode",
+        "library": "server",
+        "vtable_size": 32,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CHEGrenadeProjectile::EmitGrenade",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x18039d910",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0xd26890",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CLoggingSystem::LogDirect",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180127e10",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x20ca60",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CMolotovProjectile::EmitGrenade",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x1809af100",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x145aea0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CNetworkGameServer::ClientList",
+      "kind": "offset",
+      "windows": {
+        "status": "unchecked",
+        "detail": "field offset",
+        "value": 616
+      },
+      "linux": {
+        "status": "unchecked",
+        "detail": "field offset",
+        "value": 616
+      }
+    },
+    {
+      "name": "CPlayer_MovementServices::RunCommand",
+      "kind": "offset",
+      "windows": {
+        "value": 25,
+        "class": "CPlayer_MovementServices",
+        "library": "server",
+        "vtable_size": 51,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 26,
+        "class": "CPlayer_MovementServices",
+        "library": "server",
+        "vtable_size": 52,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CPlayer_ObserverServices::IsValidObserverTarget",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180c70ad0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x17b0960",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CSScript::RunScript",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x1801d2830",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0xaf86a0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CServerSideClientBase::SendNetMessage",
+      "kind": "offset",
+      "windows": {
+        "value": 15,
+        "class": "CServerSideClientBase",
+        "library": "engine2",
+        "vtable_size": 79,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 16,
+        "class": "CServerSideClientBase",
+        "library": "engine2",
+        "vtable_size": 81,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CSmokeGrenadeProjectile::EmitGrenade",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x1809af9d0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x145e340",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CSoundSystem::TakeGuid",
+      "kind": "offset",
+      "windows": {
+        "value": 76,
+        "class": "CSoundSystem",
+        "library": "soundsystem",
+        "vtable_size": 134,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 75,
+        "class": "CSoundSystem",
+        "library": "soundsystem",
+        "vtable_size": 135,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CSource2Server::GetNavMeshData",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180dd05f0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x198c180",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CTakeDamageInfo::Constructor",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180fb2560",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x1be47f0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CTakeDamageInfo::HitGroup",
+      "kind": "offset",
+      "windows": {
+        "status": "unchecked",
+        "detail": "field offset",
+        "value": 104
+      },
+      "linux": {
+        "status": "unchecked",
+        "detail": "field offset",
+        "value": 104
+      }
+    },
+    {
+      "name": "Cmd_ExecuteCommand",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x1801c5aa0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x3f8200",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "DispatchParticleEffect",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180c47590",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x179c200",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "FilterWorkshopCommands",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x18029bbe0",
+        "status": "ok"
+      },
+      "linux": {
+        "status": "broken",
+        "detail": "no match",
+        "matches": 0
+      }
+    },
+    {
+      "name": "GetWeaponCSDataFromKey",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x1805428b0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0xee5000",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "ICvar::DispatchConCommand",
+      "kind": "offset",
+      "windows": {
+        "value": 20,
+        "class": "CCvar",
+        "library": "tier0",
+        "vtable_size": 46,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 20,
+        "class": "CCvar",
+        "library": "tier0",
+        "vtable_size": 46,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "IGameEventManager2::FireEvent",
+      "kind": "offset",
+      "windows": {
+        "value": 7,
+        "class": "CGameEventManager",
+        "library": "server",
+        "vtable_size": 16,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 8,
+        "class": "CGameEventManager",
+        "library": "server",
+        "vtable_size": 17,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "IGameEventManager2::LoadEventsFromFile",
+      "kind": "offset",
+      "windows": {
+        "value": 1,
+        "class": "CGameEventManager",
+        "library": "server",
+        "vtable_size": 16,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 2,
+        "class": "CGameEventManager",
+        "library": "server",
+        "vtable_size": 17,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "IGameEventSystem::PostEventAbstract",
+      "kind": "offset",
+      "windows": {
+        "value": 16,
+        "class": "CGameEventSystem",
+        "library": "engine2",
+        "vtable_size": 21,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 15,
+        "class": "CGameEventSystem",
+        "library": "engine2",
+        "vtable_size": 21,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "IGameSystem::InitAllSystems->pFirst",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x18053e6e3",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0xf074e6",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "IGameSystem::OnServerGamePostSimulate",
+      "kind": "offset",
+      "windows": {
+        "value": 37,
+        "class": "IGameSystem",
+        "library": "server",
+        "vtable_size": 65,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 37,
+        "class": "IGameSystem",
+        "library": "server",
+        "vtable_size": 66,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "INetworkMessageProcessingPreFilter::FilterMessage",
+      "kind": "offset",
+      "windows": {
+        "status": "unchecked",
+        "detail": "no RTTI for INetworkMessageProcessingPreFilter",
+        "value": 0
+      },
+      "linux": {
+        "status": "unchecked",
+        "detail": "no RTTI for INetworkMessageProcessingPreFilter",
+        "value": 0
+      }
+    },
+    {
+      "name": "INetworkServerService::StartupServer",
+      "kind": "offset",
+      "windows": {
+        "value": 26,
+        "class": "CNetworkServerService",
+        "library": "engine2",
+        "vtable_size": 51,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 27,
+        "class": "CNetworkServerService",
+        "library": "engine2",
+        "vtable_size": 53,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "ISource2GameClients::ClientCommand",
+      "kind": "offset",
+      "windows": {
+        "value": 17,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 17,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "ISource2GameClients::ClientDisconnect",
+      "kind": "offset",
+      "windows": {
+        "value": 16,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 16,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "ISource2GameClients::ClientPutInServer",
+      "kind": "offset",
+      "windows": {
+        "value": 13,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 13,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "ISource2GameClients::ClientSettingsChanged",
+      "kind": "offset",
+      "windows": {
+        "value": 19,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 19,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "ISource2GameClients::ClientSvcUserMessage",
+      "kind": "offset",
+      "windows": {
+        "value": 38,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 38,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "ISource2GameClients::ClientVoice",
+      "kind": "offset",
+      "windows": {
+        "value": 27,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 27,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "ISource2GameEntities::CheckTransmit",
+      "kind": "offset",
+      "windows": {
+        "value": 12,
+        "class": "CSource2GameEntities",
+        "library": "server",
+        "vtable_size": 18,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 13,
+        "class": "CSource2GameEntities",
+        "library": "server",
+        "vtable_size": 21,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "ISource2Server::GameFrame",
+      "kind": "offset",
+      "windows": {
+        "value": 19,
+        "class": "CSource2Server",
+        "library": "server",
+        "vtable_size": 103,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 19,
+        "class": "CSource2Server",
+        "library": "server",
+        "vtable_size": 104,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "ISource2Server::GameServerSteamAPIActivated",
+      "kind": "offset",
+      "windows": {
+        "value": 41,
+        "class": "CSource2Server",
+        "library": "server",
+        "vtable_size": 103,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 41,
+        "class": "CSource2Server",
+        "library": "server",
+        "vtable_size": 104,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "ISource2Server::GameServerSteamAPIDeactivated",
+      "kind": "offset",
+      "windows": {
+        "value": 42,
+        "class": "CSource2Server",
+        "library": "server",
+        "vtable_size": 103,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 42,
+        "class": "CSource2Server",
+        "library": "server",
+        "vtable_size": 104,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "LegacyGameEventListener",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180bfac50",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x171aee0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "UTIL::CreateEntityByName",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180be77f0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x1718e00",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "UTIL::Remove",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x180c28dd0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0x1719120",
+        "status": "ok"
+      }
+    }
+  ],
+  "vtables": {
+    "windows": {
+      "CBaseEntity": 238,
+      "CBasePlayerPawn": 400,
+      "CCSGameRules": 130,
+      "CCSPlayerController": 277,
+      "CCSPlayer_ItemServices": 28,
+      "CCSPlayer_WeaponServices": 45,
+      "CGameRules": 118,
+      "CGameSceneNode": 31,
+      "CPlayer_MovementServices": 51,
+      "CServerSideClientBase": 79,
+      "CSoundSystem": 134,
+      "CCvar": 46,
+      "CGameEventManager": 16,
+      "CGameEventSystem": 21,
+      "IGameSystem": 65,
+      "CNetworkServerService": 51,
+      "CSource2GameClients": 46,
+      "CSource2GameEntities": 18,
+      "CSource2Server": 103
+    },
+    "linux": {
+      "CBaseEntity": 239,
+      "CBasePlayerPawn": 401,
+      "CCSGameRules": 131,
+      "CCSPlayerController": 279,
+      "CCSPlayer_ItemServices": 29,
+      "CCSPlayer_WeaponServices": 48,
+      "CGameRules": 119,
+      "CGameSceneNode": 32,
+      "CPlayer_MovementServices": 52,
+      "CServerSideClientBase": 81,
+      "CSoundSystem": 135,
+      "CCvar": 46,
+      "CGameEventManager": 17,
+      "CGameEventSystem": 21,
+      "IGameSystem": 66,
+      "CNetworkServerService": 53,
+      "CSource2GameClients": 46,
+      "CSource2GameEntities": 21,
+      "CSource2Server": 104
+    }
+  }
+}

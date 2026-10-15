@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-10-14T16:47:56+00:00",
+  "generated_at": "2026-10-15T15:49:59+00:00",
   "build": {
-    "buildid": "25815307",
-    "linux_manifest": "8144769780027006476",
-    "windows_manifest": "571072184844314041"
+    "buildid": "25947352",
+    "linux_manifest": "5513399157532729905",
+    "windows_manifest": "8766757721818354077"
   },
   "entries": [
     {
@@ -11,12 +11,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x1802b742a",
+        "address": "0x1802b68aa",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0xc053a1",
+        "address": "0xc055a1",
         "status": "ok"
       }
     },
@@ -25,12 +25,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x1810681b0",
+        "address": "0x181067910",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x1ca1a00",
+        "address": "0x1ca1f00",
         "status": "ok"
       }
     },
@@ -57,12 +57,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ca30c0",
+        "address": "0x180ca27e0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x17fd780",
+        "address": "0x17fdc80",
         "status": "ok"
       }
     },
@@ -107,12 +107,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x1803e7330",
+        "address": "0x1803e67b0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0xd5ae80",
+        "address": "0xd5af00",
         "status": "ok"
       }
     },
@@ -157,12 +157,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180b6e890",
+        "address": "0x180b6dfb0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x1638b80",
+        "address": "0x1639040",
         "status": "ok"
       }
     },
@@ -171,12 +171,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180b5f300",
+        "address": "0x180b5ea20",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x16832b0",
+        "address": "0x1683770",
         "status": "ok"
       }
     },
@@ -185,12 +185,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180b6ef90",
+        "address": "0x180b6e6b0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x164e520",
+        "address": "0x164e9e0",
         "status": "ok"
       }
     },
@@ -217,12 +217,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180d0ac10",
+        "address": "0x180d0a330",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x188b8c0",
+        "address": "0x188bdc0",
         "status": "ok"
       }
     },
@@ -249,12 +249,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x18095de30",
+        "address": "0x18095d500",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x13e5650",
+        "address": "0x13e5dc0",
         "status": "ok"
       }
     },
@@ -281,12 +281,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180b60fe0",
+        "address": "0x180b60700",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x1681c10",
+        "address": "0x16820d0",
         "status": "ok"
       }
     },
@@ -313,12 +313,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180a93a90",
+        "address": "0x180a931b0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x153c770",
+        "address": "0x153cc30",
         "status": "ok"
       }
     },
@@ -327,12 +327,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180a95330",
+        "address": "0x180a94a50",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x157ddc0",
+        "address": "0x157e280",
         "status": "ok"
       }
     },
@@ -341,12 +341,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ab47d0",
+        "address": "0x180ab3ef0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15abb00",
+        "address": "0x15abfc0",
         "status": "ok"
       }
     },
@@ -355,12 +355,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ab4f10",
+        "address": "0x180ab4630",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15aacb0",
+        "address": "0x15ab170",
         "status": "ok"
       }
     },
@@ -369,12 +369,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ab4980",
+        "address": "0x180ab40a0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15b6040",
+        "address": "0x15b6500",
         "status": "ok"
       }
     },
@@ -383,12 +383,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180adf180",
+        "address": "0x180ade8a0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15b5660",
+        "address": "0x15b5b20",
         "status": "ok"
       }
     },
@@ -397,12 +397,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x1801dc2e0",
+        "address": "0x1801db7b0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0xaee980",
+        "address": "0xaeeb80",
         "status": "ok"
       }
     },
@@ -411,12 +411,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ab3350",
+        "address": "0x180ab2a70",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x1591dd0",
+        "address": "0x1592290",
         "status": "ok"
       }
     },
@@ -425,12 +425,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ab2140",
+        "address": "0x180ab1860",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x159ce80",
+        "address": "0x159d340",
         "status": "ok"
       }
     },
@@ -457,12 +457,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ab1110",
+        "address": "0x180ab0830",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x1584440",
+        "address": "0x1584900",
         "status": "ok"
       }
     },
@@ -489,12 +489,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180aaff40",
+        "address": "0x180aaf660",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x158c2a0",
+        "address": "0x158c760",
         "status": "ok"
       }
     },
@@ -503,12 +503,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180adbf70",
+        "address": "0x180adb690",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15d7500",
+        "address": "0x15d79c0",
         "status": "ok"
       }
     },
@@ -517,12 +517,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ab3670",
+        "address": "0x180ab2d90",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x158a210",
+        "address": "0x158a6d0",
         "status": "ok"
       }
     },
@@ -531,12 +531,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ab3cf0",
+        "address": "0x180ab3410",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15a7100",
+        "address": "0x15a75c0",
         "status": "ok"
       }
     },
@@ -545,12 +545,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ab4360",
+        "address": "0x180ab3a80",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15b6670",
+        "address": "0x15b6b30",
         "status": "ok"
       }
     },
@@ -559,12 +559,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ab5a30",
+        "address": "0x180ab5150",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15a3d70",
+        "address": "0x15a4230",
         "status": "ok"
       }
     },
@@ -573,12 +573,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ab65d0",
+        "address": "0x180ab5cf0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15d4420",
+        "address": "0x15d48e0",
         "status": "ok"
       }
     },
@@ -587,12 +587,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ab6db0",
+        "address": "0x180ab64d0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15875f0",
+        "address": "0x1587ab0",
         "status": "ok"
       }
     },
@@ -601,12 +601,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180aba9e0",
+        "address": "0x180aba100",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15b2200",
+        "address": "0x15b26c0",
         "status": "ok"
       }
     },
@@ -615,12 +615,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180abde30",
+        "address": "0x180abd550",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x158c960",
+        "address": "0x158ce20",
         "status": "ok"
       }
     },
@@ -629,12 +629,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ad5550",
+        "address": "0x180ad4c70",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15d7bb0",
+        "address": "0x15d8070",
         "status": "ok"
       }
     },
@@ -643,12 +643,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180aaf850",
+        "address": "0x180aaef70",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x158cdd0",
+        "address": "0x158d290",
         "status": "ok"
       }
     },
@@ -657,12 +657,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180acdc70",
+        "address": "0x180acd390",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15adfd0",
+        "address": "0x15ae490",
         "status": "ok"
       }
     },
@@ -671,12 +671,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ad5900",
+        "address": "0x180ad5020",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15b1a70",
+        "address": "0x15b1f30",
         "status": "ok"
       }
     },
@@ -685,12 +685,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ad4e60",
+        "address": "0x180ad4580",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15d7e60",
+        "address": "0x15d8320",
         "status": "ok"
       }
     },
@@ -699,12 +699,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ad8300",
+        "address": "0x180ad7a20",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15d82e0",
+        "address": "0x15d87a0",
         "status": "ok"
       }
     },
@@ -713,12 +713,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180adadf0",
+        "address": "0x180ada510",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15d3120",
+        "address": "0x15d35e0",
         "status": "ok"
       }
     },
@@ -727,12 +727,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180adf910",
+        "address": "0x180adf030",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x158f220",
+        "address": "0x158f6e0",
         "status": "ok"
       }
     },
@@ -741,12 +741,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ae32a0",
+        "address": "0x180ae29c0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15d6370",
+        "address": "0x15d6830",
         "status": "ok"
       }
     },
@@ -755,12 +755,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180ae4350",
+        "address": "0x180ae3a70",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x159b700",
+        "address": "0x159bbc0",
         "status": "ok"
       }
     },
@@ -805,12 +805,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180afd4e0",
+        "address": "0x180afcc00",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15da210",
+        "address": "0x15da6d0",
         "status": "ok"
       }
     },
@@ -837,12 +837,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180b03af0",
+        "address": "0x180b03210",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x15f2fb0",
+        "address": "0x15f3470",
         "status": "ok"
       }
     },
@@ -883,12 +883,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x1809af4c0",
+        "address": "0x1809aebe0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x145d6e0",
+        "address": "0x145dba0",
         "status": "ok"
       }
     },
@@ -897,12 +897,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x18138b300",
+        "address": "0x18138aa60",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x228e170",
+        "address": "0x228e670",
         "status": "ok"
       }
     },
@@ -911,12 +911,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x1813a5390",
+        "address": "0x1813a4af0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x2280bf0",
+        "address": "0x22810f0",
         "status": "ok"
       }
     },
@@ -925,12 +925,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x1813a1d90",
+        "address": "0x1813a14f0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x22842e0",
+        "address": "0x22847e0",
         "status": "ok"
       }
     },
@@ -939,12 +939,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x181374320",
+        "address": "0x181373a80",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x22d5180",
+        "address": "0x22d5680",
         "status": "ok"
       }
     },
@@ -953,12 +953,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x18039e3e0",
+        "address": "0x18039d860",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0xd25e70",
+        "address": "0xd25f30",
         "status": "ok"
       }
     },
@@ -967,12 +967,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180bf4eb0",
+        "address": "0x180bf45d0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x17155f0",
+        "address": "0x1715ab0",
         "status": "ok"
       }
     },
@@ -981,12 +981,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180bf53e0",
+        "address": "0x180bf4b00",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x1715620",
+        "address": "0x1715ae0",
         "status": "ok"
       }
     },
@@ -1049,12 +1049,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x18039e490",
+        "address": "0x18039d910",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0xd267d0",
+        "address": "0xd26890",
         "status": "ok"
       }
     },
@@ -1063,12 +1063,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180127cd0",
+        "address": "0x180127e10",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x20c8e0",
+        "address": "0x20ca60",
         "status": "ok"
       }
     },
@@ -1077,12 +1077,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x1809af9e0",
+        "address": "0x1809af100",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x145a9e0",
+        "address": "0x145aea0",
         "status": "ok"
       }
     },
@@ -1123,12 +1123,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180c713b0",
+        "address": "0x180c70ad0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x17b0460",
+        "address": "0x17b0960",
         "status": "ok"
       }
     },
@@ -1137,12 +1137,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x1801d2ed0",
+        "address": "0x1801d2830",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0xaf82a0",
+        "address": "0xaf86a0",
         "status": "ok"
       }
     },
@@ -1169,12 +1169,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x1809b02b0",
+        "address": "0x1809af9d0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x145de80",
+        "address": "0x145e340",
         "status": "ok"
       }
     },
@@ -1201,12 +1201,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180dd1e20",
+        "address": "0x180dd05f0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x198bc80",
+        "address": "0x198c180",
         "status": "ok"
       }
     },
@@ -1215,12 +1215,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180fb2e30",
+        "address": "0x180fb2560",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x1be42f0",
+        "address": "0x1be47f0",
         "status": "ok"
       }
     },
@@ -1243,12 +1243,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x1801c5910",
+        "address": "0x1801c5aa0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x3f80a0",
+        "address": "0x3f8200",
         "status": "ok"
       }
     },
@@ -1257,13 +1257,27 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180c47e70",
+        "address": "0x180c47590",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x179bd00",
+        "address": "0x179c200",
         "status": "ok"
+      }
+    },
+    {
+      "name": "FilterWorkshopCommands",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x18029bbe0",
+        "status": "ok"
+      },
+      "linux": {
+        "status": "broken",
+        "detail": "no match",
+        "matches": 0
       }
     },
     {
@@ -1271,12 +1285,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180543430",
+        "address": "0x1805428b0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0xee4f40",
+        "address": "0xee5000",
         "status": "ok"
       }
     },
@@ -1357,12 +1371,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x18053f263",
+        "address": "0x18053e6e3",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0xf07426",
+        "address": "0xf074e6",
         "status": "ok"
       }
     },
@@ -1601,12 +1615,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180bfb530",
+        "address": "0x180bfac50",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x171aa20",
+        "address": "0x171aee0",
         "status": "ok"
       }
     },
@@ -1615,12 +1629,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180be80d0",
+        "address": "0x180be77f0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x1718940",
+        "address": "0x1718e00",
         "status": "ok"
       }
     },
@@ -1629,12 +1643,12 @@
       "kind": "signature",
       "windows": {
         "matches": 1,
-        "address": "0x180c296b0",
+        "address": "0x180c28dd0",
         "status": "ok"
       },
       "linux": {
         "matches": 1,
-        "address": "0x1718c60",
+        "address": "0x1719120",
         "status": "ok"
       }
     }
