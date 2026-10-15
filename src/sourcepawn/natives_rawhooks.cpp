@@ -250,20 +250,22 @@ namespace sourcepawn
             // from the next hook, so every later hook and the original get
             // them -- whichever hook's call-original callback KHook uses.
             //
-            // The recalled call is the call now: this one is superseded (or the
-            // original would run a second time with the old arguments) and
-            // answers what the recalled one returned -- unless the handler set
-            // a return value of its own.
+            // The recall shares this call's loop: the original runs once, inside
+            // it, unless the action saved here is Supersede, and the caller gets
+            // what the outer make-return reads from the loop (not what invoke
+            // hands back, the inner pass returns without one). So the action
+            // only rises when the handler set a return value: Override with
+            // new arguments alone means "call the original with them" and the
+            // caller gets the original's value.
             if (!post && frame.changed && action != Action::Ignore && hook->invoke)
             {
-                action = Action::Supersede;
+                if (action == Action::Override && !frame.retSet)
+                    action = Action::Ignore;
                 void* again = hasValue
                     ? KHook::DoRecall(action, &value, sizeof(value), reinterpret_cast<void*>(KHook::init_operator<uint64_t>),
                                       reinterpret_cast<void*>(KHook::deinit_operator<uint64_t>))
                     : KHook::DoRecall(action, nullptr, 0, nullptr, nullptr);
-                const uint64_t recalled = hook->invoke(again, frame.regs);
-                if (!frame.retSet)
-                    value = recalled;
+                hook->invoke(again, frame.regs);
             }
 
             SaveReturn(action, &value, hasValue, false);
