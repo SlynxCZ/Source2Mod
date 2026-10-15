@@ -229,7 +229,8 @@ namespace sourcepawn
             if (!fn)
                 return -1;
             IPluginFunction* eval = nullptr;
-            if (params[0] >= 7 && params[7] != kInvalidFunction && !(eval = Function(ctx, params[7])))
+            // INVALID_FUNCTION compiles to 0 with this spcomp, -1 with others: both are "none".
+            if (params[0] >= 7 && params[7] != kInvalidFunction && params[7] != 0 && !(eval = Function(ctx, params[7])))
                 return -1;
             const cell_t option = static_cast<cell_t>(m->menu.Options().size());
             const cell_t data = params[4];
@@ -298,7 +299,7 @@ namespace sourcepawn
             if (!m || !OptionOk(ctx, m, params[2]))
                 return 0;
             ChatMenuOption& opt = m->menu.Options()[params[2]];
-            if (params[3] == kInvalidFunction)
+            if (params[3] == kInvalidFunction || params[3] == 0)
             {
                 opt.DisabledEvaluator = nullptr;
                 return 0;

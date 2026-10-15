@@ -4892,7 +4892,8 @@ methodmap CCSPlayerController < CBasePlayerController
 	// The 64-bit SteamID as decimal text.
 	public static native CCSPlayerController FromSteamId(const char[] steamId);
 	public native void PrintToCenterHtml(const char[] message, int duration = 5, bool menu = false);
-	// DamageTypes_t; C++ defaults to HookChain_Bypass here.
+	// DamageTypes_t; C++ defaults to HookChain_Bypass here. The victim must be alive and the attacker a
+	// connected player with a pawn (it may be the victim itself): otherwise the C++ helper does nothing.
 	public native void TakeDamage(CCSPlayerController attacker, int damage, int damageType, Source2ModHookChain chain = HookChain_Default);
 	public native void Respawn(Source2ModHookChain chain = HookChain_Default);
 	public native void SwitchTeam(int team, Source2ModHookChain chain = HookChain_Default);
