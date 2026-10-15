@@ -1322,6 +1322,16 @@ namespace sourcepawn
         return true;
     }
 
+    bool ReadCellList(IPluginContext* ctx, cell_t handle, std::vector<cell_t>& items)
+    {
+        CellArray* array = ArrayOf(ctx, handle);
+        if (!array)
+            return false;
+        for (size_t i = 0; i < array->size(); i++)
+            items.push_back(array->at(i)[0]);
+        return true;
+    }
+
     const sp_nativeinfo_t* GetAdtNatives()
     {
         return g_adtNatives;

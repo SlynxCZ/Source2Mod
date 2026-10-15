@@ -23,6 +23,7 @@
 #include <cstring>
 #include <random>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace SourcePawn;
@@ -388,7 +389,273 @@ namespace sourcepawn
             return sp_ftoc(std::chrono::duration<float>(end - p->start).count());
         }
 
+        // ---- IntMap / IntMapSnapshot (StringMap's shape with int keys) ------------------
+
+        struct IntEntry
+        {
+            enum Kind { Cell, Array, String } kind = Cell;
+            cell_t cell = 0;
+            std::vector<cell_t> array;
+            std::string string;
+        };
+
+        struct IntMapObj : HandleObject
+        {
+            std::unordered_map<cell_t, IntEntry> map;
+        };
+
+        struct IntSnapshotObj : HandleObject
+        {
+            std::vector<cell_t> keys;
+        };
+
+        HandleType IntMapType()
+        {
+            static const HandleType t = Handles().CreateType("IntMap", [](void* p) { delete static_cast<IntMapObj*>(p); });
+            return t;
+        }
+
+        HandleType IntSnapshotType()
+        {
+            static const HandleType t = Handles().CreateType("IntMapSnapshot", [](void* p) { delete static_cast<IntSnapshotObj*>(p); });
+            return t;
+        }
+
+        IntMapObj* IntMapOf(IPluginContext* ctx, cell_t handle)
+        {
+            return static_cast<IntMapObj*>(ReadHandle(ctx, handle, IntMapType()));
+        }
+
+        template <typename T>
+        cell_t NewObject(IPluginContext* ctx, HandleType type, T* obj)
+        {
+            const cell_t h = Handles().Create(type, obj, CallerId(ctx));
+            if (!h)
+            {
+                delete obj;
+                return ctx->ThrowNativeError("Handle limit reached");
+            }
+            return h;
+        }
+
+        cell_t N_IntMapNew(IPluginContext* ctx, const cell_t*)
+        {
+            return NewObject(ctx, IntMapType(), new IntMapObj());
+        }
+
+        cell_t N_IntMapClone(IPluginContext* ctx, const cell_t* params)
+        {
+            IntMapObj* map = IntMapOf(ctx, params[1]);
+            if (!map)
+                return 0;
+            auto* copy = new IntMapObj();
+            copy->map = map->map;
+            return NewObject(ctx, IntMapType(), copy);
+        }
+
+        // Where a Set* writes: nullptr when the key is taken and replace is false.
+        IntEntry* IntSlot(IntMapObj* map, cell_t key, bool replace)
+        {
+            auto [it, inserted] = map->map.try_emplace(key);
+            if (!inserted && !replace)
+                return nullptr;
+            it->second = IntEntry{};
+            return &it->second;
+        }
+
+        // SetValue(key, value, replace=true)
+        cell_t N_IntMapSetValue(IPluginContext* ctx, const cell_t* params)
+        {
+            IntMapObj* map = IntMapOf(ctx, params[1]);
+            IntEntry* e = map ? IntSlot(map, params[2], params[0] < 4 || params[4]) : nullptr;
+            if (!e)
+                return 0;
+            e->kind = IntEntry::Cell;
+            e->cell = params[3];
+            return 1;
+        }
+
+        // SetArray(key, array, num_items, replace=true)
+        cell_t N_IntMapSetArray(IPluginContext* ctx, const cell_t* params)
+        {
+            IntMapObj* map = IntMapOf(ctx, params[1]);
+            if (!map)
+                return 0;
+            if (params[4] < 0)
+                return ctx->ThrowNativeError("Invalid array size: %d", params[4]);
+            cell_t* src;
+            ctx->LocalToPhysAddr(params[3], &src);
+            IntEntry* e = IntSlot(map, params[2], params[0] < 5 || params[5]);
+            if (!e)
+                return 0;
+            e->kind = IntEntry::Array;
+            e->array.assign(src, src + params[4]);
+            return 1;
+        }
+
+        // SetString(key, value, replace=true)
+        cell_t N_IntMapSetString(IPluginContext* ctx, const cell_t* params)
+        {
+            IntMapObj* map = IntMapOf(ctx, params[1]);
+            if (!map)
+                return 0;
+            const std::string value = LocalString(ctx, params[3]);
+            IntEntry* e = IntSlot(map, params[2], params[0] < 4 || params[4]);
+            if (!e)
+                return 0;
+            e->kind = IntEntry::String;
+            e->string = value;
+            return 1;
+        }
+
+        const IntEntry* IntFind(IntMapObj* map, cell_t key)
+        {
+            auto it = map->map.find(key);
+            return it != map->map.end() ? &it->second : nullptr;
+        }
+
+        void WriteSize(IPluginContext* ctx, const cell_t* params, int index, size_t value)
+        {
+            cell_t* out;
+            if (params[0] >= index && ctx->LocalToPhysAddr(params[index], &out) == SP_ERROR_NONE)
+                *out = static_cast<cell_t>(value);
+        }
+
+        // GetValue(key, &value): a one-cell array reads as a value, as with StringMap.
+        cell_t N_IntMapGetValue(IPluginContext* ctx, const cell_t* params)
+        {
+            IntMapObj* map = IntMapOf(ctx, params[1]);
+            const IntEntry* e = map ? IntFind(map, params[2]) : nullptr;
+            if (!e)
+                return 0;
+            cell_t value;
+            if (e->kind == IntEntry::Cell)
+                value = e->cell;
+            else if (e->kind == IntEntry::Array && e->array.size() == 1)
+                value = e->array[0];
+            else
+                return 0;
+            cell_t* addr;
+            ctx->LocalToPhysAddr(params[3], &addr);
+            *addr = value;
+            return 1;
+        }
+
+        // GetArray(key, array, max_size, &size=0)
+        cell_t N_IntMapGetArray(IPluginContext* ctx, const cell_t* params)
+        {
+            IntMapObj* map = IntMapOf(ctx, params[1]);
+            if (!map)
+                return 0;
+            if (params[4] < 0)
+                return ctx->ThrowNativeError("Invalid array size: %d", params[4]);
+            const IntEntry* e = IntFind(map, params[2]);
+            if (!e || e->kind == IntEntry::String)
+                return 0;
+            cell_t* dest;
+            ctx->LocalToPhysAddr(params[3], &dest);
+            size_t count;
+            if (e->kind == IntEntry::Cell)
+            {
+                count = params[4] > 0 ? 1 : 0;
+                if (count)
+                    dest[0] = e->cell;
+            }
+            else
+            {
+                count = std::min(e->array.size(), static_cast<size_t>(params[4]));
+                std::copy_n(e->array.data(), count, dest);
+            }
+            WriteSize(ctx, params, 5, count);
+            return 1;
+        }
+
+        // GetString(key, value, max_size, &size=0)
+        cell_t N_IntMapGetString(IPluginContext* ctx, const cell_t* params)
+        {
+            IntMapObj* map = IntMapOf(ctx, params[1]);
+            if (!map)
+                return 0;
+            if (params[4] < 0)
+                return ctx->ThrowNativeError("Invalid buffer size: %d", params[4]);
+            const IntEntry* e = IntFind(map, params[2]);
+            if (!e || e->kind != IntEntry::String)
+                return 0;
+            size_t written = 0;
+            ctx->StringToLocalUTF8(params[3], params[4], e->string.c_str(), &written);
+            WriteSize(ctx, params, 5, written);
+            return 1;
+        }
+
+        cell_t N_IntMapContainsKey(IPluginContext* ctx, const cell_t* params)
+        {
+            IntMapObj* map = IntMapOf(ctx, params[1]);
+            return map && IntFind(map, params[2]);
+        }
+
+        cell_t N_IntMapRemove(IPluginContext* ctx, const cell_t* params)
+        {
+            IntMapObj* map = IntMapOf(ctx, params[1]);
+            return map && map->map.erase(params[2]) > 0;
+        }
+
+        cell_t N_IntMapClear(IPluginContext* ctx, const cell_t* params)
+        {
+            if (IntMapObj* map = IntMapOf(ctx, params[1]))
+                map->map.clear();
+            return 0;
+        }
+
+        cell_t N_IntMapSize(IPluginContext* ctx, const cell_t* params)
+        {
+            IntMapObj* map = IntMapOf(ctx, params[1]);
+            return map ? static_cast<cell_t>(map->map.size()) : 0;
+        }
+
+        cell_t N_IntMapSnapshot(IPluginContext* ctx, const cell_t* params)
+        {
+            IntMapObj* map = IntMapOf(ctx, params[1]);
+            if (!map)
+                return 0;
+            auto* snap = new IntSnapshotObj();
+            snap->keys.reserve(map->map.size());
+            for (const auto& [key, value] : map->map)
+                snap->keys.push_back(key);
+            return NewObject(ctx, IntSnapshotType(), snap);
+        }
+
+        cell_t N_IntSnapshotLength(IPluginContext* ctx, const cell_t* params)
+        {
+            auto* snap = static_cast<IntSnapshotObj*>(ReadHandle(ctx, params[1], IntSnapshotType()));
+            return snap ? static_cast<cell_t>(snap->keys.size()) : 0;
+        }
+
+        cell_t N_IntSnapshotGetKey(IPluginContext* ctx, const cell_t* params)
+        {
+            auto* snap = static_cast<IntSnapshotObj*>(ReadHandle(ctx, params[1], IntSnapshotType()));
+            if (!snap)
+                return 0;
+            if (params[2] < 0 || static_cast<size_t>(params[2]) >= snap->keys.size())
+                return ctx->ThrowNativeError("Invalid index %d", params[2]);
+            return snap->keys[params[2]];
+        }
+
         const sp_nativeinfo_t g_utilNatives[] = {
+            { "IntMap.IntMap", N_IntMapNew },
+            { "IntMap.Clone", N_IntMapClone },
+            { "IntMap.SetValue", N_IntMapSetValue },
+            { "IntMap.SetArray", N_IntMapSetArray },
+            { "IntMap.SetString", N_IntMapSetString },
+            { "IntMap.GetValue", N_IntMapGetValue },
+            { "IntMap.GetArray", N_IntMapGetArray },
+            { "IntMap.GetString", N_IntMapGetString },
+            { "IntMap.ContainsKey", N_IntMapContainsKey },
+            { "IntMap.Remove", N_IntMapRemove },
+            { "IntMap.Clear", N_IntMapClear },
+            { "IntMap.Snapshot", N_IntMapSnapshot },
+            { "IntMap.Size.get", N_IntMapSize },
+            { "IntMapSnapshot.Length.get", N_IntSnapshotLength },
+            { "IntMapSnapshot.GetKey", N_IntSnapshotGetKey },
             { "Source2ModUtils.Explode", N_Explode },
             { "Source2ModUtils.Implode", N_Implode },
             { "Source2ModUtils.Replace", N_Replace },
