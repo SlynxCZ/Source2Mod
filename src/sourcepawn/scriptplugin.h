@@ -80,22 +80,25 @@ namespace sourcepawn
         void OnLevelInit(const char* mapName, const char* mapEntities, const char* oldLevel, const char* landmarkName, bool loadGame, bool background) override;
         void OnLevelShutdown() override;
         void OnGameFrame(bool simulating, bool firstTick, bool lastTick) override;
+        void OnStartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* session, const char* mapName) override;
+        bool OnClientConnect(CPlayerSlot slot, const char* name, uint64 xuid, const char* networkId, bool unk1, CBufferString* rejectReason) override;
+        void OnClientConnected(CPlayerSlot slot, const char* name, uint64 xuid, const char* networkId, const char* address, bool fakePlayer) override;
         void OnClientPutInServer(CPlayerSlot slot, const char* name, int type, uint64 xuid) override;
         void OnClientDisconnect(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId) override;
-        void OnClientAuthorized(CPlayerSlot slot, uint64 steamId) override;
-        void OnClientAuthorizeFailed(CPlayerSlot slot, uint64 steamId) override;
+        void OnClientDisconnectPost(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId) override;
         void OnClientVoice(CPlayerSlot slot) override;
         void OnClientSettingsChanged(CPlayerSlot slot) override;
-        void OnPermissionsChanged(uint64 steamId) override;
         void OnGameServerSteamAPIActivated() override;
         void OnGameServerSteamAPIDeactivated() override;
+        void OnLoadEventsFromFile(IGameEventManager2* manager, const char* filename, bool searchAll) override;
+        void OnClientAuthorized(CPlayerSlot slot, uint64 steamId) override;
+        void OnClientAuthorizeFailed(CPlayerSlot slot, uint64 steamId) override;
+        void OnPermissionsChanged(uint64 steamId) override;
         void OnPluginLoad(PluginId id, const char* name) override;
         void OnPluginUnload(PluginId id, const char* name) override;
         void OnMetamodPluginLoad(PluginId id) override;
         void OnMetamodPluginUnload(PluginId id) override;
         void OnAllMetamodPluginsLoaded() override;
-        void OnStartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* session, const char* mapName) override;
-        void OnLoadEventsFromFile(IGameEventManager2* manager, const char* filename, bool searchAll) override;
 
         PluginId Id() const { return m_id; }
         const std::string& Path() const { return m_path; }

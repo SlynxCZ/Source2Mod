@@ -130,10 +130,14 @@ public:
     // Engine callbacks (plugin API 2), fanned out from virtualhooks.
     void OnGameFrame(bool simulating, bool firstTick, bool lastTick);
     void OnStartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* session, const char* mapName);
+    // False: a plugin refused the connection (and wrote rejectReason).
+    bool OnClientConnect(CPlayerSlot slot, const char* name, uint64 xuid, const char* networkId, bool unk1, CBufferString* rejectReason);
+    void OnClientConnected(CPlayerSlot slot, const char* name, uint64 xuid, const char* networkId, const char* address, bool fakePlayer);
     void OnClientPutInServer(CPlayerSlot slot, const char* name, int type, uint64 xuid);
+    void OnClientDisconnect(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId);
+    void OnClientDisconnectPost(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId);
     void OnClientVoice(CPlayerSlot slot);
     void OnClientSettingsChanged(CPlayerSlot slot);
-    void OnClientDisconnect(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId);
     void OnGameServerSteamAPIActivated();
     void OnGameServerSteamAPIDeactivated();
     void OnLoadEventsFromFile(class IGameEventManager2* manager, const char* filename, bool searchAll);

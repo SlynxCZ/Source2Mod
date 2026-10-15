@@ -74,6 +74,9 @@ namespace virtualhooks {
         KHook::Return<void> Hook_ClientVoice(ISource2GameClients* pThis, CPlayerSlot slot);
         KHook::Return<void> Hook_ClientSettingsChanged(ISource2GameClients* pThis, CPlayerSlot slot);
         KHook::Return<void> Hook_ClientDisconnect(ISource2GameClients* pThis, CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* pszName, uint64 xuid, const char* pszNetworkID);
+        KHook::Return<void> Hook_ClientDisconnectPost(ISource2GameClients* pThis, CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* pszName, uint64 xuid, const char* pszNetworkID);
+        KHook::Return<bool> Hook_ClientConnect(ISource2GameClients* pThis, CPlayerSlot slot, const char* pszName, uint64 xuid, const char* pszNetworkID, bool unk1, CBufferString* pRejectReason);
+        KHook::Return<void> Hook_OnClientConnected(ISource2GameClients* pThis, CPlayerSlot slot, const char* pszName, uint64 xuid, const char* pszNetworkID, const char* pszAddress, bool bFakePlayer);
         KHook::Return<void> Hook_ClientSvcUserMessage(ISource2GameClients* pThis, CPlayerSlot slot, int nType, uint32 nSize, const void* pBuffer);
         KHook::Return<void> Hook_GameServerSteamAPIActivated(ISource2Server* pThis);
         KHook::Return<void> Hook_GameServerSteamAPIDeactivated(ISource2Server* pThis);
@@ -95,6 +98,8 @@ namespace virtualhooks {
         // Fanned out to the plugins' ISource2ModListener; Source2Mod itself has
         // no use for them.
         Source2ModKHook::Virtual<ISource2GameClients, void, CPlayerSlot, const char*, int, uint64>* m_hClientPutInServer = nullptr;
+        Source2ModKHook::Virtual<ISource2GameClients, bool, CPlayerSlot, const char*, uint64, const char*, bool, CBufferString*>* m_hClientConnect = nullptr;
+        Source2ModKHook::Virtual<ISource2GameClients, void, CPlayerSlot, const char*, uint64, const char*, const char*, bool>* m_hOnClientConnected = nullptr;
         Source2ModKHook::Virtual<ISource2GameClients, void, CPlayerSlot>* m_hClientVoice = nullptr;
         Source2ModKHook::Virtual<ISource2GameClients, void, CPlayerSlot>* m_hClientSettingsChanged = nullptr;
         // "meta unload <this plugin>" typed at the console: superseded, and

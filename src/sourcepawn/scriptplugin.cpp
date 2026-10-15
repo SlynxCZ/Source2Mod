@@ -488,6 +488,56 @@ namespace sourcepawn
         }
     }
 
+    void ScriptPlugin::OnStartupServer(const GameSessionConfiguration_t&, ISource2WorldSession*, const char* mapName)
+    {
+        CallForwardString("Source2Mod_OnStartupServer", mapName ? mapName : "");
+    }
+
+    bool ScriptPlugin::OnClientConnect(CPlayerSlot slot, const char* name, uint64 xuid, const char* networkId, bool unk1, CBufferString* rejectReason)
+    {
+        IPluginFunction* fn = m_runtime->GetFunctionByName("Source2Mod_OnClientConnect");
+        if (!fn)
+            return true;
+
+        const std::string id = std::to_string(xuid);
+        char reason[256] = {};
+        sp::CallArgs args;
+        args.PushCell(slot.Get());
+        args.PushString(name ? name : "");
+        args.PushString(id.c_str());
+        args.PushString(networkId ? networkId : "");
+        args.PushCell(unk1 ? 1 : 0);
+        args.PushString(reason, sizeof(reason), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY | SM_PARAM_COPYBACK);
+        args.PushCell(sizeof(reason));
+
+        cell_t result = 1;
+        if (!Invoke(fn, args, &result) || result)
+            return true;
+
+        if (rejectReason && reason[0])
+        {
+            rejectReason->Clear();
+            rejectReason->Insert(0, reason);
+        }
+        return false;
+    }
+
+    void ScriptPlugin::OnClientConnected(CPlayerSlot slot, const char* name, uint64 xuid, const char* networkId, const char* address, bool fakePlayer)
+    {
+        if (IPluginFunction* fn = m_runtime->GetFunctionByName("Source2Mod_OnClientConnected"))
+        {
+            const std::string id = std::to_string(xuid);
+            sp::CallArgs args;
+            args.PushCell(slot.Get());
+            args.PushString(name ? name : "");
+            args.PushString(id.c_str());
+            args.PushString(networkId ? networkId : "");
+            args.PushString(address ? address : "");
+            args.PushCell(fakePlayer ? 1 : 0);
+            Invoke(fn, args);
+        }
+    }
+
     void ScriptPlugin::OnClientPutInServer(CPlayerSlot slot, const char* name, int type, uint64 xuid)
     {
         if (IPluginFunction* fn = m_runtime->GetFunctionByName("Source2Mod_OnClientPutInServer"))
@@ -517,6 +567,52 @@ namespace sourcepawn
         }
     }
 
+    void ScriptPlugin::OnClientDisconnectPost(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId)
+    {
+        if (IPluginFunction* fn = m_runtime->GetFunctionByName("Source2Mod_OnClientDisconnectPost"))
+        {
+            const std::string id = std::to_string(xuid);
+            sp::CallArgs args;
+            args.PushCell(slot.Get());
+            args.PushCell(static_cast<cell_t>(reason));
+            args.PushString(name ? name : "");
+            args.PushString(id.c_str());
+            args.PushString(networkId ? networkId : "");
+            Invoke(fn, args);
+        }
+    }
+
+    void ScriptPlugin::OnClientVoice(CPlayerSlot slot)
+    {
+        CallForwardClient("Source2Mod_OnClientVoice", slot.Get());
+    }
+
+    void ScriptPlugin::OnClientSettingsChanged(CPlayerSlot slot)
+    {
+        CallForwardClient("Source2Mod_OnClientSettingsChanged", slot.Get());
+    }
+
+    void ScriptPlugin::OnGameServerSteamAPIActivated()
+    {
+        CallForward("Source2Mod_OnGameServerSteamAPIActivated");
+    }
+
+    void ScriptPlugin::OnGameServerSteamAPIDeactivated()
+    {
+        CallForward("Source2Mod_OnGameServerSteamAPIDeactivated");
+    }
+
+    void ScriptPlugin::OnLoadEventsFromFile(IGameEventManager2*, const char* filename, bool searchAll)
+    {
+        if (IPluginFunction* fn = m_runtime->GetFunctionByName("Source2Mod_OnLoadEventsFromFile"))
+        {
+            sp::CallArgs args;
+            args.PushString(filename ? filename : "");
+            args.PushCell(searchAll ? 1 : 0);
+            Invoke(fn, args);
+        }
+    }
+
     void ScriptPlugin::OnClientAuthorized(CPlayerSlot slot, uint64 steamId)
     {
         if (IPluginFunction* fn = m_runtime->GetFunctionByName("Source2Mod_OnClientAuthorized"))
@@ -541,29 +637,9 @@ namespace sourcepawn
         }
     }
 
-    void ScriptPlugin::OnClientVoice(CPlayerSlot slot)
-    {
-        CallForwardClient("Source2Mod_OnClientVoice", slot.Get());
-    }
-
-    void ScriptPlugin::OnClientSettingsChanged(CPlayerSlot slot)
-    {
-        CallForwardClient("Source2Mod_OnClientSettingsChanged", slot.Get());
-    }
-
     void ScriptPlugin::OnPermissionsChanged(uint64 steamId)
     {
         CallForwardString("Source2Mod_OnPermissionsChanged", std::to_string(steamId).c_str());
-    }
-
-    void ScriptPlugin::OnGameServerSteamAPIActivated()
-    {
-        CallForward("Source2Mod_OnGameServerSteamAPIActivated");
-    }
-
-    void ScriptPlugin::OnGameServerSteamAPIDeactivated()
-    {
-        CallForward("Source2Mod_OnGameServerSteamAPIDeactivated");
     }
 
     void ScriptPlugin::CallForwardPlugin(const char* name, PluginId id, const char* pluginName)
@@ -601,22 +677,6 @@ namespace sourcepawn
     void ScriptPlugin::OnAllMetamodPluginsLoaded()
     {
         CallForward("Source2Mod_OnAllMetamodPluginsLoaded");
-    }
-
-    void ScriptPlugin::OnStartupServer(const GameSessionConfiguration_t&, ISource2WorldSession*, const char* mapName)
-    {
-        CallForwardString("Source2Mod_OnStartupServer", mapName ? mapName : "");
-    }
-
-    void ScriptPlugin::OnLoadEventsFromFile(IGameEventManager2*, const char* filename, bool searchAll)
-    {
-        if (IPluginFunction* fn = m_runtime->GetFunctionByName("Source2Mod_OnLoadEventsFromFile"))
-        {
-            sp::CallArgs args;
-            args.PushString(filename ? filename : "");
-            args.PushCell(searchAll ? 1 : 0);
-            Invoke(fn, args);
-        }
     }
 
     // ---- AutoExecConfig ---------------------------------------------------------

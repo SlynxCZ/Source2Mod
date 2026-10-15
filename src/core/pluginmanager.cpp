@@ -946,6 +946,35 @@ void PluginManager::OnClientDisconnect(CPlayerSlot slot, ENetworkDisconnectionRe
     PLUGINS_FANOUT(2, OnClientDisconnect(slot, reason, name, xuid, networkId))
 }
 
+// ---- connections (plugin API 4) ---------------------------------------------
+
+bool PluginManager::OnClientConnect(CPlayerSlot slot, const char* name, uint64 xuid, const char* networkId, bool unk1, CBufferString* rejectReason)
+{
+    // Not PLUGINS_FANOUT: the first refusal ends it.
+    for (auto& p : m_plugins)
+    {
+        if (p->apiVersion < 4)
+            continue;
+        for (auto* l : p->listeners)
+        {
+            ::slow::Guard slowGuard("listener callback", "OnClientConnect", p->id);
+            if (!l->OnClientConnect(slot, name, xuid, networkId, unk1, rejectReason))
+                return false;
+        }
+    }
+    return true;
+}
+
+void PluginManager::OnClientConnected(CPlayerSlot slot, const char* name, uint64 xuid, const char* networkId, const char* address, bool fakePlayer)
+{
+    PLUGINS_FANOUT(4, OnClientConnected(slot, name, xuid, networkId, address, fakePlayer))
+}
+
+void PluginManager::OnClientDisconnectPost(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId)
+{
+    PLUGINS_FANOUT(4, OnClientDisconnectPost(slot, reason, name, xuid, networkId))
+}
+
 void PluginManager::OnGameServerSteamAPIActivated()
 {
     PLUGINS_FANOUT(2, OnGameServerSteamAPIActivated())

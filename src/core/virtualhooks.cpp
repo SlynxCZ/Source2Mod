@@ -86,7 +86,9 @@ namespace virtualhooks
         KHOOK_NEW(m_hClientVoice, &ISource2GameClients::ClientVoice, this, nullptr, &Virtuals::Hook_ClientVoice),
         KHOOK_NEW(m_hClientSettingsChanged, &ISource2GameClients::ClientSettingsChanged, this, nullptr, &Virtuals::Hook_ClientSettingsChanged),
         KHOOK_NEW(m_hClientSvcUserMessage, &ISource2GameClients::ClientSvcUserMessage, this, &Virtuals::Hook_ClientSvcUserMessage, nullptr),
-        KHOOK_NEW(m_hClientDisconnect, &ISource2GameClients::ClientDisconnect, this, nullptr, &Virtuals::Hook_ClientDisconnect),
+        KHOOK_NEW(m_hClientDisconnect, &ISource2GameClients::ClientDisconnect, this, &Virtuals::Hook_ClientDisconnect, &Virtuals::Hook_ClientDisconnectPost),
+        KHOOK_NEW(m_hClientConnect, &ISource2GameClients::ClientConnect, this, &Virtuals::Hook_ClientConnect, nullptr),
+        KHOOK_NEW(m_hOnClientConnected, &ISource2GameClients::OnClientConnected, this, nullptr, &Virtuals::Hook_OnClientConnected),
         KHOOK_NEW(m_hSteamAPIActivated, &ISource2Server::GameServerSteamAPIActivated, this, nullptr, &Virtuals::Hook_GameServerSteamAPIActivated),
         KHOOK_NEW(m_hSteamAPIDeactivated, &ISource2Server::GameServerSteamAPIDeactivated, this, &Virtuals::Hook_GameServerSteamAPIDeactivated, nullptr),
         // PostEventAbstract is overloaded, so the member function pointer has to be disambiguated explicitly.
@@ -134,6 +136,8 @@ namespace virtualhooks
         ResolveIndex(m_hClientSettingsChanged, "ISource2GameClients::ClientSettingsChanged");
         ResolveIndex(m_hClientSvcUserMessage, "ISource2GameClients::ClientSvcUserMessage");
         ResolveIndex(m_hClientDisconnect, "ISource2GameClients::ClientDisconnect");
+        ResolveIndex(m_hClientConnect, "ISource2GameClients::ClientConnect");
+        ResolveIndex(m_hOnClientConnected, "ISource2GameClients::OnClientConnected");
         ResolveIndex(m_hSteamAPIActivated, "ISource2Server::GameServerSteamAPIActivated");
         ResolveIndex(m_hSteamAPIDeactivated, "ISource2Server::GameServerSteamAPIDeactivated");
         ResolveIndex(m_hPostEventAbstract, "IGameEventSystem::PostEventAbstract");
@@ -153,6 +157,8 @@ namespace virtualhooks
         m_hClientSettingsChanged->Add(g_pSource2GameClients);
         m_hClientSvcUserMessage->Add(g_pSource2GameClients);
         m_hClientDisconnect->Add(g_pSource2GameClients);
+        m_hClientConnect->Add(g_pSource2GameClients);
+        m_hOnClientConnected->Add(g_pSource2GameClients);
         m_hSteamAPIActivated->Add(g_pSource2Server);
         m_hSteamAPIDeactivated->Add(g_pSource2Server);
         m_hPostEventAbstract->Add(shared::g_pGameEventSystem);
@@ -191,6 +197,8 @@ namespace virtualhooks
         m_hClientSettingsChanged->Remove(g_pSource2GameClients);
         m_hClientSvcUserMessage->Remove(g_pSource2GameClients);
         m_hClientDisconnect->Remove(g_pSource2GameClients);
+        m_hClientConnect->Remove(g_pSource2GameClients);
+        m_hOnClientConnected->Remove(g_pSource2GameClients);
         m_hSteamAPIActivated->Remove(g_pSource2Server);
         m_hSteamAPIDeactivated->Remove(g_pSource2Server);
         m_hPostEventAbstract->Remove(shared::g_pGameEventSystem);
@@ -219,6 +227,8 @@ namespace virtualhooks
         delete m_hClientSettingsChanged;
         delete m_hClientSvcUserMessage;
         delete m_hClientDisconnect;
+        delete m_hClientConnect;
+        delete m_hOnClientConnected;
         delete m_hSteamAPIActivated;
         delete m_hSteamAPIDeactivated;
         delete m_hPostEventAbstract;
@@ -238,6 +248,8 @@ namespace virtualhooks
         m_hClientSettingsChanged = nullptr;
         m_hClientSvcUserMessage = nullptr;
         m_hClientDisconnect = nullptr;
+        m_hClientConnect = nullptr;
+        m_hOnClientConnected = nullptr;
         m_hSteamAPIActivated = nullptr;
         m_hSteamAPIDeactivated = nullptr;
         m_hPostEventAbstract = nullptr;
@@ -538,15 +550,46 @@ namespace virtualhooks
         return { result };
     }
 
+    KHook::Return<bool> Virtuals::Hook_ClientConnect(ISource2GameClients* pThis, CPlayerSlot slot, const char* pszName, uint64 xuid, const char* pszNetworkID, bool unk1, CBufferString* pRejectReason)
+    {
+        TK_VPROF("Source2Mod::ClientConnect");
+
+        // A plugin that refuses has written the reason; the engine never
+        // sees the connection.
+        if (!pluginManager.OnClientConnect(slot, pszName, xuid, pszNetworkID, unk1, pRejectReason))
+            return { KHook::Action::Supersede, false };
+
+        return { KHook::Action::Ignore };
+    }
+
+    KHook::Return<void> Virtuals::Hook_OnClientConnected(ISource2GameClients* pThis, CPlayerSlot slot, const char* pszName, uint64 xuid, const char* pszNetworkID, const char* pszAddress, bool bFakePlayer)
+    {
+        TK_VPROF("Source2Mod::OnClientConnected");
+
+        pluginManager.OnClientConnected(slot, pszName, xuid, pszNetworkID, pszAddress, bFakePlayer);
+
+        return { KHook::Action::Ignore };
+    }
+
     KHook::Return<void> Virtuals::Hook_ClientDisconnect(ISource2GameClients* pThis, CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* pszName, uint64 xuid, const char* pszNetworkID)
     {
         TK_VPROF("Source2Mod::ClientDisconnect");
+
+        // Pre: the plugins see the player while everything is still there.
+        pluginManager.OnClientDisconnect(slot, reason, pszName, xuid, pszNetworkID);
+
+        return { KHook::Action::Ignore };
+    }
+
+    KHook::Return<void> Virtuals::Hook_ClientDisconnectPost(ISource2GameClients* pThis, CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* pszName, uint64 xuid, const char* pszNetworkID)
+    {
+        TK_VPROF("Source2Mod::ClientDisconnectPost");
 
         sounds::soundsManager.OnClientDisconnect(slot);
         transmit::transmitManager.OnClientDisconnect(slot);
         menus::menuManager.OnClientDisconnect(slot);
 
-        pluginManager.OnClientDisconnect(slot, reason, pszName, xuid, pszNetworkID);
+        pluginManager.OnClientDisconnectPost(slot, reason, pszName, xuid, pszNetworkID);
 
         // After the plugins: theirs is the last look at who the player was.
         permissions::permissionsManager.OnClientDisconnect(slot);

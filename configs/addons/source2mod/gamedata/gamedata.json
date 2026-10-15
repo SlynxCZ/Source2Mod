@@ -632,6 +632,12 @@
       "linux": 17
     }
   },
+  "ISource2GameClients::ClientConnect": {
+    "offsets": {
+      "windows": 12,
+      "linux": 12
+    }
+  },
   "ISource2GameClients::ClientDisconnect": {
     "offsets": {
       "windows": 16,
@@ -654,6 +660,12 @@
     "offsets": {
       "windows": 38,
       "linux": 38
+    }
+  },
+  "ISource2GameClients::OnClientConnected": {
+    "offsets": {
+      "windows": 11,
+      "linux": 11
     }
   },
   "ISource2GameClients::ClientVoice": {
