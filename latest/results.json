@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-10-15T17:24:36+00:00",
+  "generated_at": "2026-10-15T20:14:08+00:00",
   "build": {
-    "buildid": "25947352",
+    "buildid": "25966348",
     "linux_manifest": "5513399157532729905",
     "windows_manifest": "8766757721818354077"
   },
@@ -1449,6 +1449,24 @@
       }
     },
     {
+      "name": "ISource2GameClients::ClientConnect",
+      "kind": "offset",
+      "windows": {
+        "value": 12,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 12,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      }
+    },
+    {
       "name": "ISource2GameClients::ClientDisconnect",
       "kind": "offset",
       "windows": {
@@ -1532,6 +1550,24 @@
       },
       "linux": {
         "value": 27,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "ISource2GameClients::OnClientConnected",
+      "kind": "offset",
+      "windows": {
+        "value": 11,
+        "class": "CSource2GameClients",
+        "library": "server",
+        "vtable_size": 46,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 11,
         "class": "CSource2GameClients",
         "library": "server",
         "vtable_size": 46,

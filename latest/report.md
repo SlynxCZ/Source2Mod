@@ -1,11 +1,11 @@
 # Gamedata validation
 
-CS2 build **25947352** · Linux manifest `5513399157532729905` · Windows manifest `8766757721818354077` · 2026-10-15T17:24:36+00:00
+CS2 build **25966348** · Linux manifest `5513399157532729905` · Windows manifest `8766757721818354077` · 2026-10-15T20:14:08+00:00
 
 | | Windows | Linux |
 |---|---|---|
 | Signatures | 🟢 66 | 🟢 66 |
-| Offsets | 🟢 37 ⚪ 4 | 🟢 37 ⚪ 4 |
+| Offsets | 🟢 39 ⚪ 4 | 🟢 39 ⚪ 4 |
 
 ## Everything resolves
 
@@ -107,11 +107,13 @@ CS2 build **25947352** · Linux manifest `5513399157532729905` · Windows manife
 - ⚪⚪ `INetworkMessageProcessingPreFilter::FilterMessage`
 - 🟢🟢 `INetworkServerService::StartupServer` — W 26/51 · L 27/53
 - 🟢🟢 `ISource2GameClients::ClientCommand` — W 17/46 · L 17/46
+- 🟢🟢 `ISource2GameClients::ClientConnect` — W 12/46 · L 12/46
 - 🟢🟢 `ISource2GameClients::ClientDisconnect` — W 16/46 · L 16/46
 - 🟢🟢 `ISource2GameClients::ClientPutInServer` — W 13/46 · L 13/46
 - 🟢🟢 `ISource2GameClients::ClientSettingsChanged` — W 19/46 · L 19/46
 - 🟢🟢 `ISource2GameClients::ClientSvcUserMessage` — W 38/46 · L 38/46
 - 🟢🟢 `ISource2GameClients::ClientVoice` — W 27/46 · L 27/46
+- 🟢🟢 `ISource2GameClients::OnClientConnected` — W 11/46 · L 11/46
 - 🟢🟢 `ISource2GameEntities::CheckTransmit` — W 12/18 · L 13/21
 - 🟢🟢 `ISource2Server::GameFrame` — W 19/103 · L 19/104
 - 🟢🟢 `ISource2Server::GameServerSteamAPIActivated` — W 41/103 · L 41/104
