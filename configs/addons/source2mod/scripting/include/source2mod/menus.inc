@@ -160,7 +160,7 @@ methodmap Source2ModMenu < Handle
 	public native void RemoveItem(int item);
 	public native void ClearItems();
 
-	/** 1-7, default 5. */
+	/** 1-6, default 5 (keys 7, 8, 9 are Back, Next, Exit). */
 	property int ItemsPerPage
 	{
 		public native get();
