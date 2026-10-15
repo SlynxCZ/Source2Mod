@@ -20,6 +20,7 @@
 #include <source2mod/schema/entity/classes/CBasePlayerController.h>
 #include <source2mod/schema/entity/classes/CBasePlayerPawn.h>
 
+#include <gameevents.pb.h>
 #include <google/protobuf/message.h>
 #include <igameevents.h>
 #include <networksystem/inetworkmessages.h>
