@@ -224,6 +224,7 @@ bool Source2ModCore::Unload(char* error, size_t maxlen)
     gamehooks::gameHooksManager.Shutdown();
     inlinehooks::inlines.DestructListeners();
     virtualhooks::virtuals.DestructListeners();
+    scripts::scriptsManager.Shutdown();
     // Only Source2Mod's own are left by now.
     scheduler::Shutdown();
     // After the scheduler: a next-frame close still holding a script runtime

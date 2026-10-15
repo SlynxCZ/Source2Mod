@@ -11,7 +11,12 @@
 
 #include <source2mod/schema>
 
-/** A message a script posted on a channel. */
+/**
+ * A message a script posted on a channel:
+ * Instance.ServerCommand("source2mod_script <channel> <payload>"). On a
+ * workshop map only a lone command gets through (no ";" or newline in it),
+ * so encode the payload (encodeURIComponent).
+ */
 typedef Source2ModScriptMessageHandler = function void (const char[] channel, const char[] payload);
 
 methodmap Source2ModScripts

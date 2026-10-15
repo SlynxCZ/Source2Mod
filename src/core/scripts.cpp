@@ -44,6 +44,7 @@
 #include "shared.h"
 #include "utils/log.h"
 
+#include <ISmmPlugin.h>
 #include <dynlibutils/module.hpp>
 #include <entity2/entityinstance.h>
 #include <entity2/entitysystem.h>
@@ -54,6 +55,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -166,6 +168,39 @@ namespace scripts
         scriptsManager.DispatchMessage(args.Arg(1), SkipFirstArg(args.ArgS()));
     }
 
+    // bool FilterWorkshopCommands(const char* pszCommands, CBufferString* pOut):
+    // what Instance.ServerCommand runs the script's text through. While a
+    // workshop addon is mounted it rebuilds the text into pOut without every
+    // command and ConVar a workshop map may not use ("DISALLOWED WORKSHOP
+    // COMMANDS: source2mod_script") and returns true; returning false makes
+    // the caller run the text as it was. A lone source2mod_script is let
+    // through that way, so a script on a workshop map still reaches
+    // HandleScriptCommand. Text with a command separator is left to the
+    // filter: only that one command bypasses it.
+    static KHook::Function<bool, const char*, void*>* s_hFilterWorkshopCommands = nullptr;
+
+    static bool IsLoneScriptCommand(const char* s)
+    {
+        if (!s)
+            return false;
+        while (*s == ' ' || *s == '\t')
+            ++s;
+        static constexpr char kCommand[] = "source2mod_script";
+        if (std::strncmp(s, kCommand, sizeof(kCommand) - 1) != 0)
+            return false;
+        s += sizeof(kCommand) - 1;
+        if (*s != ' ' && *s != '\t')
+            return false;
+        return std::strpbrk(s, ";\n\r") == nullptr;
+    }
+
+    static KHook::Return<bool> Hook_FilterWorkshopCommands(const char* pszCommands, void* pOut)
+    {
+        if (IsLoneScriptCommand(pszCommands))
+            return { KHook::Action::Supersede, false };
+        return { KHook::Action::Ignore, false };
+    }
+
     /* =========================
     Setup
     ========================= */
@@ -179,6 +214,20 @@ namespace scripts
         m_pComponentVTable = DynLibUtils::CModule(g_pSource2Server).GetVirtualTableByName(COMPONENT_VTABLE).RCast<void*>();
 
         commands::commandsManager.RegisterConCommand(0, "source2mod_script", HandleScriptCommand);
+
+        if (void* pFilter = addresses::FindSignature("FilterWorkshopCommands").GetPtr())
+        {
+            s_hFilterWorkshopCommands = new KHook::Function<bool, const char*, void*>(&Hook_FilterWorkshopCommands, nullptr);
+            s_hFilterWorkshopCommands->Configure(pFilter);
+        }
+        else
+            FP_WARN("FilterWorkshopCommands not found: scripts on a workshop map cannot message plugins");
+    }
+
+    void ScriptsManager::Shutdown()
+    {
+        delete s_hFilterWorkshopCommands;
+        s_hFilterWorkshopCommands = nullptr;
     }
 
     bool ScriptsManager::CanRunSource()

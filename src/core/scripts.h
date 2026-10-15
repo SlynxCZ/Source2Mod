@@ -102,6 +102,7 @@ namespace scripts
         /// Resolves the loader and registers `source2mod_script`. Not fatal: without
         /// the loader only LoadAsset() works.
         void Init();
+        void Shutdown();
 
         void OnLevelInit();
         void OnLevelShutdown();
