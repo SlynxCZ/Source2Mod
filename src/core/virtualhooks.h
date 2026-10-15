@@ -48,6 +48,7 @@
 #include "engine2/isource2server.h"
 #include "engine2/ivengineserver2.h"
 #include "engine2/inetworkserverservice.h"
+#include "engine2/gamesessionconfiguration.h"
 #include "entitysystem.h"
 #include "gameentitysystem.h"
 #include "engine2/igameeventsystem.h"
