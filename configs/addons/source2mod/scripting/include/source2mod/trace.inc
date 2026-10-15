@@ -13,6 +13,7 @@
 
 #include <source2mod/types>
 #include <source2mod/schema>
+#include <adt_array>
 
 // Bit numbers of the contents layers (const.h LAYER_INDEX_CONTENTS_*).
 #define CONTENTS_SOLID_BIT                      0
@@ -155,12 +156,99 @@ methodmap TraceResult < Handle
 
 	public native int TriangleIndex();
 	public native int HitboxBoneIndex();
+	/** As the C++ accessor gives it: an int (the low contents bits). */
 	public native int Contents();
+	/** RayType_t: RAY_TYPE_LINE ... RAY_TYPE_MESH. */
 	public native int RayType();
+
+	/** Hitbox(): the hit group (HITGROUP_*), -1 when no hitbox was hit. */
+	public native int HitGroup();
+	/** Hitbox(): its index in the model's hitbox set, -1 when none. */
+	public native int HitboxIndex();
+	public native int HitboxName(char[] buffer, int maxlen);
+	public native int HitboxBoneName(char[] buffer, int maxlen);
+
+	/** Surface(): the surface property's name ("metal", "flesh"); "" when unknown. */
+	public native int SurfaceName(char[] buffer, int maxlen);
+	/**
+	 * Surface()'s physics: friction, elasticity, density, thickness, soft
+	 * contact frequency, soft contact damping ratio. False when unknown.
+	 */
+	public native bool SurfacePhysics(float physics[6]);
+
+	/** ShapeAttributes(): the hit shape's collision layers and group. */
+	public native void ShapeInteractsAs(int mask[2]);
+	public native void ShapeInteractsWith(int mask[2]);
+	public native void ShapeInteractsExclude(int mask[2]);
+	public native int ShapeCollisionGroup();
+	public native int ShapeCollisionFunctionMask();
+	public native int ShapeHierarchyId();
+
+	/** BodyTransform(): the hit body's position and orientation quaternion (x, y, z, w). */
+	public native void BodyTransform(float position[3], float orientation[4]);
+}
+
+/** Ray_t's shapes for TraceShapeEx (RayType_t). */
+#define RAY_TYPE_LINE       0
+#define RAY_TYPE_SPHERE     1
+#define RAY_TYPE_HULL       2
+#define RAY_TYPE_CAPSULE    3
+#define RAY_TYPE_MESH       4
+
+/**
+ * TraceShapeEx's filter (CTraceFilter::ShouldHitEntity): called for every
+ * entity the ray touches; false lets the ray pass through it.
+ */
+typedef Source2ModTraceFilter = function bool (CEntityInstance entity, any data);
+
+/**
+ * A navigation mesh area (CCSNavArea), good for the current map. The mesh
+ * is loaded with the map; IsValidNavMesh() says whether there is one.
+ */
+methodmap CCSNavArea < SchemaObject
+{
+	public native int Id();
+	public native void Center(float center[3]);
+	public native void Normal(float normal[3]);
+	public native void Min(float mins[3]);
+	public native void Max(float maxs[3]);
+	public native float Width();
+	public native float Height();
+	public native float Area2D();
+	public native float GetHeightAtPosition(float x, float y);
+	public native bool ContainsPoint(const float position[3], float zTolerance = 32.0);
+	public native bool ContainsBox(const float mins[3], const float maxs[3], float zTolerance = 32.0);
+	public native bool IntersectsBox(const float mins[3], const float maxs[3], float zTolerance = 32.0);
+	public native void GetClosestPoint(const float position[3], float closest[3]);
+	public native float GetDistanceToPoint(const float position[3]);
+	public native float GetDistanceSquaredToPoint(const float position[3]);
+
+	/** Every area of the mesh, as an ArrayList of CCSNavArea; close it. */
+	public static native ArrayList GetAllNavAreas();
+
+	/** The closest area within maxDistance (-1.0: any); null when there is none. */
+	public static native CCSNavArea GetClosestNavArea(const float position[3], float maxDistance = -1.0, float &distance = 0.0);
+
+	public static native bool IsValidNavMesh();
 }
 
 methodmap Source2ModTrace
 {
+	/**
+	 * TraceShapeEx: a ray of any shape from start to end, with a filter.
+	 *
+	 * rayType RAY_TYPE_LINE ignores a, b and radius; RAY_TYPE_SPHERE is a
+	 * sphere at offset `a` of `radius`; RAY_TYPE_HULL a box `a` (mins) ..
+	 * `b` (maxs); RAY_TYPE_CAPSULE a capsule from `a` to `b` of `radius`.
+	 * Without options it hits everything (MASK_ALL), as TraceEndShape.
+	 */
+	public static native TraceResult TraceShapeEx(const float start[3], const float end[3], TraceOptions options = null, CBaseEntity ignore = NULL_ENTITY,
+	                                              Source2ModTraceFilter filter = INVALID_FUNCTION, any data = 0, int rayType = RAY_TYPE_LINE,
+	                                              const float a[3] = NULL_VECTOR, const float b[3] = NULL_VECTOR, float radius = 0.0);
+
+	/** Whether a nav area overlaps an entity (extrudeHullHeight: count the player hull's height). */
+	public static native bool CheckAreaOverlappingEntity(CCSNavArea area, CBaseEntity entity, bool extrudeHullHeight = false);
+
 	/** Along the angles from start, to the end of the world. */
 	public static native TraceResult TraceShape(const float start[3], const float angles[3], CBaseEntity ignore = NULL_ENTITY, TraceOptions options = null);
 

@@ -13,6 +13,8 @@
 
 #include <source2mod/ISource2ModTypes.h>
 
+#include <entityhandle.h>
+
 #include <sp_vm_api.h>
 
 #include <cstddef>
@@ -24,6 +26,9 @@ namespace sp
     class BaseRuntime;
 }
 
+class CGameTrace;
+class IGameEvent;
+class Timer;
 class ISource2ModNatives;
 class Source2ModCommandArgs;
 class Source2ModCommandContext;
@@ -52,6 +57,7 @@ namespace sourcepawn
     const sp_nativeinfo_t* GetApiNatives();          // natives_api.cpp
     const sp_nativeinfo_t* GetNetSoundNatives();     // natives_netsound.cpp
     const sp_nativeinfo_t* GetGameHookNatives();     // natives_gamehooks.cpp
+    const sp_nativeinfo_t* GetEventNatives();        // natives_events.cpp
     const sp_nativeinfo_t* GetGameConfigNatives();   // natives_gameconfig.cpp
     const sp_nativeinfo_t* GetRawHookNatives();      // natives_rawhooks.cpp
     const sp_nativeinfo_t* GetWorldNatives();        // natives_world.cpp
@@ -100,6 +106,7 @@ namespace sourcepawn
     void ForgetGameHooks(PluginId id);       // natives_gamehooks.cpp
     void ForgetWorldHooks(PluginId id);      // natives_world.cpp
     void ForgetUiHooks(PluginId id);         // natives_ui.cpp
+    void ForgetNetSoundHooks(PluginId id);   // natives_netsound.cpp
 
     /// ISource2ModNatives001, for native plugins (pluginsys.cpp).
     ISource2ModNatives* NativesInterface();
@@ -118,6 +125,22 @@ namespace sourcepawn
     /// The function behind a Source2ModAddress (addresses.inc); nullptr when not resolved, and a script error for a bad value.
     void* AddressOf(SourcePawn::IPluginContext* ctx, cell_t address);
 
+    /// A TraceResult handle (trace.inc) holding a copy of `trace`, owned by the caller (natives_world.cpp).
+    cell_t NewTraceResult(SourcePawn::IPluginContext* ctx, const CGameTrace* trace);
+
+    /// The scheduler's timer behind a timer handle; nullptr once it has ended (or a script error for a bad handle) (natives.cpp).
+    Timer* ScriptTimer(SourcePawn::IPluginContext* ctx, cell_t handle);
+
+    /// The event behind an Event handle (hooked or created); nullptr and a script error when it is none (natives.cpp).
+    IGameEvent* ScriptEvent(SourcePawn::IPluginContext* ctx, cell_t handle);
+    /// A created-event handle (IGameEventManager2.CreateEvent's kind) owning `event`; frees the event on failure.
+    cell_t NewScriptEvent(IGameEvent* event, PluginId owner);
+    /// Takes the event out of a created-event handle and closes the handle; nullptr (and a script error) for another handle.
+    IGameEvent* TakeScriptEvent(SourcePawn::IPluginContext* ctx, cell_t handle);
+
+    /// The message behind a NetMessage handle (a protobuf Message*); nullptr and a script error when empty (natives_netsound.cpp).
+    void* NetMessagePointer(SourcePawn::IPluginContext* ctx, cell_t handle);
+
     /// A new ArrayList (block size 1) holding `items`, owned by `owner` (natives_adt.cpp).
     cell_t NewCellList(const std::vector<cell_t>& items, PluginId owner);
 
@@ -133,6 +156,14 @@ namespace sourcepawn
 
     /// The first cell of each item of an ArrayList (natives_adt.cpp); false (and a script error) for a bad handle.
     bool ReadCellList(SourcePawn::IPluginContext* ctx, cell_t handle, std::vector<cell_t>& items);
+
+    /// A StringMap's string and cell (as decimal) entries; false (and a script error) for a bad handle (natives_adt.cpp).
+    bool StringMapStrings(SourcePawn::IPluginContext* ctx, cell_t handle, std::vector<std::pair<std::string, std::string>>& out);
+
+    /// An entity handle as the value CEntityInstance.GetRefEHandle() gives, -1 when empty (natives_entities.cpp).
+    cell_t RefForHandle(CEntityHandle handle);
+    /// The handle behind a GetRefEHandle() value; an empty one for -1 or a bad value.
+    CEntityHandle HandleForRef(cell_t ref);
 
     /// The ConVar handle for an access index, made on first use.
     cell_t ConVarHandle(uint16_t accessIndex);

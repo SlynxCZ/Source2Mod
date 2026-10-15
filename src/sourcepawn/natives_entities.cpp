@@ -24,17 +24,34 @@
 #include "core/entities.h"
 #include "utils/log.h"
 
+#include <source2mod/ISource2ModEntities.h>
+#include <source2mod/schema/recipientfilter.h>
 #include <source2mod/schema/schema.h>
+#include <source2mod/schema/entity/classes/CAttributeList.h>
 #include <source2mod/schema/entity/classes/CBaseEntity.h>
 #include <source2mod/schema/entity/classes/CBaseModelEntity.h>
 #include <source2mod/schema/entity/classes/CBasePlayerWeapon.h>
+#include <source2mod/schema/entity/classes/CCSCustomHudLayout.h>
 #include <source2mod/schema/entity/classes/CCSGameRules.h>
 #include <source2mod/schema/entity/classes/CCSPlayerController.h>
 #include <source2mod/schema/entity/classes/CCSPlayerPawn.h>
+#include <source2mod/schema/entity/classes/CCSPlayerPawnBase.h>
 #include <source2mod/schema/entity/classes/CCSObserverPawn.h>
+#include <source2mod/schema/entity/classes/CCSWeaponBaseVData.h>
+#include <source2mod/schema/entity/classes/CDecoyProjectile.h>
+#include <source2mod/schema/entity/classes/CFlashbangProjectile.h>
+#include <source2mod/schema/entity/classes/CGameSceneNode.h>
+#include <source2mod/schema/entity/classes/CHEGrenadeProjectile.h>
+#include <source2mod/schema/entity/classes/CMolotovProjectile.h>
+#include <source2mod/schema/entity/classes/CPlayerControllerComponent.h>
+#include <source2mod/schema/entity/classes/CPlayerPawnComponent.h>
 #include <source2mod/schema/entity/classes/CPlayer_ItemServices.h>
 #include <source2mod/schema/entity/classes/CPlayer_WeaponServices.h>
+#include <source2mod/schema/entity/classes/CSkeletonInstance.h>
+#include <source2mod/schema/entity/classes/CSmokeGrenadeProjectile.h>
 #include <source2mod/utils/plat.h>
+
+#include <entity2/entitykeyvalues.h>
 
 #include <schemalib/schemaclassinfo.h>
 #include <schemalib/schematype.h>
@@ -42,6 +59,7 @@
 #include <sp_callable.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <map>
 #include <memory>
@@ -115,6 +133,16 @@ namespace sourcepawn
         T* As(IPluginContext* ctx, cell_t entity)
         {
             return static_cast<T*>(CheckEntity(ctx, entity));
+        }
+
+        // The optional trailing Source2ModHookChain argument at params[n]:
+        // HookChain_Default (-1), or a script built before it existed, keeps
+        // the C++ helper's own default.
+        HookChain ChainArg(const cell_t* params, int n, HookChain def = HookChain::Run)
+        {
+            if (params[0] < n || params[n] < 0)
+                return def;
+            return params[n] ? HookChain::Bypass : HookChain::Run;
         }
 
         // ---- schema fields --------------------------------------------------------
@@ -674,6 +702,222 @@ namespace sourcepawn
             return f.found ? f.offset : -1;
         }
 
+        // StateChanged(instance, className, field): NetworkStateChanged for a field
+        // written behind the schema's back (a raw call, raw memory, an array element).
+        cell_t N_StateChanged(IPluginContext* ctx, const cell_t* params)
+        {
+            const char* cls = LocalString(ctx, params[2]);
+            const char* name = LocalString(ctx, params[3]);
+            const Field& f = FindField(cls, name);
+            if (!f.found)
+                return ctx->ThrowNativeError("No field %s::%s in the running game's schema", cls, name);
+            if (params[1] == 0)
+                return ctx->ThrowNativeError("Null schema object");
+            Access a;
+            a.base = static_cast<uint8_t*>(Base(ctx, params[1]));
+            if (!a.base)
+                return 0;
+            a.addr = a.base + f.offset;
+            a.field = &f;
+            Changed(a);
+            return 0;
+        }
+
+        // ---- raw memory at an offset (ISource2ModMemory's GetValue / Offset / Deref) --
+
+        bool ReadVector(IPluginContext* ctx, cell_t addr, Vector& out);
+        void WriteVector(IPluginContext* ctx, cell_t addr, float x, float y, float z);
+
+        // The address `offset` bytes into an entity or SchemaObject.
+        uint8_t* At(IPluginContext* ctx, cell_t instance, cell_t offset)
+        {
+            if (instance == 0)
+            {
+                ctx->ThrowNativeError("Null schema object");
+                return nullptr;
+            }
+            if (offset < 0)
+            {
+                ctx->ThrowNativeError("Negative offset %d", offset);
+                return nullptr;
+            }
+            auto* base = static_cast<uint8_t*>(Base(ctx, instance));
+            return base ? base + offset : nullptr;
+        }
+
+        int IntSize(IPluginContext* ctx, cell_t size)
+        {
+            if (size != 1 && size != 2 && size != 4)
+            {
+                ctx->ThrowNativeError("Integer size %d is not 1, 2 or 4", size);
+                return 0;
+            }
+            return size;
+        }
+
+        // GetIntAt(instance, offset, size = 4, bool isSigned = true)
+        cell_t N_GetIntAt(IPluginContext* ctx, const cell_t* params)
+        {
+            uint8_t* p = At(ctx, params[1], params[2]);
+            const int size = IntSize(ctx, params[3]);
+            return p && size ? ReadInt(p, size, params[4] != 0) : 0;
+        }
+
+        // SetIntAt(instance, offset, value, size = 4)
+        cell_t N_SetIntAt(IPluginContext* ctx, const cell_t* params)
+        {
+            uint8_t* p = At(ctx, params[1], params[2]);
+            const int size = IntSize(ctx, params[4]);
+            if (p && size)
+                WriteInt(p, size, params[3]);
+            return 0;
+        }
+
+        cell_t N_GetInt64At(IPluginContext* ctx, const cell_t* params)
+        {
+            if (uint8_t* p = At(ctx, params[1], params[2]))
+            {
+                const uint64_t v = *reinterpret_cast<const uint64_t*>(p);
+                cell_t* out;
+                ctx->LocalToPhysAddr(params[3], &out);
+                out[0] = static_cast<cell_t>(v & 0xFFFFFFFFu);
+                out[1] = static_cast<cell_t>(v >> 32);
+            }
+            return 0;
+        }
+
+        cell_t N_SetInt64At(IPluginContext* ctx, const cell_t* params)
+        {
+            if (uint8_t* p = At(ctx, params[1], params[2]))
+            {
+                cell_t* in;
+                ctx->LocalToPhysAddr(params[3], &in);
+                *reinterpret_cast<uint64_t*>(p) = static_cast<uint32_t>(in[0]) | (static_cast<uint64_t>(static_cast<uint32_t>(in[1])) << 32);
+            }
+            return 0;
+        }
+
+        cell_t N_GetFloatAt(IPluginContext* ctx, const cell_t* params)
+        {
+            uint8_t* p = At(ctx, params[1], params[2]);
+            return p ? sp_ftoc(*reinterpret_cast<const float*>(p)) : 0;
+        }
+
+        cell_t N_SetFloatAt(IPluginContext* ctx, const cell_t* params)
+        {
+            if (uint8_t* p = At(ctx, params[1], params[2]))
+                *reinterpret_cast<float*>(p) = sp_ctof(params[3]);
+            return 0;
+        }
+
+        cell_t N_GetVectorAt(IPluginContext* ctx, const cell_t* params)
+        {
+            if (uint8_t* p = At(ctx, params[1], params[2]))
+            {
+                const auto* v = reinterpret_cast<const float*>(p);
+                WriteVector(ctx, params[3], v[0], v[1], v[2]);
+            }
+            return 0;
+        }
+
+        cell_t N_SetVectorAt(IPluginContext* ctx, const cell_t* params)
+        {
+            uint8_t* p = At(ctx, params[1], params[2]);
+            Vector v;
+            if (p && ReadVector(ctx, params[3], v))
+                *reinterpret_cast<Vector*>(p) = v;
+            return 0;
+        }
+
+        // A CHandle at the offset, as the entity (index).
+        cell_t N_GetEntityAt(IPluginContext* ctx, const cell_t* params)
+        {
+            uint8_t* p = At(ctx, params[1], params[2]);
+            if (!p)
+                return -1;
+            const CEntityHandle h = *reinterpret_cast<const CEntityHandle*>(p);
+            return IndexOf(h.IsValid() ? GetEntitySystem()->GetEntityInstance(h) : nullptr);
+        }
+
+        cell_t N_SetEntityAt(IPluginContext* ctx, const cell_t* params)
+        {
+            uint8_t* p = At(ctx, params[1], params[2]);
+            bool ok;
+            CEntityInstance* other = OptionalEntity(ctx, params[3], &ok);
+            if (p && ok)
+                *reinterpret_cast<CEntityHandle*>(p) = other ? other->GetRefEHandle() : CEntityHandle();
+            return 0;
+        }
+
+        // The pointer stored at the offset (Deref), as a SchemaObject; 0 for null.
+        cell_t N_GetObjectAt(IPluginContext* ctx, const cell_t* params)
+        {
+            uint8_t* p = At(ctx, params[1], params[2]);
+            return p ? SchemaObjectForPointer(*reinterpret_cast<void**>(p)) : 0;
+        }
+
+        // The object embedded at the offset (Offset), as a SchemaObject.
+        cell_t N_GetEmbeddedAt(IPluginContext* ctx, const cell_t* params)
+        {
+            uint8_t* p = At(ctx, params[1], params[2]);
+            return p ? SchemaObjectForPointer(p) : 0;
+        }
+
+        // A char* stored at the offset (CUtlSymbolLarge, CUtlString, const char*).
+        cell_t N_GetStringPointerAt(IPluginContext* ctx, const cell_t* params)
+        {
+            uint8_t* p = At(ctx, params[1], params[2]);
+            const char* s = p ? *reinterpret_cast<const char* const*>(p) : nullptr;
+            size_t written = 0;
+            ctx->StringToLocalUTF8(params[3], params[4], s ? s : "", &written);
+            return static_cast<cell_t>(written);
+        }
+
+        // ---- CUtlVector fields -------------------------------------------------------
+
+        // A CUtlVector field (or a networked one, laid out the same: count, then
+        // the element pointer): the vector itself.
+        CUtlVector<uint8_t>* UtlVectorOf(IPluginContext* ctx, const cell_t* params)
+        {
+            const char* cls = LocalString(ctx, params[2]);
+            const char* name = LocalString(ctx, params[3]);
+            const Field& f = FindField(cls, name);
+            const bool vector = f.typeName.rfind("CUtlVector", 0) == 0 || f.typeName.rfind("CNetworkUtlVectorBase", 0) == 0
+                || f.typeName.rfind("C_NetworkUtlVectorBase", 0) == 0;
+            if (!f.found || !vector)
+            {
+                ctx->ThrowNativeError("Field %s::%s is not a CUtlVector", cls, name);
+                return nullptr;
+            }
+            if (params[1] == 0)
+            {
+                ctx->ThrowNativeError("Null schema object");
+                return nullptr;
+            }
+            auto* base = static_cast<uint8_t*>(Base(ctx, params[1]));
+            return base ? reinterpret_cast<CUtlVector<uint8_t>*>(base + f.offset) : nullptr;
+        }
+
+        cell_t N_GetUtlVectorCount(IPluginContext* ctx, const cell_t* params)
+        {
+            CUtlVector<uint8_t>* v = UtlVectorOf(ctx, params);
+            return v ? v->Count() : 0;
+        }
+
+        // GetUtlVectorElement(instance, className, field, index, elementSize): element `index`
+        // as a SchemaObject (read it with the *At natives, or view_as a schema class).
+        cell_t N_GetUtlVectorElement(IPluginContext* ctx, const cell_t* params)
+        {
+            CUtlVector<uint8_t>* v = UtlVectorOf(ctx, params);
+            if (!v)
+                return 0;
+            if (params[4] < 0 || params[4] >= v->Count())
+                return ctx->ThrowNativeError("Element %d is out of range (%d elements)", params[4], v->Count());
+            if (params[5] <= 0)
+                return ctx->ThrowNativeError("Element size %d is invalid", params[5]);
+            return SchemaObjectForPointer(v->Base() + static_cast<size_t>(params[4]) * params[5]);
+        }
+
         // ---- CEntityInstance -----------------------------------------------------
 
         cell_t N_EntIsValid(IPluginContext*, const cell_t* params)
@@ -743,7 +987,7 @@ namespace sourcepawn
             return IndexOf(CBaseEntity::CreateEntityByName(LocalString(ctx, params[1])));
         }
 
-        // AcceptInput(input, activator = NULL_ENTITY, caller = NULL_ENTITY, value = "")
+        // AcceptInput(input, activator = NULL_ENTITY, caller = NULL_ENTITY, value = "", chain)
         cell_t N_BaseAcceptInput(IPluginContext* ctx, const cell_t* params)
         {
             CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
@@ -751,7 +995,19 @@ namespace sourcepawn
             CEntityInstance* activator = OptionalEntity(ctx, params[3], &ok1);
             CEntityInstance* caller = OptionalEntity(ctx, params[4], &ok2);
             if (ent && ok1 && ok2)
-                ent->AcceptInput(LocalString(ctx, params[2]), activator, caller, LocalString(ctx, params[5]));
+                ent->AcceptInput(LocalString(ctx, params[2]), activator, caller, LocalString(ctx, params[5]), ChainArg(params, 6));
+            return 0;
+        }
+
+        // AddEntityIOEvent(input, activator, caller, value, delay, chain)
+        cell_t N_BaseAddEntityIOEvent(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            bool ok1, ok2;
+            CEntityInstance* activator = OptionalEntity(ctx, params[3], &ok1);
+            CEntityInstance* caller = OptionalEntity(ctx, params[4], &ok2);
+            if (ent && ok1 && ok2)
+                ent->AddEntityIOEvent(LocalString(ctx, params[2]), activator, caller, LocalString(ctx, params[5]), sp_ctof(params[6]), ChainArg(params, 7));
             return 0;
         }
 
@@ -765,14 +1021,28 @@ namespace sourcepawn
             return 0;
         }
 
+        // DispatchSpawn(StringMap keyValues = null, chain): the map's entries become the spawn keyvalues.
         cell_t N_BaseDispatchSpawn(IPluginContext* ctx, const cell_t* params)
         {
-            if (CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]))
-                ent->DispatchSpawn();
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            if (!ent)
+                return 0;
+            CEntityKeyValues* keyValues = nullptr;
+            if (params[0] >= 2 && params[2] != 0)
+            {
+                std::vector<std::pair<std::string, std::string>> entries;
+                if (!StringMapStrings(ctx, params[2], entries))
+                    return 0;
+                // The entity takes the keyvalues over; it releases them.
+                keyValues = new CEntityKeyValues();
+                for (const auto& [key, value] : entries)
+                    keyValues->SetString(key.c_str(), value.c_str());
+            }
+            ent->DispatchSpawn(keyValues, ChainArg(params, 3));
             return 0;
         }
 
-        // Teleport(position = NULL_VECTOR, angles = NULL_VECTOR, velocity = NULL_VECTOR)
+        // Teleport(position = NULL_VECTOR, angles = NULL_VECTOR, velocity = NULL_VECTOR, chain)
         cell_t N_BaseTeleport(IPluginContext* ctx, const cell_t* params)
         {
             CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
@@ -783,14 +1053,87 @@ namespace sourcepawn
             const bool hasAng = ReadVector(ctx, params[3], ang);
             const bool hasVel = ReadVector(ctx, params[4], vel);
             const QAngle angles(ang.x, ang.y, ang.z);
-            ent->Teleport(hasPos ? &pos : nullptr, hasAng ? &angles : nullptr, hasVel ? &vel : nullptr);
+            ent->Teleport(hasPos ? &pos : nullptr, hasAng ? &angles : nullptr, hasVel ? &vel : nullptr, ChainArg(params, 5));
             return 0;
         }
 
         cell_t N_BaseRemove(IPluginContext* ctx, const cell_t* params)
         {
             if (CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]))
-                ent->Remove();
+                ent->Remove(ChainArg(params, 2));
+            return 0;
+        }
+
+        // GetAngRotation / GetAbsRotation / GetAbsVelocity (float[3])
+        template <typename V, V (CBaseEntity::*GET)()>
+        cell_t N_BaseGetVector(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]))
+            {
+                const V v = (ent->*GET)();
+                WriteVector(ctx, params[2], v.x, v.y, v.z);
+            }
+            return 0;
+        }
+
+        // SetAbsOrigin / SetAbsRotation / SetAngRotation / SetAbsVelocity / SetBaseVelocity (const float[3])
+        template <typename V, void (CBaseEntity::*SET)(V)>
+        cell_t N_BaseSetVector(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            Vector v;
+            if (ent && ReadVector(ctx, params[2], v))
+                (ent->*SET)(V(v.x, v.y, v.z));
+            return 0;
+        }
+
+        cell_t N_BaseGetVData(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            return ent ? SchemaObjectForPointer(ent->GetVData()) : 0;
+        }
+
+        cell_t N_BaseSetMoveType(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]))
+                ent->SetMoveType(static_cast<MoveType_t>(params[2]));
+            return 0;
+        }
+
+        cell_t N_BaseGetCollisionGroup(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            return ent ? ent->GetCollisionGroup() : 0;
+        }
+
+        cell_t N_BaseSetCollisionGroup(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]))
+                ent->SetCollisionGroup(static_cast<uint8>(params[2]));
+            return 0;
+        }
+
+        cell_t N_BaseCollisionRulesChanged(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]))
+                ent->CollisionRulesChanged();
+            return 0;
+        }
+
+        // DispatchParticleEffect(particle, attachType, attachmentPoint, resetAll, const int recipients[2], chain)
+        cell_t N_BaseDispatchParticleEffect(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            if (!ent)
+                return 0;
+            cell_t* mask;
+            ctx->LocalToPhysAddr(params[6], &mask);
+            const uint64_t recipients = static_cast<uint32_t>(mask[0]) | (static_cast<uint64_t>(static_cast<uint32_t>(mask[1])) << 32);
+            // Everybody is C++'s default: no filter.
+            CRecipientFilter filter;
+            filter.SetFromBitmask(recipients);
+            ent->DispatchParticleEffect(LocalString(ctx, params[2]), static_cast<ParticleAttachment_t>(params[3]), static_cast<uint8>(params[4]),
+                                        params[5] != 0, recipients == ~0ull ? nullptr : &filter, ChainArg(params, 7));
             return 0;
         }
 
@@ -824,7 +1167,7 @@ namespace sourcepawn
         cell_t N_ModelSetModel(IPluginContext* ctx, const cell_t* params)
         {
             if (CBaseModelEntity* ent = As<CBaseModelEntity>(ctx, params[1]))
-                ent->SetModel(LocalString(ctx, params[2]));
+                ent->SetModel(LocalString(ctx, params[2]), ChainArg(params, 3));
             return 0;
         }
 
@@ -842,7 +1185,7 @@ namespace sourcepawn
             CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]);
             CBasePlayerPawn* pawn = As<CBasePlayerPawn>(ctx, params[2]);
             if (pc && pawn)
-                pc->SetPawn(pawn);
+                pc->SetPawn(pawn, ChainArg(params, 3));
             return 0;
         }
 
@@ -946,24 +1289,51 @@ namespace sourcepawn
             return 0;
         }
 
+        cell_t N_CSFromPawn(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSPlayerPawn* pawn = As<CCSPlayerPawn>(ctx, params[1]);
+            return pawn ? IndexOf(CCSPlayerController::FromPawn(pawn)) : -1;
+        }
+
+        cell_t N_CSFromUserId(IPluginContext*, const cell_t* params)
+        {
+            return IndexOf(CCSPlayerController::FromUserId(params[1]));
+        }
+
+        cell_t N_CSFromSteamId(IPluginContext* ctx, const cell_t* params)
+        {
+            return IndexOf(CCSPlayerController::FromSteamId(static_cast<uint64>(std::strtoull(LocalString(ctx, params[1]), nullptr, 10))));
+        }
+
+        // TakeDamage(attacker, damage, damageType, chain): C++ defaults to Bypass.
+        cell_t N_CSTakeDamage(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]);
+            bool ok;
+            auto* attacker = static_cast<CCSPlayerController*>(OptionalEntity(ctx, params[2], &ok));
+            if (pc && ok)
+                pc->TakeDamage(attacker, params[3], static_cast<DamageTypes_t>(params[4]), ChainArg(params, 5, HookChain::Bypass));
+            return 0;
+        }
+
         cell_t N_CSRespawn(IPluginContext* ctx, const cell_t* params)
         {
             if (CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]))
-                pc->Respawn();
+                pc->Respawn(ChainArg(params, 2));
             return 0;
         }
 
         cell_t N_CSSwitchTeam(IPluginContext* ctx, const cell_t* params)
         {
             if (CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]))
-                pc->SwitchTeam(params[2]);
+                pc->SwitchTeam(params[2], ChainArg(params, 3));
             return 0;
         }
 
         cell_t N_CSChangeTeam(IPluginContext* ctx, const cell_t* params)
         {
             if (CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]))
-                pc->ChangeTeam(params[2]);
+                pc->ChangeTeam(params[2], ChainArg(params, 3));
             return 0;
         }
 
@@ -984,7 +1354,7 @@ namespace sourcepawn
         cell_t N_PawnCommitSuicide(IPluginContext* ctx, const cell_t* params)
         {
             if (CBasePlayerPawn* pawn = As<CBasePlayerPawn>(ctx, params[1]))
-                pawn->CommitSuicide(params[2] != 0, params[3] != 0);
+                pawn->CommitSuicide(params[2] != 0, params[3] != 0, ChainArg(params, 4));
             return 0;
         }
 
@@ -993,7 +1363,7 @@ namespace sourcepawn
             CBasePlayerPawn* pawn = As<CBasePlayerPawn>(ctx, params[1]);
             Vector v;
             if (pawn && ReadVector(ctx, params[2], v))
-                pawn->SnapViewAngles(QAngle(v.x, v.y, v.z));
+                pawn->SnapViewAngles(QAngle(v.x, v.y, v.z), ChainArg(params, 3));
             return 0;
         }
 
@@ -1001,6 +1371,31 @@ namespace sourcepawn
         {
             CBasePlayerPawn* pawn = As<CBasePlayerPawn>(ctx, params[1]);
             return pawn ? IndexOf(pawn->GetController()) : -1;
+        }
+
+        cell_t N_PawnGetDefaultController(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerPawn* pawn = As<CBasePlayerPawn>(ctx, params[1]);
+            return pawn ? IndexOf(pawn->GetDefaultController()) : -1;
+        }
+
+        cell_t N_CSPawnBaseGetOriginalController(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSPlayerPawnBase* pawn = As<CCSPlayerPawnBase>(ctx, params[1]);
+            return pawn ? IndexOf(pawn->GetOriginalController()) : -1;
+        }
+
+        cell_t N_CSPawnBaseCanMove(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSPlayerPawnBase* pawn = As<CCSPlayerPawnBase>(ctx, params[1]);
+            return pawn && pawn->CanMove();
+        }
+
+        cell_t N_CSPawnPostThink(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CCSPlayerPawn* pawn = As<CCSPlayerPawn>(ctx, params[1]))
+                pawn->PostThink(ChainArg(params, 2));
+            return 0;
         }
 
         cell_t N_CSPawnGetEyeAngles(IPluginContext* ctx, const cell_t* params)
@@ -1020,21 +1415,21 @@ namespace sourcepawn
             CPlayer_ItemServices* items = ObjectOf<CPlayer_ItemServices>(ctx, params[1]);
             CBasePlayerWeapon* weapon = As<CBasePlayerWeapon>(ctx, params[2]);
             if (items && weapon)
-                items->DropActivePlayerWeapon(weapon);
+                items->DropActivePlayerWeapon(weapon, ChainArg(params, 3));
             return 0;
         }
 
         cell_t N_ItemsRemoveWeapons(IPluginContext* ctx, const cell_t* params)
         {
             if (CPlayer_ItemServices* items = ObjectOf<CPlayer_ItemServices>(ctx, params[1]))
-                items->RemoveWeapons(params[2] != 0);
+                items->RemoveWeapons(params[2] != 0, ChainArg(params, 3));
             return 0;
         }
 
         cell_t N_ItemsGiveNamedItem(IPluginContext* ctx, const cell_t* params)
         {
             CPlayer_ItemServices* items = ObjectOf<CPlayer_ItemServices>(ctx, params[1]);
-            return items ? IndexOf(items->GiveNamedItem(LocalString(ctx, params[2]))) : -1;
+            return items ? IndexOf(items->GiveNamedItem(LocalString(ctx, params[2]), ChainArg(params, 3))) : -1;
         }
 
         cell_t N_WeaponsCanUse(IPluginContext* ctx, const cell_t* params)
@@ -1053,7 +1448,7 @@ namespace sourcepawn
             Vector target, velocity;
             const bool hasTarget = ReadVector(ctx, params[3], target);
             const bool hasVelocity = ReadVector(ctx, params[4], velocity);
-            ws->DropWeapon(weapon, hasTarget ? &target : nullptr, hasVelocity ? &velocity : nullptr);
+            ws->DropWeapon(weapon, hasTarget ? &target : nullptr, hasVelocity ? &velocity : nullptr, ChainArg(params, 5));
             return 0;
         }
 
@@ -1061,7 +1456,7 @@ namespace sourcepawn
         {
             CPlayer_WeaponServices* ws = ObjectOf<CPlayer_WeaponServices>(ctx, params[1]);
             CBasePlayerWeapon* weapon = As<CBasePlayerWeapon>(ctx, params[2]);
-            return ws && weapon ? ws->BumpWeapon(weapon) : 0;
+            return ws && weapon ? ws->BumpWeapon(weapon, ChainArg(params, 3)) : 0;
         }
 
         cell_t N_WeaponsSelectItem(IPluginContext* ctx, const cell_t* params)
@@ -1069,15 +1464,180 @@ namespace sourcepawn
             CPlayer_WeaponServices* ws = ObjectOf<CPlayer_WeaponServices>(ctx, params[1]);
             CBasePlayerWeapon* weapon = As<CBasePlayerWeapon>(ctx, params[2]);
             if (ws && weapon)
-                ws->SelectItem(weapon);
+                ws->SelectItem(weapon, 0, ChainArg(params, 3));
             return 0;
+        }
+
+        cell_t N_WeaponsDestroy(IPluginContext* ctx, const cell_t* params)
+        {
+            CPlayer_WeaponServices* ws = ObjectOf<CPlayer_WeaponServices>(ctx, params[1]);
+            CBasePlayerWeapon* weapon = As<CBasePlayerWeapon>(ctx, params[2]);
+            if (ws && weapon)
+                ws->Destroy(weapon, ChainArg(params, 3));
+            return 0;
+        }
+
+        cell_t N_WeaponGetWeaponVData(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerWeapon* weapon = As<CBasePlayerWeapon>(ctx, params[1]);
+            return weapon ? SchemaObjectForPointer(weapon->GetWeaponVData()) : 0;
+        }
+
+        cell_t N_WeaponGetWeaponClassname(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerWeapon* weapon = As<CBasePlayerWeapon>(ctx, params[1]);
+            const char* name = weapon ? weapon->GetWeaponClassname() : nullptr;
+            size_t written = 0;
+            ctx->StringToLocalUTF8(params[2], params[3], name ? name : "", &written);
+            return static_cast<cell_t>(written);
+        }
+
+        cell_t N_WeaponVDataFromKey(IPluginContext* ctx, const cell_t* params)
+        {
+            return SchemaObjectForPointer(CCSWeaponBaseVData::FromKey(LocalString(ctx, params[1]), params[2]));
+        }
+
+        cell_t N_PawnComponentGetPlayerPawn(IPluginContext* ctx, const cell_t* params)
+        {
+            CPlayerPawnComponent* c = ObjectOf<CPlayerPawnComponent>(ctx, params[1]);
+            return c ? IndexOf(c->GetPlayerPawn()) : -1;
+        }
+
+        cell_t N_ControllerComponentGetPlayerController(IPluginContext* ctx, const cell_t* params)
+        {
+            CPlayerControllerComponent* c = ObjectOf<CPlayerControllerComponent>(ctx, params[1]);
+            return c ? IndexOf(c->GetPlayerController()) : -1;
+        }
+
+        template <void (CAttributeList::*SET)(const char*, float, HookChain)>
+        cell_t N_AttributesSet(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CAttributeList* list = ObjectOf<CAttributeList>(ctx, params[1]))
+                (list->*SET)(LocalString(ctx, params[2]), sp_ctof(params[3]), ChainArg(params, 4));
+            return 0;
+        }
+
+        cell_t N_SceneNodeGetSkeletonInstance(IPluginContext* ctx, const cell_t* params)
+        {
+            CGameSceneNode* node = ObjectOf<CGameSceneNode>(ctx, params[1]);
+            return node ? SchemaObjectForPointer(node->GetSkeletonInstance()) : 0;
+        }
+
+        // EmitGrenade(position, angles, velocity, owner, itemDefIndex, chain), static on each projectile class.
+        template <typename T>
+        cell_t N_EmitGrenade(IPluginContext* ctx, const cell_t* params)
+        {
+            Vector pos, ang, vel;
+            ReadVector(ctx, params[1], pos);
+            ReadVector(ctx, params[2], ang);
+            ReadVector(ctx, params[3], vel);
+            bool ok;
+            auto* owner = static_cast<CBaseEntity*>(OptionalEntity(ctx, params[4], &ok));
+            if (!ok)
+                return -1;
+            return IndexOf(T::EmitGrenade(pos, QAngle(ang.x, ang.y, ang.z), vel, owner, static_cast<uint32_t>(params[5]), ChainArg(params, 6)));
+        }
+
+        // CSmokeGrenadeProjectile.EmitGrenade(position, angles, velocity, team, owner, itemDefIndex, chain)
+        cell_t N_EmitSmokeGrenade(IPluginContext* ctx, const cell_t* params)
+        {
+            Vector pos, ang, vel;
+            ReadVector(ctx, params[1], pos);
+            ReadVector(ctx, params[2], ang);
+            ReadVector(ctx, params[3], vel);
+            bool ok;
+            auto* owner = static_cast<CBaseEntity*>(OptionalEntity(ctx, params[5], &ok));
+            if (!ok)
+                return -1;
+            return IndexOf(CSmokeGrenadeProjectile::EmitGrenade(pos, QAngle(ang.x, ang.y, ang.z), vel, params[4], owner,
+                                                                static_cast<uint32_t>(params[6]), ChainArg(params, 7)));
         }
 
         cell_t N_RulesTerminateRound(IPluginContext* ctx, const cell_t* params)
         {
             if (CCSGameRules* rules = ObjectOf<CCSGameRules>(ctx, params[1]))
-                rules->TerminateRound(sp_ctof(params[2]), params[3], static_cast<uint32>(params[4]));
+                rules->TerminateRound(sp_ctof(params[2]), params[3], static_cast<uint32>(params[4]), ChainArg(params, 5, HookChain::Bypass));
             return 0;
+        }
+
+        cell_t N_RulesGoToIntermission(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CCSGameRules* rules = ObjectOf<CCSGameRules>(ctx, params[1]))
+                rules->GoToIntermission(params[2] != 0, ChainArg(params, 3));
+            return 0;
+        }
+
+        cell_t N_RulesFindPickerEntity(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSGameRules* rules = ObjectOf<CCSGameRules>(ctx, params[1]);
+            CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[2]);
+            return rules && pc ? IndexOf(rules->FindPickerEntity(pc)) : -1;
+        }
+
+        cell_t N_RulesGetClientAimTarget(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSGameRules* rules = ObjectOf<CCSGameRules>(ctx, params[1]);
+            CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[2]);
+            return rules && pc ? IndexOf(rules->GetClientAimTarget(pc)) : -1;
+        }
+
+        // ---- CCSCustomHudLayout ---------------------------------------------------
+
+        // The optional controller argument: NULL_ENTITY for every player.
+        bool HudController(IPluginContext* ctx, cell_t index, CCSPlayerController** out)
+        {
+            bool ok;
+            *out = static_cast<CCSPlayerController*>(OptionalEntity(ctx, index, &ok));
+            return ok;
+        }
+
+        cell_t N_HudCreate(IPluginContext* ctx, const cell_t* params)
+        {
+            const char* target = LocalString(ctx, params[2]);
+            return IndexOf(CCSCustomHudLayout::Create(LocalString(ctx, params[1]), *target ? target : nullptr));
+        }
+
+        cell_t N_HudGetLayoutState(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSCustomHudLayout* hud = As<CCSCustomHudLayout>(ctx, params[1]);
+            CCSPlayerController* pc;
+            if (!hud || !HudController(ctx, params[2], &pc))
+                return 0;
+            return SchemaObjectForPointer(&hud->GetLayoutState(pc));
+        }
+
+        cell_t N_HudSetHasClass(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSCustomHudLayout* hud = As<CCSCustomHudLayout>(ctx, params[1]);
+            CCSPlayerController* pc;
+            if (hud && HudController(ctx, params[5], &pc))
+                hud->SetHasClass(LocalString(ctx, params[2]), LocalString(ctx, params[3]), params[4] != 0, pc);
+            return 0;
+        }
+
+        cell_t N_HudSetDialogVariableString(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSCustomHudLayout* hud = As<CCSCustomHudLayout>(ctx, params[1]);
+            CCSPlayerController* pc;
+            if (hud && HudController(ctx, params[5], &pc))
+                hud->SetDialogVariableString(LocalString(ctx, params[2]), LocalString(ctx, params[3]), LocalString(ctx, params[4]), pc);
+            return 0;
+        }
+
+        cell_t N_HudSetInputCaptureEnabled(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSCustomHudLayout* hud = As<CCSCustomHudLayout>(ctx, params[1]);
+            CCSPlayerController* pc;
+            if (hud && HudController(ctx, params[3], &pc))
+                hud->SetInputCaptureEnabled(params[2] != 0, pc);
+            return 0;
+        }
+
+        cell_t N_HudIsInputCaptureEnabled(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSCustomHudLayout* hud = As<CCSCustomHudLayout>(ctx, params[1]);
+            CCSPlayerController* pc;
+            return hud && HudController(ctx, params[2], &pc) && hud->IsInputCaptureEnabled(pc);
         }
 
         // ---- Source2ModEntities ---------------------------------------------------
@@ -1102,11 +1662,21 @@ namespace sourcepawn
             return ok ? IndexOf(entities::entitiesManager.FindEntityByClassname(start, LocalString(ctx, params[2]))) : -1;
         }
 
+        // FindEntityByName(start, name, searching = NULL_ENTITY, activator = NULL_ENTITY, caller = NULL_ENTITY):
+        // the last three resolve "!self", "!activator", "!caller", "!player".
         cell_t N_EntsFindEntityByName(IPluginContext* ctx, const cell_t* params)
         {
-            bool ok;
-            CEntityInstance* start = OptionalEntity(ctx, params[1], &ok);
-            return ok ? IndexOf(entities::entitiesManager.FindEntityByName(start, LocalString(ctx, params[2]))) : -1;
+            bool ok[4] = { true, true, true, true };
+            CEntityInstance* args[4] = {};
+            for (int i = 0; i < 4; i++)
+            {
+                const int p = i == 0 ? 1 : i + 2;
+                if (p <= params[0])
+                    args[i] = OptionalEntity(ctx, params[p], &ok[i]);
+            }
+            if (!ok[0] || !ok[1] || !ok[2] || !ok[3])
+                return -1;
+            return IndexOf(entities::entitiesManager.FindEntityByName(args[0], LocalString(ctx, params[2]), args[1], args[2], args[3]));
         }
 
         cell_t N_EntsCreateEntityByName(IPluginContext* ctx, const cell_t* params)
@@ -1179,9 +1749,12 @@ namespace sourcepawn
             IPluginFunction* fn = nullptr;
             std::string className, outputName;
             bool post = false;
+            CEntityHandle only;     // AddSingleEntityIOListener: the one entity whose outputs count
 
             Action OnEntityOutput(const char* output, CEntityInstance* activator, CEntityInstance* caller, float delay, bool isPost) override
             {
+                if (only.IsValid() && (!caller || caller->GetRefEHandle() != only))
+                    return Action::Ignore;
                 sp::CallArgs args;
                 args.PushString(output ? output : "");
                 args.PushCell(IndexOf(activator));
@@ -1253,6 +1826,38 @@ namespace sourcepawn
             return id;
         }
 
+        // CBaseEntity.AddSingleEntityIOListener(output, handler, post): the class-wide
+        // listener for this output, kept to this entity; RemoveEntityIOListener takes the id.
+        cell_t N_BaseAddSingleEntityIOListener(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            IPluginFunction* fn = ctx->GetFunctionById(static_cast<funcid_t>(params[3]));
+            if (!ent)
+                return 0;
+            if (!fn)
+                return ctx->ThrowNativeError("Invalid function id (%X)", params[3]);
+            auto listener = std::make_unique<ScriptIOListener>();
+            listener->owner = CallerId(ctx);
+            listener->fn = fn;
+            listener->outputName = LocalString(ctx, params[2]);
+            listener->post = params[4] != 0;
+            listener->only = ent->GetRefEHandle();
+            entities::entitiesManager.AddEntityIOListener(listener->owner, listener.get(), nullptr,
+                                                          listener->outputName.empty() ? nullptr : listener->outputName.c_str(), listener->post);
+            const cell_t id = g_nextListenerId++;
+            g_ioListeners[id] = std::move(listener);
+            return id;
+        }
+
+        // FindAllEntitiesByDesignerName(name) -> ArrayList of indices (UTIL_FindAllEntitiesByDesignerName).
+        cell_t N_EntsFindAllEntitiesByDesignerName(IPluginContext* ctx, const cell_t* params)
+        {
+            std::vector<cell_t> found;
+            for (CEntityInstance* e : UTIL_FindAllEntitiesByDesignerName<CEntityInstance>(LocalString(ctx, params[1])))
+                found.push_back(IndexOf(e));
+            return NewCellList(found, CallerId(ctx));
+        }
+
         cell_t N_EntsRemoveEntityIOListener(IPluginContext* ctx, const cell_t* params)
         {
             auto it = g_ioListeners.find(params[1]);
@@ -1284,6 +1889,22 @@ namespace sourcepawn
             { "Source2ModSchema.GetString", N_GetString },
             { "Source2ModSchema.SetString", N_SetString },
             { "Source2ModSchema.GetOffset", N_GetOffset },
+            { "Source2ModSchema.StateChanged", N_StateChanged },
+            { "Source2ModSchema.GetIntAt", N_GetIntAt },
+            { "Source2ModSchema.SetIntAt", N_SetIntAt },
+            { "Source2ModSchema.GetInt64At", N_GetInt64At },
+            { "Source2ModSchema.SetInt64At", N_SetInt64At },
+            { "Source2ModSchema.GetFloatAt", N_GetFloatAt },
+            { "Source2ModSchema.SetFloatAt", N_SetFloatAt },
+            { "Source2ModSchema.GetVectorAt", N_GetVectorAt },
+            { "Source2ModSchema.SetVectorAt", N_SetVectorAt },
+            { "Source2ModSchema.GetEntityAt", N_GetEntityAt },
+            { "Source2ModSchema.SetEntityAt", N_SetEntityAt },
+            { "Source2ModSchema.GetObjectAt", N_GetObjectAt },
+            { "Source2ModSchema.GetEmbeddedAt", N_GetEmbeddedAt },
+            { "Source2ModSchema.GetStringPointerAt", N_GetStringPointerAt },
+            { "Source2ModSchema.GetUtlVectorCount", N_GetUtlVectorCount },
+            { "Source2ModSchema.GetUtlVectorElement", N_GetUtlVectorElement },
             { "CEntityInstance.IsValid", N_EntIsValid },
             { "CEntityInstance.GetClassname", N_EntGetClassname },
             { "CEntityInstance.GetName", N_EntGetName },
@@ -1298,6 +1919,22 @@ namespace sourcepawn
             { "CBaseEntity.Teleport", N_BaseTeleport },
             { "CBaseEntity.Remove", N_BaseRemove },
             { "CBaseEntity.GetIndex", N_BaseGetIndex },
+            { "CBaseEntity.AddEntityIOEvent", N_BaseAddEntityIOEvent },
+            { "CBaseEntity.AddSingleEntityIOListener", N_BaseAddSingleEntityIOListener },
+            { "CBaseEntity.GetAngRotation", N_BaseGetVector<QAngle, &CBaseEntity::GetAngRotation> },
+            { "CBaseEntity.GetAbsRotation", N_BaseGetVector<QAngle, &CBaseEntity::GetAbsRotation> },
+            { "CBaseEntity.GetAbsVelocity", N_BaseGetVector<Vector, &CBaseEntity::GetAbsVelocity> },
+            { "CBaseEntity.SetAbsOrigin", N_BaseSetVector<Vector, &CBaseEntity::SetAbsOrigin> },
+            { "CBaseEntity.SetAbsRotation", N_BaseSetVector<QAngle, &CBaseEntity::SetAbsRotation> },
+            { "CBaseEntity.SetAngRotation", N_BaseSetVector<QAngle, &CBaseEntity::SetAngRotation> },
+            { "CBaseEntity.SetAbsVelocity", N_BaseSetVector<Vector, &CBaseEntity::SetAbsVelocity> },
+            { "CBaseEntity.SetBaseVelocity", N_BaseSetVector<Vector, &CBaseEntity::SetBaseVelocity> },
+            { "CBaseEntity.GetVData", N_BaseGetVData },
+            { "CBaseEntity.SetMoveType", N_BaseSetMoveType },
+            { "CBaseEntity.GetCollisionGroup", N_BaseGetCollisionGroup },
+            { "CBaseEntity.SetCollisionGroup", N_BaseSetCollisionGroup },
+            { "CBaseEntity.CollisionRulesChanged", N_BaseCollisionRulesChanged },
+            { "CBaseEntity.DispatchParticleEffect", N_BaseDispatchParticleEffect },
             { "CBaseModelEntity.GetModelName", N_ModelGetModelName },
             { "CBaseModelEntity.GetEyePosition", N_ModelGetEyePosition },
             { "CBaseModelEntity.SetModel", N_ModelSetModel },
@@ -1320,6 +1957,10 @@ namespace sourcepawn
             { "CBasePlayerController.GetIpAddress", N_PCGetIpAddress },
             { "CBasePlayerController.ReplicateConVar", N_PCReplicateConVar },
             { "CCSPlayerController.FromSlot", N_CSFromSlot },
+            { "CCSPlayerController.FromPawn", N_CSFromPawn },
+            { "CCSPlayerController.FromUserId", N_CSFromUserId },
+            { "CCSPlayerController.FromSteamId", N_CSFromSteamId },
+            { "CCSPlayerController.TakeDamage", N_CSTakeDamage },
             { "CCSPlayerController.PrintToCenterHtml", N_CSPrintToCenterHtml },
             { "CCSPlayerController.Respawn", N_CSRespawn },
             { "CCSPlayerController.SwitchTeam", N_CSSwitchTeam },
@@ -1329,7 +1970,35 @@ namespace sourcepawn
             { "CBasePlayerPawn.CommitSuicide", N_PawnCommitSuicide },
             { "CBasePlayerPawn.SnapViewAngles", N_PawnSnapViewAngles },
             { "CBasePlayerPawn.GetController", N_PawnGetController },
+            { "CBasePlayerPawn.GetDefaultController", N_PawnGetDefaultController },
+            { "CCSPlayerPawnBase.GetOriginalController", N_CSPawnBaseGetOriginalController },
+            { "CCSPlayerPawnBase.CanMove", N_CSPawnBaseCanMove },
             { "CCSPlayerPawn.GetEyeAngles", N_CSPawnGetEyeAngles },
+            { "CCSPlayerPawn.PostThink", N_CSPawnPostThink },
+            { "CBasePlayerWeapon.GetWeaponVData", N_WeaponGetWeaponVData },
+            { "CBasePlayerWeapon.GetWeaponClassname", N_WeaponGetWeaponClassname },
+            { "CCSWeaponBaseVData.FromKey", N_WeaponVDataFromKey },
+            { "CPlayerPawnComponent.GetPlayerPawn", N_PawnComponentGetPlayerPawn },
+            { "CPlayerControllerComponent.GetPlayerController", N_ControllerComponentGetPlayerController },
+            { "CPlayer_WeaponServices.Destroy", N_WeaponsDestroy },
+            { "CAttributeList.SetOrAddAttribute", N_AttributesSet<&CAttributeList::SetOrAddAttribute> },
+            { "CAttributeList.SetOrAddAttributeValueByName", N_AttributesSet<&CAttributeList::SetOrAddAttributeValueByName> },
+            { "CGameSceneNode.GetSkeletonInstance", N_SceneNodeGetSkeletonInstance },
+            { "CDecoyProjectile.EmitGrenade", N_EmitGrenade<CDecoyProjectile> },
+            { "CFlashbangProjectile.EmitGrenade", N_EmitGrenade<CFlashbangProjectile> },
+            { "CHEGrenadeProjectile.EmitGrenade", N_EmitGrenade<CHEGrenadeProjectile> },
+            { "CMolotovProjectile.EmitGrenade", N_EmitGrenade<CMolotovProjectile> },
+            { "CSmokeGrenadeProjectile.EmitGrenade", N_EmitSmokeGrenade },
+            { "CCSGameRules.GoToIntermission", N_RulesGoToIntermission },
+            { "CCSGameRules.FindPickerEntity", N_RulesFindPickerEntity },
+            { "CCSGameRules.GetClientAimTarget", N_RulesGetClientAimTarget },
+            { "CCSCustomHudLayout.Create", N_HudCreate },
+            { "CCSCustomHudLayout.GetLayoutState", N_HudGetLayoutState },
+            { "CCSCustomHudLayout.SetHasClass", N_HudSetHasClass },
+            { "CCSCustomHudLayout.SetDialogVariableString", N_HudSetDialogVariableString },
+            { "CCSCustomHudLayout.SetInputCaptureEnabled", N_HudSetInputCaptureEnabled },
+            { "CCSCustomHudLayout.IsInputCaptureEnabled", N_HudIsInputCaptureEnabled },
+            { "Source2ModEntities.FindAllEntitiesByDesignerName", N_EntsFindAllEntitiesByDesignerName },
             { "CPlayer_ItemServices.DropActivePlayerWeapon", N_ItemsDropActive },
             { "CPlayer_ItemServices.RemoveWeapons", N_ItemsRemoveWeapons },
             { "CPlayer_ItemServices.GiveNamedItem", N_ItemsGiveNamedItem },
@@ -1364,6 +2033,22 @@ namespace sourcepawn
         // A pointer the game handed back, with nothing to find it again by:
         // good for as long as the object it points at.
         return ptr ? RefFor(Root::Raw, CEntityHandle(), ptr, {}) : 0;
+    }
+
+    cell_t RefForHandle(CEntityHandle handle)
+    {
+        if (!handle.IsValid())
+            return -1;
+        return static_cast<cell_t>(kRefFlag | ((static_cast<uint32_t>(handle.GetSerialNumber()) & 0xFFFF) << 15)
+                                   | (static_cast<uint32_t>(handle.GetEntryIndex()) & 0x7FFF));
+    }
+
+    CEntityHandle HandleForRef(cell_t ref)
+    {
+        // A ref keeps 16 bits of the serial: the live entity at the index
+        // gives the whole handle when it is still the same one.
+        CEntityInstance* inst = FromRef(ref);
+        return inst ? inst->GetRefEHandle() : CEntityHandle();
     }
 
     void ForgetEntityListeners(PluginId id)

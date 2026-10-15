@@ -37,3 +37,28 @@ forward void Source2Mod_OnPermissionsChanged(const char[] steamId);
 forward void Source2Mod_OnGameServerSteamAPIActivated();
 
 forward void Source2Mod_OnGameServerSteamAPIDeactivated();
+
+/** Another Source2Mod plugin (native or script) loaded / is unloading; `id` is its plugin id. */
+forward void Source2Mod_OnPluginLoad(int id, const char[] name);
+
+forward void Source2Mod_OnPluginUnload(int id, const char[] name);
+
+/** A Metamod plugin loaded / unloaded (Metamod's numbering). */
+forward void Source2Mod_OnMetamodPluginLoad(int id);
+
+forward void Source2Mod_OnMetamodPluginUnload(int id);
+
+/** Every Source2Mod plugin of the startup batch is loaded (SourceMod's OnAllPluginsLoaded runs right after). */
+forward void Source2Mod_OnAllSource2ModPluginsLoaded();
+
+forward void Source2Mod_OnAllMetamodPluginsLoaded();
+
+/**
+ * The server is starting a map session (IServerGameDLL StartupServer). The
+ * session configuration and world session are engine objects without a
+ * script view and are not passed.
+ */
+forward void Source2Mod_OnStartupServer(const char[] mapName);
+
+/** The game event manager loaded an event description file (IGameEventManager2.LoadEventsFromFile). */
+forward void Source2Mod_OnLoadEventsFromFile(const char[] filename, bool searchAll);

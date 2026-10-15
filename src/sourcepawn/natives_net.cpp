@@ -71,6 +71,16 @@ namespace sourcepawn
             out[1] = static_cast<cell_t>(static_cast<uint32_t>(static_cast<uint64_t>(value) >> 32));
         }
 
+        // An optional int[2] argument (scripts built before it existed pass none): 0 when absent.
+        int64_t ReadInt64Arg(IPluginContext* ctx, const cell_t* params, int index)
+        {
+            if (params[0] < index)
+                return 0;
+            cell_t* in;
+            ctx->LocalToPhysAddr(params[index], &in);
+            return static_cast<int64_t>(static_cast<uint64_t>(static_cast<uint32_t>(in[0])) | (static_cast<uint64_t>(static_cast<uint32_t>(in[1])) << 32));
+        }
+
         HandleType FrameType(const char* name)
         {
             return Handles().CreateType(name, nullptr, 0, false);
@@ -211,7 +221,7 @@ namespace sourcepawn
         cell_t N_JsonAsInt64(IPluginContext* ctx, const cell_t* params)
         {
             if (JsonVal* v = ValOf(ctx, params[1]))
-                WriteInt64(ctx, params[2], v->value->AsInt64(0));
+                WriteInt64(ctx, params[2], v->value->AsInt64(ReadInt64Arg(ctx, params, 3)));
             return 0;
         }
 
@@ -249,7 +259,7 @@ namespace sourcepawn
         cell_t N_JsonGetInt64(IPluginContext* ctx, const cell_t* params)
         {
             if (JsonVal* v = ValOf(ctx, params[1]))
-                WriteInt64(ctx, params[3], v->value->GetInt64(LocalString(ctx, params[2]), 0));
+                WriteInt64(ctx, params[3], v->value->GetInt64(LocalString(ctx, params[2]), ReadInt64Arg(ctx, params, 4)));
             return 0;
         }
 

@@ -62,13 +62,16 @@ methodmap ISource2ModSound < Handle
 	public native void SetBool(const char[] name, bool value);
 	public native void SetInt32(const char[] name, int value);
 	public native void SetUInt32(const char[] name, int value);
+	/** 64-bit: two cells, [0] low and [1] high bits. */
+	public native void SetUInt64(const char[] name, const int value[2]);
 	public native void SetFloat(const char[] name, float value);
 	public native void SetFloat3(const char[] name, const float value[3]);
 	public native bool GetBool(const char[] name, bool def = false);
 	public native int GetInt32(const char[] name, int def = 0);
 	public native int GetUInt32(const char[] name, int def = 0);
+	public native void GetUInt64(const char[] name, int value[2], const int def[2] = {0, 0});
 	public native float GetFloat(const char[] name, float def = 0.0);
-	public native void GetFloat3(const char[] name, float value[3]);
+	public native void GetFloat3(const char[] name, float value[3], const float def[3] = {0.0, 0.0, 0.0});
 
 	public native void AddRecipient(CPlayerSlot slot);
 	public native void RemoveRecipient(CPlayerSlot slot);
@@ -91,12 +94,28 @@ methodmap Source2ModSounds
 	public static native int EmitSoundToPlayer(CPlayerSlot slot, const char[] name, float volume = 1.0, float pitch = 1.0, const char[] channel = "");
 	public static native int EmitSoundToPlayers(const int players[2], const char[] name, float volume = 1.0, float pitch = 1.0, const char[] channel = "");
 	public static native int EmitSoundToAll(const char[] name, float volume = 1.0, float pitch = 1.0, const char[] channel = "");
+	/** From the entity (it follows it), to the players in the mask ({-1, -1} = everyone). */
+	public static native int EmitSoundFromEntity(CEntityInstance entity, const char[] name, float volume = 1.0, float pitch = 1.0,
+	                                             const int players[2] = {-1, -1}, const char[] channel = "");
 
 	public static native void StopSound(int guid);
 	public static native void StopSoundForPlayers(int guid, const int players[2]);
-	public static native void StopSoundByName(const char[] name, int sourceEntityIndex = SOUND_SOURCE_LISTENER);
+	/** players: whose copies stop ({-1, -1} = everyone). */
+	public static native void StopSoundByName(const char[] name, int sourceEntityIndex = SOUND_SOURCE_LISTENER, const int players[2] = {-1, -1});
 	public static native void SetSoundVolume(int guid, float volume);
-	public static native void UpdateSoundParams(int guid, ISource2ModSound params);
+	/** players: who gets the new params ({0, 0} = the ones it was emitted to). */
+	public static native void UpdateSoundParams(int guid, ISource2ModSound params, const int players[2] = {0, 0});
+
+	/**
+	 * A player's volume for a channel (the name sounds are emitted under):
+	 * 0 mutes, 1 is unchanged. Applies to later sounds and the ones still
+	 * playing; forgotten when the player disconnects.
+	 */
+	public static native void SetPlayerVolume(CPlayerSlot slot, const char[] channel, float volume);
+	/** 1.0 when never set. */
+	public static native float GetPlayerVolume(CPlayerSlot slot, const char[] channel);
+	/** Puts all of a player's channels back to 1.0. */
+	public static native void ResetPlayerVolumes(CPlayerSlot slot);
 
 	/** @return The id UnhookSound takes */
 	public static native int HookSound(Source2ModSoundHook handler);
@@ -104,4 +123,7 @@ methodmap Source2ModSounds
 
 	/** What sounds travel as; hash the names you care about once. */
 	public static native int HashSoundName(const char[] name);
+
+	/** The name for a hash (one HashSoundName or a sound has seen). @return false when unknown */
+	public static native bool LookupSoundName(int hash, char[] buffer, int maxlen);
 }

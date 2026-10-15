@@ -25,6 +25,8 @@ INT_TYPES = {
     "char", "int", "uint", "uint32", "int32", "uint16", "int16", "uint8", "int8",
     "CEntityIndex", "CUtlStringToken", "WorldGroupId_t", "AttachmentHandle_t", "ModelConfigHandle_t",
     "HSequence", "GameTick_t", "CPlayerSlot", "ParticleIndex_t", "HitGroup_t",
+    # s2sdk's own enums (not in schema/entity/enums)
+    "MoveType_t", "MoveCollide_t", "SolidType_t", "DamageTypes_t", "Class_T", "soundlevel_t",
 }
 FLOAT_TYPES = {"float", "float32", "GameTime_t"}
 VECTOR_TYPES = {"Vector", "QAngle", "VectorWS"}

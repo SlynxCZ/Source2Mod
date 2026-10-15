@@ -24,6 +24,20 @@ enum Source2ModAction
 };
 
 /**
+ * C++'s HookChain: whether an SDK helper's call into the game runs the hooks
+ * on it (Run) or goes past them to the original (Bypass) -- what a handler
+ * that calls the function it hooks needs, and what an admin action uses to
+ * stay out of other plugins' way. Default is what the C++ helper defaults to
+ * (Run for most, Bypass for TakeDamage and TerminateRound).
+ */
+enum Source2ModHookChain
+{
+	HookChain_Default = -1,
+	HookChain_Run = 0,
+	HookChain_Bypass
+};
+
+/**
  * A player's slot, 0..63; -1 is "no player" (the server console).
  * The client index of the SourceMod-style natives is slot + 1.
  */

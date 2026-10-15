@@ -886,6 +886,15 @@ namespace sourcepawn
             return 0;
         }
 
+        // HookEventEx: HookEvent, false instead of an error for an event that does not exist.
+        cell_t N_HookEventEx(IPluginContext* ctx, const cell_t* params)
+        {
+            if (!shared::g_pGameEventManager || !shared::g_pGameEventManager->HasEventDescriptor(Str(ctx, params[1])))
+                return 0;
+            N_HookEvent(ctx, params);
+            return 1;
+        }
+
         cell_t N_UnhookEvent(IPluginContext* ctx, const cell_t* params)
         {
             ScriptPlugin* plugin = Plugin(ctx);
@@ -1392,6 +1401,7 @@ namespace sourcepawn
             { "CBasePlayerController.FireEventToClient", N_ControllerFireEventToClient },
             // events.inc
             { "HookEvent", N_HookEvent },
+            { "HookEventEx", N_HookEventEx },
             { "UnhookEvent", N_UnhookEvent },
             { "GetEventBool", N_EventGetBool },
             { "GetEventInt", N_EventGetInt },
@@ -1444,12 +1454,45 @@ namespace sourcepawn
         };
     }
 
+    Timer* ScriptTimer(IPluginContext* ctx, cell_t handle)
+    {
+        auto* object = static_cast<TimerObject*>(ReadHandle(ctx, handle, Types().timer));
+        return object ? object->state->timer : nullptr;
+    }
+
+    IGameEvent* ScriptEvent(IPluginContext* ctx, cell_t handle)
+    {
+        return EventOf(ctx, handle);
+    }
+
+    cell_t NewScriptEvent(IGameEvent* event, PluginId owner)
+    {
+        auto* frame = new EventFrame{ event, nullptr };
+        const cell_t handle = Handles().Create(CreatedEventType(), frame, owner);
+        if (!handle)
+        {
+            shared::g_pGameEventManager->FreeEvent(event);
+            delete frame;
+        }
+        return handle;
+    }
+
+    IGameEvent* TakeScriptEvent(IPluginContext* ctx, cell_t handle)
+    {
+        auto* frame = static_cast<EventFrame*>(ReadHandle(ctx, handle, CreatedEventType()));
+        if (!frame)
+            return nullptr;
+        IGameEvent* ev = std::exchange(frame->event, nullptr);
+        Handles().Free(handle, 0, true);
+        return ev;
+    }
+
     const sp_nativeinfo_t* GetCoreNatives()
     {
         static const std::vector<sp_nativeinfo_t> s_all = []
         {
             std::vector<sp_nativeinfo_t> all;
-            for (const sp_nativeinfo_t* table : { g_natives, GetAdtNatives(), GetConVarNatives(), GetPluginSysNatives(), GetEntityNatives(), GetApiNatives(), GetNetSoundNatives(), GetGameHookNatives(), GetGameConfigNatives(), GetRawHookNatives(), GetWorldNatives(), GetNetNatives(), GetUiNatives(), GetMathNatives(), GetFeatureNatives(), GetMapNatives(), GetGeoIPNatives(), GetCookieNatives(), GetTranslationNatives(), GetFileNatives(), GetUtilNatives(), GetClientNatives(), GetTargetingNatives(), GetMenuBuilderNatives() })
+            for (const sp_nativeinfo_t* table : { g_natives, GetAdtNatives(), GetConVarNatives(), GetPluginSysNatives(), GetEntityNatives(), GetApiNatives(), GetNetSoundNatives(), GetGameHookNatives(), GetEventNatives(), GetGameConfigNatives(), GetRawHookNatives(), GetWorldNatives(), GetNetNatives(), GetUiNatives(), GetMathNatives(), GetFeatureNatives(), GetMapNatives(), GetGeoIPNatives(), GetCookieNatives(), GetTranslationNatives(), GetFileNatives(), GetUtilNatives(), GetClientNatives(), GetTargetingNatives(), GetMenuBuilderNatives() })
                 for (const sp_nativeinfo_t* n = table; n->name; ++n)
                     all.push_back(*n);
             all.push_back({ nullptr, nullptr });

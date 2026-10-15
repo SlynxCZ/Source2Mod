@@ -23,9 +23,12 @@
 #include "core/networkmessages.h"
 #include "core/sounds.h"
 
+#include <source2mod/schema/entity/classes/CBaseEntity.h>
+
 #include <sp_callable.h>
 
 #include <algorithm>
+#include <map>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -248,6 +251,36 @@ namespace sourcepawn
             return 0;
         }
 
+        // GetRepeatedInt64(msg, field, index, buffer, maxlen)
+        cell_t N_GetRepeatedInt64(IPluginContext* ctx, const cell_t* params)
+        {
+            if (NetMsg* m = MsgOf(ctx, params[1]))
+                ctx->StringToLocalUTF8(params[4], params[5], std::to_string(NM().GetRepeatedInt64(m->msg, LocalString(ctx, params[2]), params[3])).c_str(), nullptr);
+            return 0;
+        }
+
+        // SetRepeatedInt64(msg, field, index, value)
+        cell_t N_SetRepeatedInt64(IPluginContext* ctx, const cell_t* params)
+        {
+            if (NetMsg* m = MsgOf(ctx, params[1]))
+                NM().SetRepeatedInt64(m->msg, LocalString(ctx, params[2]), params[3], strtoll(LocalString(ctx, params[4]), nullptr, 10));
+            return 0;
+        }
+
+        cell_t N_GetRepeatedUInt64(IPluginContext* ctx, const cell_t* params)
+        {
+            if (NetMsg* m = MsgOf(ctx, params[1]))
+                ctx->StringToLocalUTF8(params[4], params[5], std::to_string(NM().GetRepeatedUInt64(m->msg, LocalString(ctx, params[2]), params[3])).c_str(), nullptr);
+            return 0;
+        }
+
+        cell_t N_SetRepeatedUInt64(IPluginContext* ctx, const cell_t* params)
+        {
+            if (NetMsg* m = MsgOf(ctx, params[1]))
+                NM().SetRepeatedUInt64(m->msg, LocalString(ctx, params[2]), params[3], strtoull(LocalString(ctx, params[4]), nullptr, 10));
+            return 0;
+        }
+
         cell_t N_GetString(IPluginContext* ctx, const cell_t* params)
         {
             NetMsg* m = MsgOf(ctx, params[1]);
@@ -408,20 +441,142 @@ namespace sourcepawn
             return 0;
         }
 
+        // Repeated elements and Add for the vector types: GetRepeated(msg, field, index, out),
+        // SetRepeated(msg, field, index, in), Add(msg, field, in).
+        void ToCells(IPluginContext* ctx, cell_t addr, const Vector2D& v)
+        {
+            const float f[2] = { v.x, v.y };
+            ToFloats(ctx, addr, f, 2);
+        }
+
+        void ToCells(IPluginContext* ctx, cell_t addr, const Vector& v)
+        {
+            const float f[3] = { v.x, v.y, v.z };
+            ToFloats(ctx, addr, f, 3);
+        }
+
+        void ToCells(IPluginContext* ctx, cell_t addr, const QAngle& a)
+        {
+            const float f[3] = { a.x, a.y, a.z };
+            ToFloats(ctx, addr, f, 3);
+        }
+
+        void ToCells(IPluginContext* ctx, cell_t addr, const Color& c)
+        {
+            cell_t* out;
+            ctx->LocalToPhysAddr(addr, &out);
+            out[0] = c.r();
+            out[1] = c.g();
+            out[2] = c.b();
+            out[3] = c.a();
+        }
+
+        template <typename T>
+        T FromCells(IPluginContext* ctx, cell_t addr);
+
+        template <>
+        Vector2D FromCells<Vector2D>(IPluginContext* ctx, cell_t addr)
+        {
+            float f[2];
+            FromFloats(ctx, addr, f, 2);
+            return Vector2D(f[0], f[1]);
+        }
+
+        template <>
+        Vector FromCells<Vector>(IPluginContext* ctx, cell_t addr)
+        {
+            float f[3];
+            FromFloats(ctx, addr, f, 3);
+            return Vector(f[0], f[1], f[2]);
+        }
+
+        template <>
+        QAngle FromCells<QAngle>(IPluginContext* ctx, cell_t addr)
+        {
+            float f[3];
+            FromFloats(ctx, addr, f, 3);
+            return QAngle(f[0], f[1], f[2]);
+        }
+
+        template <>
+        Color FromCells<Color>(IPluginContext* ctx, cell_t addr)
+        {
+            cell_t* in;
+            ctx->LocalToPhysAddr(addr, &in);
+            return Color(in[0], in[1], in[2], in[3]);
+        }
+
+#define NETMSG_VECTOR_REPEATED(Name, Type)                                                                                   \
+        cell_t N_GetRepeated##Name(IPluginContext* ctx, const cell_t* params)                                                 \
+        {                                                                                                                     \
+            if (NetMsg* m = MsgOf(ctx, params[1]))                                                                            \
+                ToCells(ctx, params[4], NM().GetRepeated##Name(m->msg, LocalString(ctx, params[2]), params[3]));              \
+            return 0;                                                                                                         \
+        }                                                                                                                     \
+        cell_t N_SetRepeated##Name(IPluginContext* ctx, const cell_t* params)                                                 \
+        {                                                                                                                     \
+            if (NetMsg* m = MsgOf(ctx, params[1]))                                                                            \
+                NM().SetRepeated##Name(m->msg, LocalString(ctx, params[2]), params[3], FromCells<Type>(ctx, params[4]));      \
+            return 0;                                                                                                         \
+        }
+
+        NETMSG_VECTOR_REPEATED(Vector2D, Vector2D)
+        NETMSG_VECTOR_REPEATED(Vector, Vector)
+        NETMSG_VECTOR_REPEATED(QAngle, QAngle)
+        NETMSG_VECTOR_REPEATED(Color, Color)
+#undef NETMSG_VECTOR_REPEATED
+
+        cell_t N_AddVector2D(IPluginContext* ctx, const cell_t* params)
+        {
+            if (NetMsg* m = MsgOf(ctx, params[1]))
+                NM().AddVector2D(m->msg, LocalString(ctx, params[2]), FromCells<Vector2D>(ctx, params[3]));
+            return 0;
+        }
+
+        cell_t N_AddQAngle(IPluginContext* ctx, const cell_t* params)
+        {
+            if (NetMsg* m = MsgOf(ctx, params[1]))
+                NM().AddQAngle(m->msg, LocalString(ctx, params[2]), FromCells<QAngle>(ctx, params[3]));
+            return 0;
+        }
+
+        cell_t N_AddColor(IPluginContext* ctx, const cell_t* params)
+        {
+            if (NetMsg* m = MsgOf(ctx, params[1]))
+                NM().AddColor(m->msg, LocalString(ctx, params[2]), FromCells<Color>(ctx, params[3]));
+            return 0;
+        }
+
+        // Bytes into a script buffer: the interface writes the whole field, so it
+        // is sized first (a null out only measures). index -1 = not repeated.
+        cell_t CopyBytes(IPluginContext* ctx, void* msg, const char* field, int index, cell_t addr, cell_t maxlen)
+        {
+            if (maxlen <= 0)
+                return 0;
+            const int size = index < 0 ? NM().GetBytes(nullptr, msg, field) : NM().GetRepeatedBytes(nullptr, msg, field, index);
+            if (size <= 0)
+                return 0;
+            std::vector<uint8_t> tmp(static_cast<size_t>(size));
+            const int n = index < 0 ? NM().GetBytes(tmp.data(), msg, field) : NM().GetRepeatedBytes(tmp.data(), msg, field, index);
+            char* dest;
+            ctx->LocalToString(addr, &dest);
+            const int copy = std::min({ n, size, maxlen });
+            memcpy(dest, tmp.data(), static_cast<size_t>(std::max(copy, 0)));
+            return copy;
+        }
+
         // GetBytes(msg, field, char[] buffer, maxlen): raw bytes
         cell_t N_GetBytes(IPluginContext* ctx, const cell_t* params)
         {
             NetMsg* m = MsgOf(ctx, params[1]);
-            if (!m || params[4] <= 0)
-                return 0;
-            // The interface writes the whole field; size it first.
-            std::vector<uint8_t> tmp(65536);
-            const int n = NM().GetBytes(tmp.data(), m->msg, LocalString(ctx, params[2]));
-            char* dest;
-            ctx->LocalToString(params[3], &dest);
-            const int copy = std::min(n, params[4]);
-            memcpy(dest, tmp.data(), static_cast<size_t>(std::max(copy, 0)));
-            return copy;
+            return m ? CopyBytes(ctx, m->msg, LocalString(ctx, params[2]), -1, params[3], params[4]) : 0;
+        }
+
+        // GetRepeatedBytes(msg, field, index, char[] buffer, maxlen)
+        cell_t N_GetRepeatedBytes(IPluginContext* ctx, const cell_t* params)
+        {
+            NetMsg* m = MsgOf(ctx, params[1]);
+            return m && params[3] >= 0 ? CopyBytes(ctx, m->msg, LocalString(ctx, params[2]), params[3], params[4], params[5]) : 0;
         }
 
         cell_t N_SetBytes(IPluginContext* ctx, const cell_t* params)
@@ -432,6 +587,30 @@ namespace sourcepawn
             char* src;
             ctx->LocalToString(params[3], &src);
             NM().SetBytes(m->msg, LocalString(ctx, params[2]), src, params[4]);
+            return 0;
+        }
+
+        // SetRepeatedBytes(msg, field, index, value, length)
+        cell_t N_SetRepeatedBytes(IPluginContext* ctx, const cell_t* params)
+        {
+            NetMsg* m = MsgOf(ctx, params[1]);
+            if (!m)
+                return 0;
+            char* src;
+            ctx->LocalToString(params[4], &src);
+            NM().SetRepeatedBytes(m->msg, LocalString(ctx, params[2]), params[3], src, params[5]);
+            return 0;
+        }
+
+        // AddBytes(msg, field, value, length)
+        cell_t N_AddBytes(IPluginContext* ctx, const cell_t* params)
+        {
+            NetMsg* m = MsgOf(ctx, params[1]);
+            if (!m)
+                return 0;
+            char* src;
+            ctx->LocalToString(params[3], &src);
+            NM().AddBytes(m->msg, LocalString(ctx, params[2]), src, params[4]);
             return 0;
         }
 
@@ -511,6 +690,40 @@ namespace sourcepawn
             return static_cast<Action>(std::clamp<cell_t>(res, 0, 2));
         }
 
+        // The scripts' hook ids by kind: an Unhook* takes only an id of its own
+        // kind that the calling script made.
+        enum class HookKind
+        {
+            ServerMessage,
+            ClientMessage,
+            ServerInternalMessage,
+            Sound,
+        };
+
+        struct ScriptHook
+        {
+            PluginId owner;
+            HookKind kind;
+        };
+        std::map<Source2ModHookId, ScriptHook> g_hooks;
+
+        cell_t Remember(Source2ModHookId id, PluginId owner, HookKind kind)
+        {
+            if (id)
+                g_hooks[id] = { owner, kind };
+            return static_cast<cell_t>(id);
+        }
+
+        /// Takes the id out of the script's hooks; false when it is not the caller's of that kind.
+        bool Forget(IPluginContext* ctx, cell_t id, HookKind kind)
+        {
+            auto it = g_hooks.find(static_cast<Source2ModHookId>(id));
+            if (it == g_hooks.end() || it->second.kind != kind || it->second.owner != CallerId(ctx))
+                return false;
+            g_hooks.erase(it);
+            return true;
+        }
+
         cell_t N_HookServerMessage(IPluginContext* ctx, const cell_t* params)
         {
             IPluginFunction* fn = Function(ctx, params[1]);
@@ -531,7 +744,7 @@ namespace sourcepawn
                 *clients = static_cast<uint64_t>(static_cast<uint32_t>(mask[0])) | (static_cast<uint64_t>(static_cast<uint32_t>(mask[1])) << 32);
                 return ToAction(res);
             });
-            return static_cast<cell_t>(networkmessages::networkMessagesManager.HookServerMessage(owner, std::move(handler)));
+            return Remember(networkmessages::networkMessagesManager.HookServerMessage(owner, std::move(handler)), owner, HookKind::ServerMessage);
         }
 
         NetMessageClientHook ClientHook(IPluginFunction* fn, PluginId owner)
@@ -555,7 +768,7 @@ namespace sourcepawn
             if (!fn)
                 return 0;
             const PluginId owner = CallerId(ctx);
-            return static_cast<cell_t>(networkmessages::networkMessagesManager.HookClientMessage(owner, ClientHook(fn, owner)));
+            return Remember(networkmessages::networkMessagesManager.HookClientMessage(owner, ClientHook(fn, owner)), owner, HookKind::ClientMessage);
         }
 
         cell_t N_HookServerInternalMessage(IPluginContext* ctx, const cell_t* params)
@@ -564,11 +777,15 @@ namespace sourcepawn
             if (!fn)
                 return 0;
             const PluginId owner = CallerId(ctx);
-            return static_cast<cell_t>(networkmessages::networkMessagesManager.HookServerInternalMessage(owner, ClientHook(fn, owner)));
+            return Remember(networkmessages::networkMessagesManager.HookServerInternalMessage(owner, ClientHook(fn, owner)), owner,
+                            HookKind::ServerInternalMessage);
         }
 
-        cell_t N_UnhookNetMessage(IPluginContext*, const cell_t* params)
+        template <HookKind KIND>
+        cell_t N_UnhookNetMessage(IPluginContext* ctx, const cell_t* params)
         {
+            if (!Forget(ctx, params[1], KIND))
+                return 0;
             return networkmessages::networkMessagesManager.UnhookNetMessage(static_cast<Source2ModHookId>(params[1]));
         }
 
@@ -768,6 +985,14 @@ namespace sourcepawn
             return 0;
         }
 
+        // SetUInt64(name, const int value[2]): two cells, [0] low bits.
+        cell_t N_SoundSetUInt64(IPluginContext* ctx, const cell_t* params)
+        {
+            if (ISource2ModSound* s = SoundOf(ctx, params[1]))
+                s->SetUInt64(LocalString(ctx, params[2]), ReadMask(ctx, params[3]));
+            return 0;
+        }
+
         cell_t N_SoundSetFloat(IPluginContext* ctx, const cell_t* params)
         {
             if (ISource2ModSound* s = SoundOf(ctx, params[1]))
@@ -810,11 +1035,27 @@ namespace sourcepawn
             return s ? sp_ftoc(s->GetFloat(LocalString(ctx, params[2]), sp_ctof(params[3]))) : 0;
         }
 
+        // GetUInt64(name, int value[2], const int def[2])
+        cell_t N_SoundGetUInt64(IPluginContext* ctx, const cell_t* params)
+        {
+            if (ISource2ModSound* s = SoundOf(ctx, params[1]))
+            {
+                cell_t* out;
+                ctx->LocalToPhysAddr(params[3], &out);
+                WriteMask(out, s->GetUInt64(LocalString(ctx, params[2]), ReadMask(ctx, params[4])));
+            }
+            return 0;
+        }
+
+        // GetFloat3(name, float value[3], const float def[3]); scripts built before def pass none.
         cell_t N_SoundGetFloat3(IPluginContext* ctx, const cell_t* params)
         {
             if (ISource2ModSound* s = SoundOf(ctx, params[1]))
             {
-                const Vector v = s->GetFloat3(LocalString(ctx, params[2]));
+                float d[3] = { 0.0f, 0.0f, 0.0f };
+                if (params[0] >= 4)
+                    FromFloats(ctx, params[4], d, 3);
+                const Vector v = s->GetFloat3(LocalString(ctx, params[2]), Vector(d[0], d[1], d[2]));
                 const float f[3] = { v.x, v.y, v.z };
                 ToFloats(ctx, params[3], f, 3);
             }
@@ -903,6 +1144,16 @@ namespace sourcepawn
             return static_cast<cell_t>(SM().EmitSoundToAll(LocalString(ctx, params[1]), sp_ctof(params[2]), sp_ctof(params[3]), Channel(ctx, params[4])));
         }
 
+        // EmitSoundFromEntity(entity, name, volume = 1.0, pitch = 1.0, players = {-1, -1}, channel = "")
+        cell_t N_EmitFromEntity(IPluginContext* ctx, const cell_t* params)
+        {
+            CEntityInstance* ent = params[1] >= 0 && params[1] < 32768 ? CBaseEntity::FromIndex<CBaseEntity>(params[1]) : nullptr;
+            if (!ent)
+                return ctx->ThrowNativeError("Entity %d is invalid", params[1]);
+            return static_cast<cell_t>(SM().EmitSoundFromEntity(ent, LocalString(ctx, params[2]), sp_ctof(params[3]), sp_ctof(params[4]),
+                                                               ReadMask(ctx, params[5]), Channel(ctx, params[6])));
+        }
+
         cell_t N_StopSound(IPluginContext*, const cell_t* params)
         {
             SM().StopSound(static_cast<SoundGuid>(params[1]));
@@ -917,7 +1168,8 @@ namespace sourcepawn
 
         cell_t N_StopSoundByName(IPluginContext* ctx, const cell_t* params)
         {
-            SM().StopSoundByName(LocalString(ctx, params[1]), params[2]);
+            // players: appended later, scripts built before it pass none (= everyone).
+            SM().StopSoundByName(LocalString(ctx, params[1]), params[2], params[0] >= 3 ? ReadMask(ctx, params[3]) : ~SoundRecipients(0));
             return 0;
         }
 
@@ -930,7 +1182,7 @@ namespace sourcepawn
         cell_t N_UpdateSoundParams(IPluginContext* ctx, const cell_t* params)
         {
             if (ISource2ModSound* s = SoundOf(ctx, params[2]))
-                SM().UpdateSoundParams(static_cast<SoundGuid>(params[1]), s);
+                SM().UpdateSoundParams(static_cast<SoundGuid>(params[1]), s, params[0] >= 3 ? ReadMask(ctx, params[3]) : SOUND_RECIPIENTS_NONE);
             return 0;
         }
 
@@ -950,17 +1202,44 @@ namespace sourcepawn
                 Handles().Free(h, 0, true);
                 return ToAction(res);
             });
-            return static_cast<cell_t>(sounds::soundsManager.HookSound(owner, std::move(handler)));
+            return Remember(sounds::soundsManager.HookSound(owner, std::move(handler)), owner, HookKind::Sound);
         }
 
-        cell_t N_UnhookSound(IPluginContext*, const cell_t* params)
+        cell_t N_UnhookSound(IPluginContext* ctx, const cell_t* params)
         {
+            if (!Forget(ctx, params[1], HookKind::Sound))
+                return 0;
             return sounds::soundsManager.UnhookSoundId(static_cast<Source2ModHookId>(params[1]));
         }
 
         cell_t N_HashSoundName(IPluginContext* ctx, const cell_t* params)
         {
             return static_cast<cell_t>(SM().HashSoundName(LocalString(ctx, params[1])));
+        }
+
+        // LookupSoundName(hash, buffer, maxlen): false when the hash was never seen.
+        cell_t N_LookupSoundName(IPluginContext* ctx, const cell_t* params)
+        {
+            const char* name = SM().LookupSoundName(static_cast<uint32_t>(params[1]));
+            ctx->StringToLocalUTF8(params[2], params[3], name ? name : "", nullptr);
+            return name != nullptr;
+        }
+
+        cell_t N_SetPlayerVolume(IPluginContext* ctx, const cell_t* params)
+        {
+            SM().SetPlayerVolume(CPlayerSlot(params[1]), LocalString(ctx, params[2]), sp_ctof(params[3]));
+            return 0;
+        }
+
+        cell_t N_GetPlayerVolume(IPluginContext* ctx, const cell_t* params)
+        {
+            return sp_ftoc(SM().GetPlayerVolume(CPlayerSlot(params[1]), LocalString(ctx, params[2])));
+        }
+
+        cell_t N_ResetPlayerVolumes(IPluginContext*, const cell_t* params)
+        {
+            SM().ResetPlayerVolumes(CPlayerSlot(params[1]));
+            return 0;
         }
 
         const sp_nativeinfo_t g_netSoundNatives[] = {
@@ -982,9 +1261,13 @@ namespace sourcepawn
             { "Source2ModNetworkMessages.GetInt64", N_GetInt64 },
             { "Source2ModNetworkMessages.SetInt64", N_SetInt64 },
             { "Source2ModNetworkMessages.AddInt64", N_AddInt64 },
+            { "Source2ModNetworkMessages.GetRepeatedInt64", N_GetRepeatedInt64 },
+            { "Source2ModNetworkMessages.SetRepeatedInt64", N_SetRepeatedInt64 },
             { "Source2ModNetworkMessages.GetUInt64", N_GetUInt64 },
             { "Source2ModNetworkMessages.SetUInt64", N_SetUInt64 },
             { "Source2ModNetworkMessages.AddUInt64", N_AddUInt64 },
+            { "Source2ModNetworkMessages.GetRepeatedUInt64", N_GetRepeatedUInt64 },
+            { "Source2ModNetworkMessages.SetRepeatedUInt64", N_SetRepeatedUInt64 },
             { "Source2ModNetworkMessages.GetBool", N_GetBool },
             { "Source2ModNetworkMessages.GetRepeatedBool", N_GetRepeatedBool },
             { "Source2ModNetworkMessages.SetBool", N_SetBool },
@@ -996,7 +1279,9 @@ namespace sourcepawn
             { "Source2ModNetworkMessages.SetRepeatedFloat", N_SetRepeatedFloat },
             { "Source2ModNetworkMessages.AddFloat", N_AddFloat },
             { "Source2ModNetworkMessages.GetDouble", N_GetDouble },
+            { "Source2ModNetworkMessages.GetRepeatedDouble", N_GetRepeatedDouble },
             { "Source2ModNetworkMessages.SetDouble", N_SetDouble },
+            { "Source2ModNetworkMessages.SetRepeatedDouble", N_SetRepeatedDouble },
             { "Source2ModNetworkMessages.AddDouble", N_AddDouble },
             { "Source2ModNetworkMessages.GetString", N_GetString },
             { "Source2ModNetworkMessages.GetRepeatedString", N_GetRepeatedString },
@@ -1004,16 +1289,30 @@ namespace sourcepawn
             { "Source2ModNetworkMessages.SetRepeatedString", N_SetRepeatedString },
             { "Source2ModNetworkMessages.AddString", N_AddString },
             { "Source2ModNetworkMessages.GetVector", N_GetVector },
+            { "Source2ModNetworkMessages.GetRepeatedVector", N_GetRepeatedVector },
             { "Source2ModNetworkMessages.SetVector", N_SetVector },
+            { "Source2ModNetworkMessages.SetRepeatedVector", N_SetRepeatedVector },
             { "Source2ModNetworkMessages.AddVector", N_AddVector },
             { "Source2ModNetworkMessages.GetQAngle", N_GetQAngle },
+            { "Source2ModNetworkMessages.GetRepeatedQAngle", N_GetRepeatedQAngle },
             { "Source2ModNetworkMessages.SetQAngle", N_SetQAngle },
+            { "Source2ModNetworkMessages.SetRepeatedQAngle", N_SetRepeatedQAngle },
+            { "Source2ModNetworkMessages.AddQAngle", N_AddQAngle },
             { "Source2ModNetworkMessages.GetVector2D", N_GetVector2D },
+            { "Source2ModNetworkMessages.GetRepeatedVector2D", N_GetRepeatedVector2D },
             { "Source2ModNetworkMessages.SetVector2D", N_SetVector2D },
+            { "Source2ModNetworkMessages.SetRepeatedVector2D", N_SetRepeatedVector2D },
+            { "Source2ModNetworkMessages.AddVector2D", N_AddVector2D },
             { "Source2ModNetworkMessages.GetColor", N_GetColor },
+            { "Source2ModNetworkMessages.GetRepeatedColor", N_GetRepeatedColor },
             { "Source2ModNetworkMessages.SetColor", N_SetColor },
+            { "Source2ModNetworkMessages.SetRepeatedColor", N_SetRepeatedColor },
+            { "Source2ModNetworkMessages.AddColor", N_AddColor },
             { "Source2ModNetworkMessages.GetBytes", N_GetBytes },
+            { "Source2ModNetworkMessages.GetRepeatedBytes", N_GetRepeatedBytes },
             { "Source2ModNetworkMessages.SetBytes", N_SetBytes },
+            { "Source2ModNetworkMessages.SetRepeatedBytes", N_SetRepeatedBytes },
+            { "Source2ModNetworkMessages.AddBytes", N_AddBytes },
             { "Source2ModNetworkMessages.GetNestedMessage", N_GetNested },
             { "Source2ModNetworkMessages.GetRepeatedNestedMessage", N_GetRepeatedNested },
             { "Source2ModNetworkMessages.AddNestedMessage", N_AddNested },
@@ -1023,11 +1322,11 @@ namespace sourcepawn
             { "Source2ModNetworkMessages.SendMessage", N_SendMessage },
             { "Source2ModNetworkMessages.SendMessageToPlayers", N_SendMessageToPlayers },
             { "Source2ModNetworkMessages.HookServerMessage", N_HookServerMessage },
-            { "Source2ModNetworkMessages.UnhookServerMessage", N_UnhookNetMessage },
+            { "Source2ModNetworkMessages.UnhookServerMessage", N_UnhookNetMessage<HookKind::ServerMessage> },
             { "Source2ModNetworkMessages.HookClientMessage", N_HookClientMessage },
-            { "Source2ModNetworkMessages.UnhookClientMessage", N_UnhookNetMessage },
+            { "Source2ModNetworkMessages.UnhookClientMessage", N_UnhookNetMessage<HookKind::ClientMessage> },
             { "Source2ModNetworkMessages.HookServerInternalMessage", N_HookServerInternalMessage },
-            { "Source2ModNetworkMessages.UnhookServerInternalMessage", N_UnhookNetMessage },
+            { "Source2ModNetworkMessages.UnhookServerInternalMessage", N_UnhookNetMessage<HookKind::ServerInternalMessage> },
             // source2mod/sounds.inc
             { "ISource2ModSound.New", N_SoundNew },
             { "ISource2ModSound.SetName", N_SoundSetName },
@@ -1052,11 +1351,13 @@ namespace sourcepawn
             { "ISource2ModSound.SetBool", N_SoundSetBool },
             { "ISource2ModSound.SetInt32", N_SoundSetInt32 },
             { "ISource2ModSound.SetUInt32", N_SoundSetUInt32 },
+            { "ISource2ModSound.SetUInt64", N_SoundSetUInt64 },
             { "ISource2ModSound.SetFloat", N_SoundSetFloat },
             { "ISource2ModSound.SetFloat3", N_SoundSetFloat3 },
             { "ISource2ModSound.GetBool", N_SoundGetBool },
             { "ISource2ModSound.GetInt32", N_SoundGetInt32 },
             { "ISource2ModSound.GetUInt32", N_SoundGetUInt32 },
+            { "ISource2ModSound.GetUInt64", N_SoundGetUInt64 },
             { "ISource2ModSound.GetFloat", N_SoundGetFloat },
             { "ISource2ModSound.GetFloat3", N_SoundGetFloat3 },
             { "ISource2ModSound.AddRecipient", N_SoundAddRecipient },
@@ -1070,6 +1371,7 @@ namespace sourcepawn
             { "Source2ModSounds.EmitSoundToPlayer", N_EmitToPlayer },
             { "Source2ModSounds.EmitSoundToPlayers", N_EmitToPlayers },
             { "Source2ModSounds.EmitSoundToAll", N_EmitToAll },
+            { "Source2ModSounds.EmitSoundFromEntity", N_EmitFromEntity },
             { "Source2ModSounds.StopSound", N_StopSound },
             { "Source2ModSounds.StopSoundForPlayers", N_StopSoundForPlayers },
             { "Source2ModSounds.StopSoundByName", N_StopSoundByName },
@@ -1078,8 +1380,26 @@ namespace sourcepawn
             { "Source2ModSounds.HookSound", N_HookSound },
             { "Source2ModSounds.UnhookSound", N_UnhookSound },
             { "Source2ModSounds.HashSoundName", N_HashSoundName },
+            { "Source2ModSounds.LookupSoundName", N_LookupSoundName },
+            { "Source2ModSounds.SetPlayerVolume", N_SetPlayerVolume },
+            { "Source2ModSounds.GetPlayerVolume", N_GetPlayerVolume },
+            { "Source2ModSounds.ResetPlayerVolumes", N_ResetPlayerVolumes },
             { nullptr, nullptr },
         };
+    }
+
+    void ForgetNetSoundHooks(PluginId id)
+    {
+        // The core has taken these down already (it unhooks by owner); only the
+        // bookkeeping is left.
+        for (auto it = g_hooks.begin(); it != g_hooks.end();)
+            it = it->second.owner == id ? g_hooks.erase(it) : std::next(it);
+    }
+
+    void* NetMessagePointer(IPluginContext* ctx, cell_t handle)
+    {
+        NetMsg* m = MsgOf(ctx, handle);
+        return m ? m->msg : nullptr;
     }
 
     const sp_nativeinfo_t* GetNetSoundNatives()

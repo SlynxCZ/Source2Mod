@@ -86,6 +86,15 @@ enum
 	svc_dummy = 600,
 };
 
+// netmessages.proto: Bidirectional_Messages
+enum
+{
+	bi_RebroadcastGameEvent = 16,
+	bi_RebroadcastSource = 17,
+	bi_GameEvent_DEPRECATED = 18,
+	bi_PredictionEvent = 19,
+};
+
 // usermessages.proto: EBaseUserMessages
 enum
 {

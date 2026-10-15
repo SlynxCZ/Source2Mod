@@ -1332,6 +1332,21 @@ namespace sourcepawn
         return true;
     }
 
+    bool StringMapStrings(IPluginContext* ctx, cell_t handle, std::vector<std::pair<std::string, std::string>>& out)
+    {
+        StringMap* map = MapOf(ctx, handle);
+        if (!map)
+            return false;
+        for (const auto& [key, entry] : map->map)
+        {
+            if (entry.kind == MapEntry::String)
+                out.emplace_back(key, entry.string);
+            else if (entry.kind == MapEntry::Cell)
+                out.emplace_back(key, std::to_string(entry.cell));
+        }
+        return true;
+    }
+
     const sp_nativeinfo_t* GetAdtNatives()
     {
         return g_adtNatives;

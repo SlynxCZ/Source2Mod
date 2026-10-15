@@ -32,6 +32,9 @@ enum CenterHtmlMenuColor
 /** option is the index AddMenuOption returned. */
 typedef CenterHtmlMenuHandler = function void (CCSPlayerController player, CenterHtmlMenu menu, int option, any data);
 
+/** Whether the option is disabled; asked each time the menu is drawn (every frame while open). */
+typedef CenterHtmlMenuDisabledEval = function bool (CenterHtmlMenu menu, int option, any data);
+
 methodmap CenterHtmlMenu < Handle
 {
 	public native CenterHtmlMenu(const char[] title);
@@ -45,9 +48,10 @@ methodmap CenterHtmlMenu < Handle
 	/**
 	 * IBaseMenu::AddMenuOptionWithCooldown with the default cooldown handlers:
 	 * close = after a pick, close the menu and show the option text centered
-	 * for 5 seconds.
+	 * for 5 seconds. evaluator: as SetOptionDisabledEvaluator, with the same data.
 	 */
-	public native int AddMenuOptionWithCooldown(const char[] text, CenterHtmlMenuHandler handler, any data = 0, bool disabled = false, bool close = true);
+	public native int AddMenuOptionWithCooldown(const char[] text, CenterHtmlMenuHandler handler, any data = 0, bool disabled = false, bool close = true,
+	                                            CenterHtmlMenuDisabledEval evaluator = INVALID_FUNCTION);
 
 	public native void ClearOptions();
 	public native int OptionCount();
@@ -55,6 +59,9 @@ methodmap CenterHtmlMenu < Handle
 	public native int GetOptionText(int option, char[] buffer, int maxlen);
 	public native void SetOptionDisabled(int option, bool disabled);
 	public native bool IsOptionDisabled(int option);
+
+	/** Decides the option's disabled state from now on; INVALID_FUNCTION removes it. */
+	public native void SetOptionDisabledEvaluator(int option, CenterHtmlMenuDisabledEval evaluator, any data = 0);
 
 	property PostSelectAction PostSelect
 	{
@@ -84,6 +91,12 @@ methodmap Source2ModMenus
 	public static native CenterHtmlMenu GetActiveMenu(CCSPlayerController player);
 
 	public static native void CloseActiveMenu(CCSPlayerController player);
+
+	/** Draws the player's open menu now (it is redrawn every frame anyway). */
+	public static native void RedrawActiveMenu(CCSPlayerController player);
+
+	/** Takes the player's open menu back to its first page. */
+	public static native void ResetActiveMenu(CCSPlayerController player);
 
 	/** Feeds a key (1..9) to the player's open menu. */
 	public static native void OnKeyPress(CCSPlayerController player, int key);

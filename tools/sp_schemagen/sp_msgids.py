@@ -3,7 +3,7 @@
 Source2Mod: net message ids for SourcePawn.
 
 Writes source2mod/netmessage_ids.inc from the game's .proto files: the
-message id enums (UM_Shake, CS_UM_..., clc_..., svc_..., net_..., GE_...,
+message id enums (UM_Shake, CS_UM_..., clc_..., svc_..., net_..., bi_..., GE_...,
 TE_...) as SourcePawn enum constants.
 
     python3 tools/sp_schemagen/sp_msgids.py <Protobufs/csgo> <output .inc>
@@ -16,7 +16,7 @@ FILES = [
     "networkbasetypes.proto", "netmessages.proto", "usermessages.proto",
     "cstrike15_usermessages.proto", "gameevents.proto", "cs_gameevents.proto", "te.proto",
 ]
-PREFIXES = ("UM_", "CS_UM_", "clc_", "svc_", "net_", "GE_", "TE_", "k_")
+PREFIXES = ("UM_", "CS_UM_", "clc_", "svc_", "net_", "bi_", "GE_", "TE_", "k_")
 
 
 def main(proto_dir, out):

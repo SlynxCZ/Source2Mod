@@ -29,6 +29,7 @@
 
 #include <sp_callable.h>
 
+#include <functional>
 #include <map>
 #include <string>
 #include <unordered_map>
@@ -156,6 +157,25 @@ namespace sourcepawn
             Invoke(fn, args);
         }
 
+        constexpr cell_t kInvalidFunction = -1;     // INVALID_FUNCTION
+
+        /// A DisabledEvaluator calling the script's (menu, option, data) -> bool; run each time the menu is drawn.
+        std::function<bool()> Evaluator(ScriptMenu* m, IPluginFunction* fn, cell_t option, cell_t data)
+        {
+            return [m, fn, option, data]() -> bool
+            {
+                if (m->dead)
+                    return true;
+                sp::CallArgs args;
+                args.PushCell(m->handle);
+                args.PushCell(option);
+                args.PushCell(data);
+                cell_t res = 0;
+                Invoke(fn, args, &res);
+                return res != 0;
+            };
+        }
+
         cell_t N_MenuNew(IPluginContext* ctx, const cell_t* params)
         {
             auto* m = new ScriptMenu(LocalString(ctx, params[1]));
@@ -199,13 +219,17 @@ namespace sourcepawn
             return option;
         }
 
-        // AddMenuOptionWithCooldown(text, handler, data, disabled, close): IBaseMenu's
-        // version with the default cooldown handlers (no cooldown).
+        // AddMenuOptionWithCooldown(text, handler, data, disabled, close, evaluator): IBaseMenu's
+        // version with the default cooldown handlers (no cooldown). evaluator came later:
+        // scripts built before it pass none.
         cell_t N_MenuAddMenuOptionWithCooldown(IPluginContext* ctx, const cell_t* params)
         {
             ScriptMenu* m = MenuOf(ctx, params[1]);
             IPluginFunction* fn = m ? Function(ctx, params[3]) : nullptr;
             if (!fn)
+                return -1;
+            IPluginFunction* eval = nullptr;
+            if (params[0] >= 7 && params[7] != kInvalidFunction && !(eval = Function(ctx, params[7])))
                 return -1;
             const cell_t option = static_cast<cell_t>(m->menu.Options().size());
             const cell_t data = params[4];
@@ -221,6 +245,8 @@ namespace sourcepawn
                         player->PrintToCenterHtml(text.c_str(), 5, true);
                 }
             }, params[5] != 0);
+            if (eval)
+                m->menu.Options().back().DisabledEvaluator = Evaluator(m, eval, option, data);
             return option;
         }
 
@@ -263,6 +289,23 @@ namespace sourcepawn
         {
             ScriptMenu* m = MenuOf(ctx, params[1]);
             return m && OptionOk(ctx, m, params[2]) && m->menu.Options()[params[2]].Disabled;
+        }
+
+        // SetOptionDisabledEvaluator(option, evaluator, data): INVALID_FUNCTION removes it.
+        cell_t N_MenuSetOptionDisabledEvaluator(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptMenu* m = MenuOf(ctx, params[1]);
+            if (!m || !OptionOk(ctx, m, params[2]))
+                return 0;
+            ChatMenuOption& opt = m->menu.Options()[params[2]];
+            if (params[3] == kInvalidFunction)
+            {
+                opt.DisabledEvaluator = nullptr;
+                return 0;
+            }
+            if (IPluginFunction* fn = Function(ctx, params[3]))
+                opt.DisabledEvaluator = Evaluator(m, fn, params[2], params[4]);
+            return 0;
         }
 
         cell_t N_MenuPostSelectGet(IPluginContext* ctx, const cell_t* params)
@@ -356,6 +399,27 @@ namespace sourcepawn
         {
             if (CCSPlayerController* player = PlayerArg(ctx, params[1]))
                 menus::menuManager.CloseActiveMenu(player);
+            return 0;
+        }
+
+        // IMenuInstance::Display: draws the open menu now (it is redrawn every frame anyway).
+        cell_t N_MenusRedrawActiveMenu(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSPlayerController* player = PlayerArg(ctx, params[1]);
+            if (IMenuInstance* open = player ? menus::menuManager.GetActiveMenu(player) : nullptr)
+                open->Display();
+            return 0;
+        }
+
+        // IMenuInstance::Reset: back to the first page, then drawn.
+        cell_t N_MenusResetActiveMenu(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSPlayerController* player = PlayerArg(ctx, params[1]);
+            if (IMenuInstance* open = player ? menus::menuManager.GetActiveMenu(player) : nullptr)
+            {
+                open->Reset();
+                open->Display();
+            }
             return 0;
         }
 
@@ -516,6 +580,7 @@ namespace sourcepawn
             { "CenterHtmlMenu.GetOptionText", N_MenuGetOptionText },
             { "CenterHtmlMenu.SetOptionDisabled", N_MenuSetOptionDisabled },
             { "CenterHtmlMenu.IsOptionDisabled", N_MenuIsOptionDisabled },
+            { "CenterHtmlMenu.SetOptionDisabledEvaluator", N_MenuSetOptionDisabledEvaluator },
             { "CenterHtmlMenu.PostSelect.get", N_MenuPostSelectGet },
             { "CenterHtmlMenu.PostSelect.set", N_MenuPostSelectSet },
             { "CenterHtmlMenu.ExitButton.get", N_MenuExitButtonGet },
@@ -526,6 +591,8 @@ namespace sourcepawn
             { "Source2ModMenus.HasActiveMenu", N_MenusHasActiveMenu },
             { "Source2ModMenus.GetActiveMenu", N_MenusGetActiveMenu },
             { "Source2ModMenus.CloseActiveMenu", N_MenusCloseActiveMenu },
+            { "Source2ModMenus.RedrawActiveMenu", N_MenusRedrawActiveMenu },
+            { "Source2ModMenus.ResetActiveMenu", N_MenusResetActiveMenu },
             { "Source2ModMenus.OnKeyPress", N_MenusOnKeyPress },
 
             { "Source2ModCustomHud.HookCustomHudClick", N_HudHookCustomHudClick },

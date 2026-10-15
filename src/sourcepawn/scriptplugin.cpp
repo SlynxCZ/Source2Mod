@@ -159,6 +159,7 @@ namespace sourcepawn
         ForgetGameHooks(id);
         ForgetWorldHooks(id);
         ForgetUiHooks(id);
+        ForgetNetSoundHooks(id);
         Handles().RemoveAllForPlugin(id);
     }
 
@@ -460,6 +461,7 @@ namespace sourcepawn
 
     void ScriptPlugin::OnAllSource2ModPluginsLoaded()
     {
+        CallForward("Source2Mod_OnAllSource2ModPluginsLoaded");
         CallForward("OnAllPluginsLoaded");
     }
 
@@ -589,6 +591,59 @@ namespace sourcepawn
     void ScriptPlugin::OnGameServerSteamAPIDeactivated()
     {
         CallForward("Source2Mod_OnGameServerSteamAPIDeactivated");
+    }
+
+    void ScriptPlugin::CallForwardPlugin(const char* name, PluginId id, const char* pluginName)
+    {
+        if (IPluginFunction* fn = m_runtime->GetFunctionByName(name))
+        {
+            sp::CallArgs args;
+            args.PushCell(id);
+            if (pluginName)
+                args.PushString(pluginName);
+            Invoke(fn, args);
+        }
+    }
+
+    void ScriptPlugin::OnPluginLoad(PluginId id, const char* name)
+    {
+        CallForwardPlugin("Source2Mod_OnPluginLoad", id, name ? name : "");
+    }
+
+    void ScriptPlugin::OnPluginUnload(PluginId id, const char* name)
+    {
+        CallForwardPlugin("Source2Mod_OnPluginUnload", id, name ? name : "");
+    }
+
+    void ScriptPlugin::OnMetamodPluginLoad(PluginId id)
+    {
+        CallForwardPlugin("Source2Mod_OnMetamodPluginLoad", id, nullptr);
+    }
+
+    void ScriptPlugin::OnMetamodPluginUnload(PluginId id)
+    {
+        CallForwardPlugin("Source2Mod_OnMetamodPluginUnload", id, nullptr);
+    }
+
+    void ScriptPlugin::OnAllMetamodPluginsLoaded()
+    {
+        CallForward("Source2Mod_OnAllMetamodPluginsLoaded");
+    }
+
+    void ScriptPlugin::OnStartupServer(const GameSessionConfiguration_t&, ISource2WorldSession*, const char* mapName)
+    {
+        CallForwardString("Source2Mod_OnStartupServer", mapName ? mapName : "");
+    }
+
+    void ScriptPlugin::OnLoadEventsFromFile(IGameEventManager2*, const char* filename, bool searchAll)
+    {
+        if (IPluginFunction* fn = m_runtime->GetFunctionByName("Source2Mod_OnLoadEventsFromFile"))
+        {
+            sp::CallArgs args;
+            args.PushString(filename ? filename : "");
+            args.PushCell(searchAll ? 1 : 0);
+            Invoke(fn, args);
+        }
     }
 
     // ---- AutoExecConfig ---------------------------------------------------------

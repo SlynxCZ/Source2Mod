@@ -28,6 +28,35 @@ typedef Source2ModTask = function void (any data);
  */
 methodmap Source2ModTimer
 {
+	/** Seconds between runs. 0.0 once the timer has ended (as every getter's zero). */
+	property float Interval
+	{
+		public native get();
+	}
+
+	/** The engine time of the next run. */
+	property float ExecTime
+	{
+		public native get();
+	}
+
+	/** TIMER_FLAG_* */
+	property int Flags
+	{
+		public native get();
+	}
+
+	/** True while its callback runs. */
+	property bool InExec
+	{
+		public native get();
+	}
+
+	/** True when it is marked for deletion -- or has ended already. */
+	property bool KillMe
+	{
+		public native get();
+	}
 }
 
 methodmap Source2ModScheduler

@@ -10,16 +10,14 @@
 
 #include <source2mod/types>
 #include <source2mod/schema>
+#include <adt_array>
 
 /** IEntityListener's callbacks, one function each. */
 typedef Source2ModEntityCallback = function void (CEntityInstance entity);
 typedef Source2ModEntityParentCallback = function void (CEntityInstance entity, CEntityInstance newParent);
 
-/**
- * IEntityIOListener::OnEntityOutput. Pre may answer Action_Supersede: the
- * output then never fires.
- */
-typedef Source2ModEntityOutputHandler = function Source2ModAction (const char[] output, CEntityInstance activator, CEntityInstance caller, float delay, bool post);
+// Source2ModEntityOutputHandler (IEntityIOListener::OnEntityOutput) is in
+// source2mod/schema.inc: CBaseEntity.AddSingleEntityIOListener takes it too.
 
 methodmap Source2ModEntities
 {
@@ -32,8 +30,16 @@ methodmap Source2ModEntities
 	/** The next entity of a class after `start` (NULL_ENTITY starts the search). */
 	public static native CBaseEntity FindEntityByClassname(CEntityInstance start, const char[] className);
 
-	/** The next entity with a targetname after `start` (NULL_ENTITY starts the search). */
-	public static native CBaseEntity FindEntityByName(CEntityInstance start, const char[] name);
+	/**
+	 * The next entity with a targetname after `start` (NULL_ENTITY starts the
+	 * search). searching / activator / caller resolve the special names
+	 * "!self", "!activator", "!caller", "!player".
+	 */
+	public static native CBaseEntity FindEntityByName(CEntityInstance start, const char[] name, CEntityInstance searching = NULL_ENTITY,
+	                                                  CEntityInstance activator = NULL_ENTITY, CEntityInstance caller = NULL_ENTITY);
+
+	/** Every entity of a designer name ("prop_dynamic"), as an ArrayList of entities; close it. */
+	public static native ArrayList FindAllEntitiesByDesignerName(const char[] designerName);
 
 	/** Created, not spawned: set it up, then DispatchSpawn(). */
 	public static native CBaseEntity CreateEntityByName(const char[] className);

@@ -22,6 +22,7 @@
 #include "core/permissions.h"
 #include "core/raytrace.h"
 
+#include <source2mod/schema/navarea.h>
 #include <source2mod/schema/entity/classes/CBaseEntity.h>
 
 #include <sp_callable.h>
@@ -29,6 +30,7 @@
 #include <cstdlib>
 #include <map>
 #include <string>
+#include <vector>
 
 using namespace SourcePawn;
 
@@ -475,6 +477,297 @@ namespace sourcepawn
             return 0;
         }
 
+        // TraceShapeEx's filter: the ignore entity as TraceEndShape's, then the
+        // script's function for every entity the ray touches.
+        class ScriptTraceFilter final : public CTraceFilterEx
+        {
+        public:
+            ScriptTraceFilter(CBaseEntity* ignore, IPluginFunction* fn, cell_t data)
+                : CTraceFilterEx(ignore), m_fn(fn), m_data(data)
+            {
+                m_bIterateEntities = fn != nullptr;
+            }
+
+            ScriptTraceFilter(IPluginFunction* fn, cell_t data) : m_fn(fn), m_data(data)
+            {
+                m_bIterateEntities = fn != nullptr;
+            }
+
+            bool ShouldHitEntity(CEntityInstance* entity) override
+            {
+                if (!m_fn)
+                    return true;
+                sp::CallArgs args;
+                args.PushCell(IndexOf(entity));
+                args.PushCell(m_data);
+                cell_t res = 1;
+                Invoke(m_fn, args, &res);
+                return res != 0;
+            }
+
+        private:
+            IPluginFunction* m_fn;
+            cell_t m_data;
+        };
+
+        // TraceShapeEx(start, end, options, ignore, filter, data, rayType, a, b, radius)
+        cell_t N_TraceShapeEx(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseEntity* ignore;
+            TraceOptions* opts;
+            if (!TraceArgs(ctx, params[4], params[3], &ignore, &opts))
+                return 0;
+            IPluginFunction* fn = nullptr;
+            if (params[5] != 0 && params[5] != -1)
+            {
+                fn = ctx->GetFunctionById(static_cast<funcid_t>(params[5]));
+                if (!fn)
+                    return ctx->ThrowNativeError("Invalid function id (%X)", params[5]);
+            }
+            ScriptTraceFilter filter = ignore ? ScriptTraceFilter(ignore, fn, params[6]) : ScriptTraceFilter(fn, params[6]);
+            filter.m_nInteractsAs = opts ? opts->InteractsAs : CONTENTS_EMPTY;
+            filter.m_nInteractsWith = opts ? opts->InteractsWith : MASK_ALL;
+            filter.m_nInteractsExclude = opts ? opts->InteractsExclude : CONTENTS_EMPTY;
+
+            const Vector a = ReadVector(ctx, params[8]);
+            const Vector b = ReadVector(ctx, params[9]);
+            const float radius = sp_ctof(params[10]);
+            Ray_t ray;
+            switch (params[7])
+            {
+            case RAY_TYPE_SPHERE:
+                ray.Init(a, radius);
+                break;
+            case RAY_TYPE_HULL:
+                ray.Init(a, b);
+                break;
+            case RAY_TYPE_CAPSULE:
+                ray.Init(a, b, radius);
+                break;
+            default:
+                break;
+            }
+            return NewResult(ctx, raytrace::rayTrace.TraceShapeEx(ReadVector(ctx, params[1]), ReadVector(ctx, params[2]), &filter, &ray));
+        }
+
+        // ---- TraceResult: hitbox, surface, shape, body ------------------------------
+
+        cell_t WriteString(IPluginContext* ctx, cell_t addr, cell_t maxlen, const char* value)
+        {
+            size_t written = 0;
+            ctx->StringToLocalUTF8(addr, maxlen, value ? value : "", &written);
+            return static_cast<cell_t>(written);
+        }
+
+        cell_t N_ResultHitGroup(IPluginContext* ctx, const cell_t* params)
+        {
+            const TraceResult* r = ResultOf(ctx, params[1]);
+            return r && r->Hitbox() ? r->Hitbox()->m_nGroupId : -1;
+        }
+
+        cell_t N_ResultHitboxIndex(IPluginContext* ctx, const cell_t* params)
+        {
+            const TraceResult* r = ResultOf(ctx, params[1]);
+            return r && r->Hitbox() ? r->Hitbox()->m_nHitBoxIndex : -1;
+        }
+
+        cell_t N_ResultHitboxName(IPluginContext* ctx, const cell_t* params)
+        {
+            const TraceResult* r = ResultOf(ctx, params[1]);
+            return WriteString(ctx, params[2], params[3], r && r->Hitbox() ? r->Hitbox()->m_name.Get() : "");
+        }
+
+        cell_t N_ResultHitboxBoneName(IPluginContext* ctx, const cell_t* params)
+        {
+            const TraceResult* r = ResultOf(ctx, params[1]);
+            return WriteString(ctx, params[2], params[3], r && r->Hitbox() ? r->Hitbox()->m_sBoneName.Get() : "");
+        }
+
+        cell_t N_ResultSurfaceName(IPluginContext* ctx, const cell_t* params)
+        {
+            const TraceResult* r = ResultOf(ctx, params[1]);
+            return WriteString(ctx, params[2], params[3], r && r->Surface() ? r->Surface()->m_name.Get() : "");
+        }
+
+        // SurfaceProperties(float physics[6]): friction, elasticity, density, thickness, soft contact frequency, damping ratio.
+        cell_t N_ResultSurfacePhysics(IPluginContext* ctx, const cell_t* params)
+        {
+            const TraceResult* r = ResultOf(ctx, params[1]);
+            if (!r || !r->Surface())
+                return 0;
+            const CPhysSurfacePropertiesPhysics& p = r->Surface()->m_physics;
+            cell_t* out;
+            ctx->LocalToPhysAddr(params[2], &out);
+            out[0] = sp_ftoc(p.m_friction);
+            out[1] = sp_ftoc(p.m_elasticity);
+            out[2] = sp_ftoc(p.m_density);
+            out[3] = sp_ftoc(p.m_thickness);
+            out[4] = sp_ftoc(p.m_softContactFrequency);
+            out[5] = sp_ftoc(p.m_softContactDampingRatio);
+            return 1;
+        }
+
+#define S2M_SHAPE_MASK(name, field)                                                \
+        cell_t N_ResultShape##name(IPluginContext* ctx, const cell_t* params)      \
+        {                                                                          \
+            if (const TraceResult* r = ResultOf(ctx, params[1]))                   \
+                WriteMask(ctx, params[2], r->ShapeAttributes().field);             \
+            return 0;                                                              \
+        }
+        S2M_SHAPE_MASK(InteractsAs, m_nInteractsAs)
+        S2M_SHAPE_MASK(InteractsWith, m_nInteractsWith)
+        S2M_SHAPE_MASK(InteractsExclude, m_nInteractsExclude)
+#undef S2M_SHAPE_MASK
+
+#define S2M_SHAPE_VALUE(name, field)                                               \
+        cell_t N_ResultShape##name(IPluginContext* ctx, const cell_t* params)      \
+        {                                                                          \
+            const TraceResult* r = ResultOf(ctx, params[1]);                       \
+            return r ? static_cast<cell_t>(r->ShapeAttributes().field) : 0;        \
+        }
+        S2M_SHAPE_VALUE(CollisionGroup, m_nCollisionGroup)
+        S2M_SHAPE_VALUE(CollisionFunctionMask, m_nCollisionFunctionMask)
+        S2M_SHAPE_VALUE(HierarchyId, m_nHierarchyId)
+#undef S2M_SHAPE_VALUE
+
+        // BodyTransform(float position[3], float orientation[4])
+        cell_t N_ResultBodyTransform(IPluginContext* ctx, const cell_t* params)
+        {
+            const TraceResult* r = ResultOf(ctx, params[1]);
+            if (!r)
+                return 0;
+            const CTransform& t = r->BodyTransform();
+            WriteVector(ctx, params[2], Vector(t.m_vPosition.x, t.m_vPosition.y, t.m_vPosition.z));
+            cell_t* q;
+            ctx->LocalToPhysAddr(params[3], &q);
+            q[0] = sp_ftoc(t.m_orientation.x);
+            q[1] = sp_ftoc(t.m_orientation.y);
+            q[2] = sp_ftoc(t.m_orientation.z);
+            q[3] = sp_ftoc(t.m_orientation.w);
+            return 0;
+        }
+
+        // ---- CCSNavArea (SchemaObjects: an area stays valid for the map) -----------------
+
+        CCSNavArea* AreaOf(IPluginContext* ctx, cell_t handle)
+        {
+            if (handle == 0)
+            {
+                ctx->ThrowNativeError("Null nav area");
+                return nullptr;
+            }
+            return static_cast<CCSNavArea*>(SchemaObjectPointer(ctx, handle));
+        }
+
+        cell_t N_NavId(IPluginContext* ctx, const cell_t* params)
+        {
+            const CCSNavArea* a = AreaOf(ctx, params[1]);
+            return a ? static_cast<cell_t>(a->Id()) : 0;
+        }
+
+        template <Vector (*GET)(const CCSNavArea*)>
+        cell_t N_NavVector(IPluginContext* ctx, const cell_t* params)
+        {
+            if (const CCSNavArea* a = AreaOf(ctx, params[1]))
+                WriteVector(ctx, params[2], GET(a));
+            return 0;
+        }
+
+        Vector NavCenter(const CCSNavArea* a) { return a->Center(); }
+        Vector NavNormal(const CCSNavArea* a) { return a->Normal(); }
+        Vector NavMin(const CCSNavArea* a) { return a->Min(); }
+        Vector NavMax(const CCSNavArea* a) { return a->Max(); }
+
+        template <float (CCSNavArea::*GET)() const>
+        cell_t N_NavFloat(IPluginContext* ctx, const cell_t* params)
+        {
+            const CCSNavArea* a = AreaOf(ctx, params[1]);
+            return a ? sp_ftoc((a->*GET)()) : 0;
+        }
+
+        cell_t N_NavGetHeightAtPosition(IPluginContext* ctx, const cell_t* params)
+        {
+            const CCSNavArea* a = AreaOf(ctx, params[1]);
+            return a ? sp_ftoc(a->GetHeightAtPosition(sp_ctof(params[2]), sp_ctof(params[3]))) : 0;
+        }
+
+        cell_t N_NavContainsPoint(IPluginContext* ctx, const cell_t* params)
+        {
+            const CCSNavArea* a = AreaOf(ctx, params[1]);
+            return a && a->ContainsPoint(ReadVector(ctx, params[2]), sp_ctof(params[3]));
+        }
+
+        cell_t N_NavContainsBox(IPluginContext* ctx, const cell_t* params)
+        {
+            const CCSNavArea* a = AreaOf(ctx, params[1]);
+            return a && a->ContainsBox(ReadVector(ctx, params[2]), ReadVector(ctx, params[3]), sp_ctof(params[4]));
+        }
+
+        cell_t N_NavIntersectsBox(IPluginContext* ctx, const cell_t* params)
+        {
+            const CCSNavArea* a = AreaOf(ctx, params[1]);
+            return a && a->IntersectsBox(ReadVector(ctx, params[2]), ReadVector(ctx, params[3]), sp_ctof(params[4]));
+        }
+
+        cell_t N_NavGetClosestPoint(IPluginContext* ctx, const cell_t* params)
+        {
+            if (const CCSNavArea* a = AreaOf(ctx, params[1]))
+                WriteVector(ctx, params[3], a->GetClosestPoint(ReadVector(ctx, params[2])));
+            return 0;
+        }
+
+        cell_t N_NavGetDistanceToPoint(IPluginContext* ctx, const cell_t* params)
+        {
+            const CCSNavArea* a = AreaOf(ctx, params[1]);
+            return a ? sp_ftoc(a->GetDistanceToPoint(ReadVector(ctx, params[2]))) : 0;
+        }
+
+        cell_t N_NavGetDistanceSquaredToPoint(IPluginContext* ctx, const cell_t* params)
+        {
+            const CCSNavArea* a = AreaOf(ctx, params[1]);
+            return a ? sp_ftoc(a->GetDistanceSquaredToPoint(ReadVector(ctx, params[2]))) : 0;
+        }
+
+        // GetAllNavAreas() -> ArrayList of CCSNavArea
+        cell_t N_NavGetAllNavAreas(IPluginContext* ctx, const cell_t*)
+        {
+            std::vector<cell_t> areas;
+            for (CCSNavArea* a : CCSNavArea::GetAllNavAreas())
+                areas.push_back(SchemaObjectForPointer(a));
+            return NewCellList(areas, CallerId(ctx));
+        }
+
+        // GetClosestNavArea(pos, maxDistance = -1.0, &distance)
+        cell_t N_NavGetClosestNavArea(IPluginContext* ctx, const cell_t* params)
+        {
+            float distance = 0.0f;
+            CCSNavArea* a = CCSNavArea::GetClosestNavArea(ReadVector(ctx, params[1]), &distance, sp_ctof(params[2]));
+            if (params[0] >= 3)
+            {
+                cell_t* out;
+                ctx->LocalToPhysAddr(params[3], &out);
+                *out = sp_ftoc(distance);
+            }
+            return SchemaObjectForPointer(a);
+        }
+
+        cell_t N_NavIsValidNavMesh(IPluginContext*, const cell_t*)
+        {
+            return CCSNavArea::IsValidNavMesh();
+        }
+
+        // Source2ModTrace.CheckAreaOverlappingEntity(area, entity, extrudeHullHeight)
+        cell_t N_TraceCheckAreaOverlappingEntity(IPluginContext* ctx, const cell_t* params)
+        {
+            const CCSNavArea* a = AreaOf(ctx, params[1]);
+            CBaseEntity* entity;
+            if (!a || !OptionalEntity(ctx, params[2], &entity))
+                return 0;
+            if (!entity)
+                return ctx->ThrowNativeError("Entity %d is invalid", params[2]);
+            return raytrace::rayTrace.CheckAreaOverlappingEntity(a, entity, params[3] != 0);
+        }
+
         // ---- Source2ModGameSystems -------------------------------------------------
 
         cell_t N_GameSystemsIsAvailable(IPluginContext*, const cell_t*)
@@ -552,6 +845,39 @@ namespace sourcepawn
             { "Source2ModTrace.TraceHullShape", N_TraceHullShape },
             { "Source2ModTrace.PointContents", N_TracePointContents },
             { "Source2ModTrace.GetEntityWorldSpaceAABB", N_TraceGetEntityWorldSpaceAABB },
+            { "Source2ModTrace.TraceShapeEx", N_TraceShapeEx },
+            { "Source2ModTrace.CheckAreaOverlappingEntity", N_TraceCheckAreaOverlappingEntity },
+            { "TraceResult.HitGroup", N_ResultHitGroup },
+            { "TraceResult.HitboxIndex", N_ResultHitboxIndex },
+            { "TraceResult.HitboxName", N_ResultHitboxName },
+            { "TraceResult.HitboxBoneName", N_ResultHitboxBoneName },
+            { "TraceResult.SurfaceName", N_ResultSurfaceName },
+            { "TraceResult.SurfacePhysics", N_ResultSurfacePhysics },
+            { "TraceResult.ShapeInteractsAs", N_ResultShapeInteractsAs },
+            { "TraceResult.ShapeInteractsWith", N_ResultShapeInteractsWith },
+            { "TraceResult.ShapeInteractsExclude", N_ResultShapeInteractsExclude },
+            { "TraceResult.ShapeCollisionGroup", N_ResultShapeCollisionGroup },
+            { "TraceResult.ShapeCollisionFunctionMask", N_ResultShapeCollisionFunctionMask },
+            { "TraceResult.ShapeHierarchyId", N_ResultShapeHierarchyId },
+            { "TraceResult.BodyTransform", N_ResultBodyTransform },
+            { "CCSNavArea.Id", N_NavId },
+            { "CCSNavArea.Center", N_NavVector<NavCenter> },
+            { "CCSNavArea.Normal", N_NavVector<NavNormal> },
+            { "CCSNavArea.Min", N_NavVector<NavMin> },
+            { "CCSNavArea.Max", N_NavVector<NavMax> },
+            { "CCSNavArea.Width", N_NavFloat<&CCSNavArea::Width> },
+            { "CCSNavArea.Height", N_NavFloat<&CCSNavArea::Height> },
+            { "CCSNavArea.Area2D", N_NavFloat<&CCSNavArea::Area2D> },
+            { "CCSNavArea.GetHeightAtPosition", N_NavGetHeightAtPosition },
+            { "CCSNavArea.ContainsPoint", N_NavContainsPoint },
+            { "CCSNavArea.ContainsBox", N_NavContainsBox },
+            { "CCSNavArea.IntersectsBox", N_NavIntersectsBox },
+            { "CCSNavArea.GetClosestPoint", N_NavGetClosestPoint },
+            { "CCSNavArea.GetDistanceToPoint", N_NavGetDistanceToPoint },
+            { "CCSNavArea.GetDistanceSquaredToPoint", N_NavGetDistanceSquaredToPoint },
+            { "CCSNavArea.GetAllNavAreas", N_NavGetAllNavAreas },
+            { "CCSNavArea.GetClosestNavArea", N_NavGetClosestNavArea },
+            { "CCSNavArea.IsValidNavMesh", N_NavIsValidNavMesh },
 
             { "Source2ModGameSystems.IsAvailable", N_GameSystemsIsAvailable },
             { "Source2ModGameSystems.FindByName", N_GameSystemsFindByName },
@@ -586,6 +912,11 @@ namespace sourcepawn
             else
                 ++it;
         }
+    }
+
+    cell_t NewTraceResult(IPluginContext* ctx, const CGameTrace* trace)
+    {
+        return NewResult(ctx, TraceResult(trace));
     }
 
     const sp_nativeinfo_t* GetWorldNatives()

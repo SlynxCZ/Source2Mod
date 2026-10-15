@@ -15,6 +15,10 @@
 #include <source2mod/types>
 #include <source2mod/schema>
 
+/** A visibility channel: 0 .. TRANSMIT_MAX_CHANNELS - 1, or every channel at once. */
+#define TRANSMIT_CHANNEL_ALL    -1
+#define TRANSMIT_MAX_CHANNELS   8
+
 /** One viewer's transmit set; valid inside the CheckTransmit hook. */
 methodmap ISource2ModTransmitInfo
 {
@@ -28,6 +32,21 @@ methodmap ISource2ModTransmitInfo
 	 */
 	public native void BlockTransmit(int entityIndex);
 	public native void AllowTransmit(int entityIndex);
+
+	/**
+	 * The four CheckTransmit bit sets (C++ GetTransmitEntity, ...NonPlayers,
+	 * ...OutOfPVS, ...Always), one entity bit at a time. Prefer
+	 * Block/AllowTransmit: a bit cleared in TransmitEntity alone leaves the
+	 * client without a record of the entity.
+	 */
+	public native bool GetTransmitEntity(int entityIndex);
+	public native void SetTransmitEntity(int entityIndex, bool set);
+	public native bool GetTransmitNonPlayers(int entityIndex);
+	public native void SetTransmitNonPlayers(int entityIndex, bool set);
+	public native bool GetTransmitOutOfPVS(int entityIndex);
+	public native void SetTransmitOutOfPVS(int entityIndex, bool set);
+	public native bool GetTransmitAlways(int entityIndex);
+	public native void SetTransmitAlways(int entityIndex, bool set);
 }
 
 /** The viewers of one CheckTransmit call. */

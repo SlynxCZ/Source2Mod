@@ -37,7 +37,7 @@ methodmap ISource2ModJSONValue < Handle
 
 	/** @return Bytes written */
 	public native int AsString(char[] buffer, int maxlen, const char[] def = "");
-	public native void AsInt64(int value[2]);
+	public native void AsInt64(int value[2], const int def[2] = {0, 0});
 	public native int AsInt(int def = 0);
 	public native float AsDouble(float def = 0.0);
 	public native float AsFloat(float def = 0.0);
@@ -45,7 +45,7 @@ methodmap ISource2ModJSONValue < Handle
 
 	/** Objects: a member's value, or def when missing or of another type. */
 	public native int GetString(const char[] key, char[] buffer, int maxlen, const char[] def = "");
-	public native void GetInt64(const char[] key, int value[2]);
+	public native void GetInt64(const char[] key, int value[2], const int def[2] = {0, 0});
 	public native int GetInt(const char[] key, int def = 0);
 	public native float GetDouble(const char[] key, float def = 0.0);
 	public native float GetFloat(const char[] key, float def = 0.0);

@@ -85,6 +85,22 @@ methodmap CBaseEntity < CEntityInstance
 		public get() { return Source2ModSchema.GetInt(this, "CBaseEntity", "m_nPlatformType"); }
 		public set(int value) { Source2ModSchema.SetInt(this, "CBaseEntity", "m_nPlatformType", value); }
 	}
+	property int m_MoveCollide {
+		public get() { return Source2ModSchema.GetInt(this, "CBaseEntity", "m_MoveCollide"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CBaseEntity", "m_MoveCollide", value); }
+	}
+	property int m_MoveType {
+		public get() { return Source2ModSchema.GetInt(this, "CBaseEntity", "m_MoveType"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CBaseEntity", "m_MoveType", value); }
+	}
+	property int m_nPreviouslySetMoveType {
+		public get() { return Source2ModSchema.GetInt(this, "CBaseEntity", "m_nPreviouslySetMoveType"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CBaseEntity", "m_nPreviouslySetMoveType", value); }
+	}
+	property int m_nActualMoveType {
+		public get() { return Source2ModSchema.GetInt(this, "CBaseEntity", "m_nActualMoveType"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CBaseEntity", "m_nActualMoveType", value); }
+	}
 	property int m_nWaterTouch {
 		public get() { return Source2ModSchema.GetInt(this, "CBaseEntity", "m_nWaterTouch"); }
 		public set(int value) { Source2ModSchema.SetInt(this, "CBaseEntity", "m_nWaterTouch", value); }
@@ -274,15 +290,36 @@ methodmap CBaseEntity < CEntityInstance
 	property CPulseGraphInstance_ServerEntity m_pPulseGraphInstance {
 		public get() { return view_as<CPulseGraphInstance_ServerEntity>(Source2ModSchema.GetObject(this, "CBaseEntity", "m_pPulseGraphInstance")); }
 	}
-	// CBaseEntity's helpers, as in the SDK's CBaseEntity.h.
+	// CBaseEntity's helpers, as in the SDK's CBaseEntity.h. `chain` is C++'s
+	// HookChain: HookChain_Default keeps the C++ default.
 	public static native CBaseEntity FromIndex(int index);
 	public static native CBaseEntity CreateEntityByName(const char[] className);
-	public native void AcceptInput(const char[] input, CEntityInstance activator = NULL_ENTITY, CEntityInstance caller = NULL_ENTITY, const char[] value = "");
+	public native void AcceptInput(const char[] input, CEntityInstance activator = NULL_ENTITY, CEntityInstance caller = NULL_ENTITY, const char[] value = "", Source2ModHookChain chain = HookChain_Default);
+	public native void AddEntityIOEvent(const char[] input, CEntityInstance activator = NULL_ENTITY, CEntityInstance caller = NULL_ENTITY, const char[] value = "", float delay = 0.0, Source2ModHookChain chain = HookChain_Default);
+	// AddSingleEntityIOListener: an output of this entity only; the id goes to Source2ModEntities.RemoveEntityIOListener.
+	public native int AddSingleEntityIOListener(const char[] output, Source2ModEntityOutputHandler handler, bool post = false);
 	public native void GetAbsOrigin(float origin[3]);
-	public native void DispatchSpawn();
-	public native void Teleport(const float position[3] = NULL_VECTOR, const float angles[3] = NULL_VECTOR, const float velocity[3] = NULL_VECTOR);
-	public native void Remove();
+	public native void GetAngRotation(float angles[3]);
+	public native void GetAbsRotation(float angles[3]);
+	public native void GetAbsVelocity(float velocity[3]);
+	public native void SetAbsOrigin(const float origin[3]);
+	public native void SetAbsRotation(const float angles[3]);
+	public native void SetAngRotation(const float angles[3]);
+	public native void SetAbsVelocity(const float velocity[3]);
+	public native void SetBaseVelocity(const float velocity[3]);
+	public native CEntitySubclassVDataBase GetVData();
+	// keyValues: optional StringMap of key -> string value, applied as the entity's spawn keyvalues.
+	public native void DispatchSpawn(StringMap keyValues = null, Source2ModHookChain chain = HookChain_Default);
+	public native void Teleport(const float position[3] = NULL_VECTOR, const float angles[3] = NULL_VECTOR, const float velocity[3] = NULL_VECTOR, Source2ModHookChain chain = HookChain_Default);
+	// MoveType_t.
+	public native void SetMoveType(int moveType);
+	public native int GetCollisionGroup();
+	public native void SetCollisionGroup(int collisionGroup);
+	public native void CollisionRulesChanged();
+	public native void Remove(Source2ModHookChain chain = HookChain_Default);
 	public native int GetIndex();
+	// ParticleAttachment_t (PATTACH_ABSORIGIN_FOLLOW = 1); recipients: a player mask, all players by default.
+	public native void DispatchParticleEffect(const char[] particle, int attachType = 1, int attachmentPoint = 0, bool resetAllParticles = false, const int recipients[2] = {-1, -1}, Source2ModHookChain chain = HookChain_Default);
 }
 
 methodmap CAI_ChangeHintGroup < CBaseEntity
@@ -485,7 +522,7 @@ methodmap CBaseModelEntity < CBaseEntity
 	}
 	public native int GetModelName(char[] buffer, int maxlen);
 	public native void GetEyePosition(float position[3]);
-	public native void SetModel(const char[] model);
+	public native void SetModel(const char[] model, Source2ModHookChain chain = HookChain_Default);
 	public native void SetBodyGroup(const char[] name, int value);
 }
 
@@ -603,6 +640,8 @@ methodmap CBasePlayerWeapon < CEconEntity
 		public get() { return Source2ModSchema.GetInt(this, "CBasePlayerWeapon", "m_iClip2"); }
 		public set(int value) { Source2ModSchema.SetInt(this, "CBasePlayerWeapon", "m_iClip2", value); }
 	}
+	public native CCSWeaponBaseVData GetWeaponVData();
+	public native int GetWeaponClassname(char[] buffer, int maxlen);
 }
 
 methodmap CCSWeaponBase < CBasePlayerWeapon
@@ -896,6 +935,10 @@ methodmap CAmbientGeneric < CPointEntity
 		public get() { return Source2ModSchema.GetFloat(this, "CAmbientGeneric", "m_flMaxRadius"); }
 		public set(float value) { Source2ModSchema.SetFloat(this, "CAmbientGeneric", "m_flMaxRadius", value); }
 	}
+	property int m_iSoundLevel {
+		public get() { return Source2ModSchema.GetInt(this, "CAmbientGeneric", "m_iSoundLevel"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CAmbientGeneric", "m_iSoundLevel", value); }
+	}
 	property bool m_fActive {
 		public get() { return Source2ModSchema.GetBool(this, "CAmbientGeneric", "m_fActive"); }
 		public set(bool value) { Source2ModSchema.SetBool(this, "CAmbientGeneric", "m_fActive", value); }
@@ -973,6 +1016,8 @@ methodmap CAttributeList < SchemaObject
 	property CAttributeManager m_pManager {
 		public get() { return view_as<CAttributeManager>(Source2ModSchema.GetObject(this, "CAttributeList", "m_pManager")); }
 	}
+	public native void SetOrAddAttribute(const char[] name, float value, Source2ModHookChain chain = HookChain_Default);
+	public native void SetOrAddAttributeValueByName(const char[] name, float value, Source2ModHookChain chain = HookChain_Default);
 }
 
 methodmap CAttributeManager__cached_attribute_float_t < SchemaObject
@@ -1891,7 +1936,7 @@ methodmap CBasePlayerController < CBaseEntity
 		public get() { return Source2ModSchema.GetInt(this, "CBasePlayerController", "m_iDesiredFOV"); }
 		public set(int value) { Source2ModSchema.SetInt(this, "CBasePlayerController", "m_iDesiredFOV", value); }
 	}
-	public native void SetPawn(CBasePlayerPawn pawn);
+	public native void SetPawn(CBasePlayerPawn pawn, Source2ModHookChain chain = HookChain_Default);
 	public native CCSPlayerPawn GetPawn();
 	public native void PrintToConsole(const char[] message);
 	public native void PrintToChat(const char[] message);
@@ -1988,9 +2033,10 @@ methodmap CBasePlayerPawn < CBaseCombatCharacter
 		public get() { return Source2ModSchema.GetInt(this, "CBasePlayerPawn", "m_iHltvReplayEntity"); }
 		public set(int value) { Source2ModSchema.SetInt(this, "CBasePlayerPawn", "m_iHltvReplayEntity", value); }
 	}
-	public native void CommitSuicide(bool explode, bool force);
-	public native void SnapViewAngles(const float angles[3]);
+	public native void CommitSuicide(bool explode, bool force, Source2ModHookChain chain = HookChain_Default);
+	public native void SnapViewAngles(const float angles[3], Source2ModHookChain chain = HookChain_Default);
 	public native CCSPlayerController GetController();
+	public native CCSPlayerController GetDefaultController();
 }
 
 methodmap CEntitySubclassVDataBase < SchemaObject
@@ -3262,6 +3308,13 @@ methodmap CCSCustomHudLayout < CBaseEntity
 	property CCSCustomHudLayoutState m_globalLayoutState {
 		public get() { return view_as<CCSCustomHudLayoutState>(Source2ModSchema.GetObject(this, "CCSCustomHudLayout", "m_globalLayoutState")); }
 	}
+	// NULL_ENTITY as the controller: every player (the layout's shared state).
+	public static native CCSCustomHudLayout Create(const char[] layout, const char[] targetName = "");
+	public native CCSCustomHudLayoutState GetLayoutState(CCSPlayerController controller = NULL_ENTITY);
+	public native void SetHasClass(const char[] panelId, const char[] className, bool hasClass, CCSPlayerController controller = NULL_ENTITY);
+	public native void SetDialogVariableString(const char[] panelId, const char[] variable, const char[] value, CCSPlayerController controller = NULL_ENTITY);
+	public native void SetInputCaptureEnabled(bool enable, CCSPlayerController controller = NULL_ENTITY);
+	public native bool IsInputCaptureEnabled(CCSPlayerController controller = NULL_ENTITY);
 }
 
 methodmap CCSCustomHudLayoutState < SchemaObject
@@ -4116,7 +4169,11 @@ methodmap CCSGameRules < CTeamplayRules
 		public get() { return Source2ModSchema.GetInt(this, "CCSGameRules", "m_nRoundStartCount"); }
 		public set(int value) { Source2ModSchema.SetInt(this, "CCSGameRules", "m_nRoundStartCount", value); }
 	}
-	public native void TerminateRound(float delay, int reason, int teamId = 0);
+	public native void GoToIntermission(bool abortedMatch = false, Source2ModHookChain chain = HookChain_Default);
+	// C++ defaults to HookChain_Bypass here.
+	public native void TerminateRound(float delay, int reason, int teamId = 0, Source2ModHookChain chain = HookChain_Default);
+	public native CBaseEntity FindPickerEntity(CBasePlayerController player);
+	public native CCSPlayerController GetClientAimTarget(CCSPlayerController player);
 }
 
 methodmap CGameRulesProxy < CBaseEntity
@@ -4216,6 +4273,8 @@ methodmap CCSPlayerPawnBase < CBasePlayerPawn
 		public get() { return view_as<CCSPlayerController>(Source2ModSchema.GetHandle(this, "CCSPlayerPawnBase", "m_hOriginalController")); }
 		public set(CCSPlayerController value) { Source2ModSchema.SetHandle(this, "CCSPlayerPawnBase", "m_hOriginalController", view_as<int>(value)); }
 	}
+	public native CCSPlayerController GetOriginalController();
+	public native bool CanMove();
 }
 
 methodmap CCSObserverPawn < CCSPlayerPawnBase
@@ -4227,6 +4286,7 @@ methodmap CPlayerPawnComponent < SchemaObject
 	property CAnimGraphControllerPtr m_pComponentGraphController {
 		public get() { return view_as<CAnimGraphControllerPtr>(Source2ModSchema.GetObject(this, "CPlayerPawnComponent", "m_pComponentGraphController")); }
 	}
+	public native CCSPlayerPawn GetPlayerPawn();
 }
 
 methodmap CPlayer_CameraServices < CPlayerPawnComponent
@@ -4827,16 +4887,23 @@ methodmap CCSPlayerController < CBasePlayerController
 		public set(bool value) { Source2ModSchema.SetBool(this, "CCSPlayerController", "m_bFireBulletsSeedSynchronized", value); }
 	}
 	public static native CCSPlayerController FromSlot(int slot);
+	public static native CCSPlayerController FromPawn(CCSPlayerPawn pawn);
+	public static native CCSPlayerController FromUserId(int userId);
+	// The 64-bit SteamID as decimal text.
+	public static native CCSPlayerController FromSteamId(const char[] steamId);
 	public native void PrintToCenterHtml(const char[] message, int duration = 5, bool menu = false);
-	public native void Respawn();
-	public native void SwitchTeam(int team);
-	public native void ChangeTeam(int team);
+	// DamageTypes_t; C++ defaults to HookChain_Bypass here.
+	public native void TakeDamage(CCSPlayerController attacker, int damage, int damageType, Source2ModHookChain chain = HookChain_Default);
+	public native void Respawn(Source2ModHookChain chain = HookChain_Default);
+	public native void SwitchTeam(int team, Source2ModHookChain chain = HookChain_Default);
+	public native void ChangeTeam(int team, Source2ModHookChain chain = HookChain_Default);
 	public native CCSPlayerPawn GetPlayerPawn();
 	public native CCSObserverPawn GetObserverPawn();
 }
 
 methodmap CPlayerControllerComponent < SchemaObject
 {
+	public native CCSPlayerController GetPlayerController();
 }
 
 methodmap CCSPlayerController_ActionTrackingServices < CPlayerControllerComponent
@@ -5358,6 +5425,7 @@ methodmap CCSPlayerPawn < CCSPlayerPawnBase
 	public void m_angEyeAngles(float vec[3]) { Source2ModSchema.GetVector(this, "CCSPlayerPawn", "m_angEyeAngles", vec); }
 	public void Set_m_angEyeAngles(const float vec[3]) { Source2ModSchema.SetVector(this, "CCSPlayerPawn", "m_angEyeAngles", vec); }
 	public native void GetEyeAngles(float angles[3]);
+	public native void PostThink(Source2ModHookChain chain = HookChain_Default);
 }
 
 methodmap CCSPlayerResource < CBaseEntity
@@ -5453,9 +5521,9 @@ methodmap CCSPlayer_HostageServices < CPlayerPawnComponent
 
 methodmap CPlayer_ItemServices < CPlayerPawnComponent
 {
-	public native void DropActivePlayerWeapon(CBasePlayerWeapon weapon);
-	public native void RemoveWeapons(bool removeSuit);
-	public native CBasePlayerWeapon GiveNamedItem(const char[] item);
+	public native void DropActivePlayerWeapon(CBasePlayerWeapon weapon, Source2ModHookChain chain = HookChain_Default);
+	public native void RemoveWeapons(bool removeSuit, Source2ModHookChain chain = HookChain_Default);
+	public native CBasePlayerWeapon GiveNamedItem(const char[] item, Source2ModHookChain chain = HookChain_Default);
 }
 
 methodmap CCSPlayer_ItemServices < CPlayer_ItemServices
@@ -5768,9 +5836,10 @@ methodmap CPlayer_WeaponServices < CPlayerPawnComponent
 		public set(bool value) { Source2ModSchema.SetBool(this, "CPlayer_WeaponServices", "m_bPreventWeaponPickup", value); }
 	}
 	public native bool CanUse(CBasePlayerWeapon weapon);
-	public native void DropWeapon(CBasePlayerWeapon weapon, const float target[3] = NULL_VECTOR, const float velocity[3] = NULL_VECTOR);
-	public native int BumpWeapon(CBasePlayerWeapon weapon);
-	public native void SelectItem(CBasePlayerWeapon weapon);
+	public native void DropWeapon(CBasePlayerWeapon weapon, const float target[3] = NULL_VECTOR, const float velocity[3] = NULL_VECTOR, Source2ModHookChain chain = HookChain_Default);
+	public native int BumpWeapon(CBasePlayerWeapon weapon, Source2ModHookChain chain = HookChain_Default);
+	public native void SelectItem(CBasePlayerWeapon weapon, Source2ModHookChain chain = HookChain_Default);
+	public native void Destroy(CBasePlayerWeapon weapon, Source2ModHookChain chain = HookChain_Default);
 }
 
 methodmap CCSPlayer_WeaponServices < CPlayer_WeaponServices
@@ -6303,6 +6372,8 @@ methodmap CCSWeaponBaseVData < CBasePlayerWeaponVData
 	public void m_vSmokeColor(float vec[3]) { Source2ModSchema.GetVector(this, "CCSWeaponBaseVData", "m_vSmokeColor", vec); }
 	public void Set_m_vSmokeColor(const float vec[3]) { Source2ModSchema.SetVector(this, "CCSWeaponBaseVData", "m_vSmokeColor", vec); }
 	public int m_szAnimClass(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CCSWeaponBaseVData", "m_szAnimClass", buffer, maxlen); }
+	// The weapon's VData by its name ("weapon_ak47") or item definition index as text.
+	public static native CCSWeaponBaseVData FromKey(const char[] key, int weaponType = -1);
 }
 
 methodmap CCashStack < CBaseModelEntity
@@ -6480,6 +6551,10 @@ methodmap CCollisionProperty < SchemaObject
 	property int m_usSolidFlags {
 		public get() { return Source2ModSchema.GetInt(this, "CCollisionProperty", "m_usSolidFlags"); }
 		public set(int value) { Source2ModSchema.SetInt(this, "CCollisionProperty", "m_usSolidFlags", value); }
+	}
+	property int m_nSolidType {
+		public get() { return Source2ModSchema.GetInt(this, "CCollisionProperty", "m_nSolidType"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CCollisionProperty", "m_nSolidType", value); }
 	}
 	property int m_triggerBloat {
 		public get() { return Source2ModSchema.GetInt(this, "CCollisionProperty", "m_triggerBloat"); }
@@ -6756,6 +6831,7 @@ methodmap CDecoyProjectile < CBaseCSGrenadeProjectile
 		public get() { return Source2ModSchema.GetInt(this, "CDecoyProjectile", "m_decoyWeaponDefIndex"); }
 		public set(int value) { Source2ModSchema.SetInt(this, "CDecoyProjectile", "m_decoyWeaponDefIndex", value); }
 	}
+	public static native CDecoyProjectile EmitGrenade(const float position[3], const float angles[3], const float velocity[3], CBaseEntity owner, int itemDefIndex, Source2ModHookChain chain = HookChain_Default);
 }
 
 methodmap CDestructiblePartsComponent < SchemaObject
@@ -7456,6 +7532,10 @@ methodmap CEnvExplosion < CModelPointEntity
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "CEnvExplosion", "m_hInflictor")); }
 		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "CEnvExplosion", "m_hInflictor", view_as<int>(value)); }
 	}
+	property int m_iCustomDamageType {
+		public get() { return Source2ModSchema.GetInt(this, "CEnvExplosion", "m_iCustomDamageType"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CEnvExplosion", "m_iCustomDamageType", value); }
+	}
 	property bool m_bHasCustomDamageType {
 		public get() { return Source2ModSchema.GetBool(this, "CEnvExplosion", "m_bHasCustomDamageType"); }
 		public set(bool value) { Source2ModSchema.SetBool(this, "CEnvExplosion", "m_bHasCustomDamageType", value); }
@@ -7469,6 +7549,14 @@ methodmap CEnvExplosion < CModelPointEntity
 	property bool m_bSuppressParticleImpulse {
 		public get() { return Source2ModSchema.GetBool(this, "CEnvExplosion", "m_bSuppressParticleImpulse"); }
 		public set(bool value) { Source2ModSchema.SetBool(this, "CEnvExplosion", "m_bSuppressParticleImpulse", value); }
+	}
+	property int m_iClassIgnore {
+		public get() { return Source2ModSchema.GetInt(this, "CEnvExplosion", "m_iClassIgnore"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CEnvExplosion", "m_iClassIgnore", value); }
+	}
+	property int m_iClassIgnore2 {
+		public get() { return Source2ModSchema.GetInt(this, "CEnvExplosion", "m_iClassIgnore2"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CEnvExplosion", "m_iClassIgnore2", value); }
 	}
 	public int m_iszEntityIgnoreName(char[] buffer, int maxlen) { return Source2ModSchema.GetString(this, "CEnvExplosion", "m_iszEntityIgnoreName", buffer, maxlen); }
 	property CBaseEntity m_hEntityIgnore {
@@ -8571,6 +8659,7 @@ methodmap CFlashbangProjectile < CBaseCSGrenadeProjectile
 		public get() { return Source2ModSchema.GetInt(this, "CFlashbangProjectile", "m_numTeammatesHit"); }
 		public set(int value) { Source2ModSchema.SetInt(this, "CFlashbangProjectile", "m_numTeammatesHit", value); }
 	}
+	public static native CFlashbangProjectile EmitGrenade(const float position[3], const float angles[3], const float velocity[3], CBaseEntity owner, int itemDefIndex, Source2ModHookChain chain = HookChain_Default);
 }
 
 methodmap CFogController < CBaseEntity
@@ -8846,6 +8935,10 @@ methodmap CFuncMover < CBaseModelEntity
 	property int m_nPreviousNodeIndex {
 		public get() { return Source2ModSchema.GetInt(this, "CFuncMover", "m_nPreviousNodeIndex"); }
 		public set(int value) { Source2ModSchema.SetInt(this, "CFuncMover", "m_nPreviousNodeIndex", value); }
+	}
+	property int m_eSolidType {
+		public get() { return Source2ModSchema.GetInt(this, "CFuncMover", "m_eSolidType"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CFuncMover", "m_eSolidType", value); }
 	}
 	property bool m_bIsMoving {
 		public get() { return Source2ModSchema.GetBool(this, "CFuncMover", "m_bIsMoving"); }
@@ -9260,6 +9353,10 @@ methodmap CFuncRotator < CBaseModelEntity
 	property bool m_bIsRotating {
 		public get() { return Source2ModSchema.GetBool(this, "CFuncRotator", "m_bIsRotating"); }
 		public set(bool value) { Source2ModSchema.SetBool(this, "CFuncRotator", "m_bIsRotating", value); }
+	}
+	property int m_eSolidType {
+		public get() { return Source2ModSchema.GetInt(this, "CFuncRotator", "m_eSolidType"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CFuncRotator", "m_eSolidType", value); }
 	}
 	property float m_flSpeed {
 		public get() { return Source2ModSchema.GetFloat(this, "CFuncRotator", "m_flSpeed"); }
@@ -9794,6 +9891,7 @@ methodmap CGameSceneNode < SchemaObject
 		public get() { return Source2ModSchema.GetFloat(this, "CGameSceneNode", "m_flClientLocalScale"); }
 		public set(float value) { Source2ModSchema.SetFloat(this, "CGameSceneNode", "m_flClientLocalScale", value); }
 	}
+	public native CSkeletonInstance GetSkeletonInstance();
 }
 
 methodmap CGameText < CRulePointEntity
@@ -10168,6 +10266,7 @@ methodmap CHEGrenade < CBaseCSGrenade
 
 methodmap CHEGrenadeProjectile < CBaseCSGrenadeProjectile
 {
+	public static native CHEGrenadeProjectile EmitGrenade(const float position[3], const float angles[3], const float velocity[3], CBaseEntity owner, int itemDefIndex, Source2ModHookChain chain = HookChain_Default);
 }
 
 methodmap CHandleDummy < CBaseEntity
@@ -12123,6 +12222,7 @@ methodmap CMolotovProjectile < CBaseCSGrenadeProjectile
 	property IntervalTimer m_stillTimer {
 		public get() { return view_as<IntervalTimer>(Source2ModSchema.GetObject(this, "CMolotovProjectile", "m_stillTimer")); }
 	}
+	public static native CMolotovProjectile EmitGrenade(const float position[3], const float angles[3], const float velocity[3], CBaseEntity owner, int itemDefIndex, Source2ModHookChain chain = HookChain_Default);
 }
 
 methodmap CRotButton < CBaseButton
@@ -14059,6 +14159,10 @@ methodmap CPointHurt < CPointEntity
 		public get() { return Source2ModSchema.GetInt(this, "CPointHurt", "m_nDamage"); }
 		public set(int value) { Source2ModSchema.SetInt(this, "CPointHurt", "m_nDamage", value); }
 	}
+	property int m_bitsDamageType {
+		public get() { return Source2ModSchema.GetInt(this, "CPointHurt", "m_bitsDamageType"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CPointHurt", "m_bitsDamageType", value); }
+	}
 	property float m_flRadius {
 		public get() { return Source2ModSchema.GetFloat(this, "CPointHurt", "m_flRadius"); }
 		public set(float value) { Source2ModSchema.SetFloat(this, "CPointHurt", "m_flRadius", value); }
@@ -15158,6 +15262,10 @@ methodmap CSceneListManager < CLogicalEntity
 
 methodmap CScriptItem < CItem
 {
+	property int m_MoveTypeOverride {
+		public get() { return Source2ModSchema.GetInt(this, "CScriptItem", "m_MoveTypeOverride"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CScriptItem", "m_MoveTypeOverride", value); }
+	}
 }
 
 methodmap CScriptNavBlocker < CFuncNavBlocker
@@ -15187,6 +15295,10 @@ methodmap CTriggerHurt < CBaseTrigger
 	property float m_flForgivenessDelay {
 		public get() { return Source2ModSchema.GetFloat(this, "CTriggerHurt", "m_flForgivenessDelay"); }
 		public set(float value) { Source2ModSchema.SetFloat(this, "CTriggerHurt", "m_flForgivenessDelay", value); }
+	}
+	property int m_bitsDamageInflict {
+		public get() { return Source2ModSchema.GetInt(this, "CTriggerHurt", "m_bitsDamageInflict"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "CTriggerHurt", "m_bitsDamageInflict", value); }
 	}
 	property int m_damageModel {
 		public get() { return Source2ModSchema.GetInt(this, "CTriggerHurt", "m_damageModel"); }
@@ -15712,6 +15824,7 @@ methodmap CSmokeGrenadeProjectile < CBaseCSGrenadeProjectile
 		public get() { return Source2ModSchema.GetBool(this, "CSmokeGrenadeProjectile", "m_bDidGroundScorch"); }
 		public set(bool value) { Source2ModSchema.SetBool(this, "CSmokeGrenadeProjectile", "m_bDidGroundScorch", value); }
 	}
+	public static native CSmokeGrenadeProjectile EmitGrenade(const float position[3], const float angles[3], const float velocity[3], int team, CBaseEntity owner, int itemDefIndex, Source2ModHookChain chain = HookChain_Default);
 }
 
 methodmap CSoundAreaEntityBase < CBaseEntity
@@ -17200,6 +17313,10 @@ methodmap DestructiblePartDamageRequest_t < SchemaObject
 		public get() { return Source2ModSchema.GetInt(this, "DestructiblePartDamageRequest_t", "m_nDestroyFlags"); }
 		public set(int value) { Source2ModSchema.SetInt(this, "DestructiblePartDamageRequest_t", "m_nDestroyFlags", value); }
 	}
+	property int m_nDamageType {
+		public get() { return Source2ModSchema.GetInt(this, "DestructiblePartDamageRequest_t", "m_nDamageType"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "DestructiblePartDamageRequest_t", "m_nDamageType", value); }
+	}
 	property float m_flBreakDamage {
 		public get() { return Source2ModSchema.GetFloat(this, "DestructiblePartDamageRequest_t", "m_flBreakDamage"); }
 		public set(float value) { Source2ModSchema.SetFloat(this, "DestructiblePartDamageRequest_t", "m_flBreakDamage", value); }
@@ -17475,6 +17592,10 @@ methodmap RelationshipOverride_t < Relationship_t
 	property CBaseEntity entity {
 		public get() { return view_as<CBaseEntity>(Source2ModSchema.GetHandle(this, "RelationshipOverride_t", "entity")); }
 		public set(CBaseEntity value) { Source2ModSchema.SetHandle(this, "RelationshipOverride_t", "entity", view_as<int>(value)); }
+	}
+	property int classType {
+		public get() { return Source2ModSchema.GetInt(this, "RelationshipOverride_t", "classType"); }
+		public set(int value) { Source2ModSchema.SetInt(this, "RelationshipOverride_t", "classType", value); }
 	}
 }
 

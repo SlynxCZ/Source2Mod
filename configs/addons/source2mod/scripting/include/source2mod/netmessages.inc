@@ -54,9 +54,13 @@ methodmap Source2ModNetworkMessages
 	public static native void GetInt64(NetMessage msg, const char[] field, char[] buffer, int maxlen);
 	public static native void SetInt64(NetMessage msg, const char[] field, const char[] value);
 	public static native void AddInt64(NetMessage msg, const char[] field, const char[] value);
+	public static native void GetRepeatedInt64(NetMessage msg, const char[] field, int index, char[] buffer, int maxlen);
+	public static native void SetRepeatedInt64(NetMessage msg, const char[] field, int index, const char[] value);
 	public static native void GetUInt64(NetMessage msg, const char[] field, char[] buffer, int maxlen);
 	public static native void SetUInt64(NetMessage msg, const char[] field, const char[] value);
 	public static native void AddUInt64(NetMessage msg, const char[] field, const char[] value);
+	public static native void GetRepeatedUInt64(NetMessage msg, const char[] field, int index, char[] buffer, int maxlen);
+	public static native void SetRepeatedUInt64(NetMessage msg, const char[] field, int index, const char[] value);
 
 	public static native bool GetBool(NetMessage msg, const char[] field);
 	public static native bool GetRepeatedBool(NetMessage msg, const char[] field, int index);
@@ -71,7 +75,9 @@ methodmap Source2ModNetworkMessages
 	public static native void AddFloat(NetMessage msg, const char[] field, float value);
 
 	public static native float GetDouble(NetMessage msg, const char[] field);
+	public static native float GetRepeatedDouble(NetMessage msg, const char[] field, int index);
 	public static native void SetDouble(NetMessage msg, const char[] field, float value);
+	public static native void SetRepeatedDouble(NetMessage msg, const char[] field, int index, float value);
 	public static native void AddDouble(NetMessage msg, const char[] field, float value);
 
 	public static native int GetString(NetMessage msg, const char[] field, char[] buffer, int maxlen);
@@ -81,18 +87,32 @@ methodmap Source2ModNetworkMessages
 	public static native void AddString(NetMessage msg, const char[] field, const char[] value);
 
 	public static native void GetVector(NetMessage msg, const char[] field, float vec[3]);
+	public static native void GetRepeatedVector(NetMessage msg, const char[] field, int index, float vec[3]);
 	public static native void SetVector(NetMessage msg, const char[] field, const float vec[3]);
+	public static native void SetRepeatedVector(NetMessage msg, const char[] field, int index, const float vec[3]);
 	public static native void AddVector(NetMessage msg, const char[] field, const float vec[3]);
 	public static native void GetQAngle(NetMessage msg, const char[] field, float angles[3]);
+	public static native void GetRepeatedQAngle(NetMessage msg, const char[] field, int index, float angles[3]);
 	public static native void SetQAngle(NetMessage msg, const char[] field, const float angles[3]);
+	public static native void SetRepeatedQAngle(NetMessage msg, const char[] field, int index, const float angles[3]);
+	public static native void AddQAngle(NetMessage msg, const char[] field, const float angles[3]);
 	public static native void GetVector2D(NetMessage msg, const char[] field, float vec[2]);
+	public static native void GetRepeatedVector2D(NetMessage msg, const char[] field, int index, float vec[2]);
 	public static native void SetVector2D(NetMessage msg, const char[] field, const float vec[2]);
+	public static native void SetRepeatedVector2D(NetMessage msg, const char[] field, int index, const float vec[2]);
+	public static native void AddVector2D(NetMessage msg, const char[] field, const float vec[2]);
 	public static native void GetColor(NetMessage msg, const char[] field, int color[4]);
+	public static native void GetRepeatedColor(NetMessage msg, const char[] field, int index, int color[4]);
 	public static native void SetColor(NetMessage msg, const char[] field, const int color[4]);
+	public static native void SetRepeatedColor(NetMessage msg, const char[] field, int index, const int color[4]);
+	public static native void AddColor(NetMessage msg, const char[] field, const int color[4]);
 
 	/** Bytes fields: raw bytes in a char array. @return Bytes read */
 	public static native int GetBytes(NetMessage msg, const char[] field, char[] buffer, int maxlen);
+	public static native int GetRepeatedBytes(NetMessage msg, const char[] field, int index, char[] buffer, int maxlen);
 	public static native void SetBytes(NetMessage msg, const char[] field, const char[] value, int length);
+	public static native void SetRepeatedBytes(NetMessage msg, const char[] field, int index, const char[] value, int length);
+	public static native void AddBytes(NetMessage msg, const char[] field, const char[] value, int length);
 
 	/** Nested messages: handles valid as long as the message they are in. */
 	public static native NetMessage GetNestedMessage(NetMessage msg, const char[] field);
@@ -106,7 +126,12 @@ methodmap Source2ModNetworkMessages
 	public static native void SendMessage(NetMessage msg, int messageId, CPlayerSlot slot);
 	public static native void SendMessageToPlayers(NetMessage msg, int messageId, const int players[2]);
 
-	/** @return The id UnhookServerMessage takes */
+	/**
+	 * Unhook* take only an id of their own kind that this plugin got back;
+	 * anything else is false.
+	 *
+	 * @return The id UnhookServerMessage takes
+	 */
 	public static native int HookServerMessage(Source2ModServerMessageHook handler);
 	public static native bool UnhookServerMessage(int id);
 

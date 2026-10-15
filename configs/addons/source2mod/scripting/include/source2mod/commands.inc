@@ -36,6 +36,9 @@ methodmap Source2ModCommandContext
 	public native bool IsFromChat();
 }
 
+/** Source2ModCommandArgs::kMaxArgs: arguments past this many are dropped. */
+#define SOURCE2MOD_COMMAND_MAX_ARGS 64
+
 /**
  * The command line. Arg(0) is the command itself. Valid inside the handler
  * it was given to.

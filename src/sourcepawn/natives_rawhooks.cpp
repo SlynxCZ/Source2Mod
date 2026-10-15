@@ -11,13 +11,18 @@
  * KHook calls a hook's callbacks (pre, post, make-return, call-original)
  * with the hooked function's own arguments. The callbacks here are generic
  * over registers instead of over a C++ signature: on SysV x86-64 every
- * callback takes the six integer and eight SSE argument registers, which is
- * every argument of a function with at most that many of each class; on
+ * callback takes the six integer and eight SSE argument registers and then
+ * eight stack slots (what overflows either class, in argument order; KHook
+ * copies the caller's stack arguments for every callback it makes); on
  * Windows x64 the four argument positions are each integer or SSE (one
  * instantiation per combination) and the rest are stack slots. The
  * parameter list the script gave says which register holds which argument.
  *
  * Return values are kept as eight bytes: integer-class in RAX, SSE in XMM0.
+ *
+ * A hook on one object (FromVirtualObject) is KHook's per-instance virtual
+ * hook: the vtable slot is hooked for every object that uses it, and the
+ * handlers only run for calls whose `this` is that object.
  *
  * Project: Source2Mod
  */
@@ -70,6 +75,9 @@ namespace sourcepawn
             T_Pointer,
             T_BufferString,
             T_Command,
+            T_IntRef,
+            T_BoolRef,
+            T_FloatRef,
         };
 
         bool IsSse(Type t)
@@ -86,7 +94,7 @@ namespace sourcepawn
 #if defined(_WIN32)
         constexpr int kSlots = 14;
 #else
-        constexpr int kSlots = 14;   // 6 integer + 8 SSE
+        constexpr int kSlots = 22;   // 6 integer + 8 SSE + 8 stack
 #endif
 
         // The argument registers of one call, as the callbacks got them.
@@ -100,6 +108,7 @@ namespace sourcepawn
             PluginId owner = 0;
             void* address = nullptr;
             void** vtable = nullptr;
+            void* instance = nullptr;       // FromVirtualObject: the handlers run only for this `this`
             int index = -1;
             Type ret = T_Void;
             std::vector<Type> params;
@@ -143,6 +152,9 @@ namespace sourcepawn
             // Command parameters lent as Source2ModCommandArgs, freed after the handler.
             std::vector<std::unique_ptr<Source2ModCommandArgs>> commands;
             std::vector<cell_t> commandHandles;
+            // Strings SetString put in a parameter: alive until the call (made
+            // inside Handle, see the recall there) is over.
+            std::vector<std::unique_ptr<std::string>> strings;
         };
 
         HandleType HookType()
@@ -206,13 +218,16 @@ namespace sourcepawn
             const bool hasValue = hook->ret != T_Void;
             IPluginFunction* fn = post ? hook->post : hook->pre;
 
-            Frame frame{ hook, regs, post, 0, false, false, {}, {} };
+            Frame frame{ hook, regs, post, 0, false, false, {}, {}, {} };
             if (post && hasValue)
                 if (void* original = KHook::GetOriginalValuePtr())
                     frame.ret = *static_cast<uint64_t*>(original);
 
+            // A hook on one object: other objects' calls pass untouched.
+            const bool mine = !hook->instance || regs.s[0] == reinterpret_cast<uintptr_t>(hook->instance);
+
             cell_t res = 0;
-            if (fn && !hook->zombie)
+            if (fn && !hook->zombie && mine)
             {
                 const cell_t params = Handles().Create(ParamsType(), &frame, hook->owner);
                 const cell_t ret = Handles().Create(ReturnType(), &frame, hook->owner);
@@ -371,9 +386,12 @@ namespace sourcepawn
             return static_cast<unsigned>((args <= 4 ? 0 : (args - 4)) * 8 + 32);
         }
 #else
-        // SysV: s[0..5] the integer registers, s[6..13] the SSE ones.
-#define S2M_ARGS uint64_t i0, uint64_t i1, uint64_t i2, uint64_t i3, uint64_t i4, uint64_t i5, double f0, double f1, double f2, double f3, double f4, double f5, double f6, double f7
-#define S2M_REGS Regs regs{ { i0, i1, i2, i3, i4, i5, ToBits(f0), ToBits(f1), ToBits(f2), ToBits(f3), ToBits(f4), ToBits(f5), ToBits(f6), ToBits(f7) } }
+        // SysV: s[0..5] the integer registers, s[6..13] the SSE ones,
+        // s[14..21] the first eight stack slots.
+#define S2M_ARGS uint64_t i0, uint64_t i1, uint64_t i2, uint64_t i3, uint64_t i4, uint64_t i5, double f0, double f1, double f2, double f3, double f4, double f5, double f6, double f7, \
+                 uint64_t k0, uint64_t k1, uint64_t k2, uint64_t k3, uint64_t k4, uint64_t k5, uint64_t k6, uint64_t k7
+#define S2M_REGS Regs regs{ { i0, i1, i2, i3, i4, i5, ToBits(f0), ToBits(f1), ToBits(f2), ToBits(f3), ToBits(f4), ToBits(f5), ToBits(f6), ToBits(f7), \
+                              k0, k1, k2, k3, k4, k5, k6, k7 } }
 
         template <typename R>
         struct Callbacks
@@ -386,11 +404,13 @@ namespace sourcepawn
 
             static uint64_t Invoke(void* fn, const Regs& regs)
             {
-                using Fn = R (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, double, double, double, double, double, double, double, double);
+                using Fn = R (*)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, double, double, double, double, double, double, double, double,
+                                 uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
                 const uint64_t* s = regs.s;
                 return ToBits(reinterpret_cast<Fn>(fn)(s[0], s[1], s[2], s[3], s[4], s[5], FromBits<double>(s[6]), FromBits<double>(s[7]),
                                                         FromBits<double>(s[8]), FromBits<double>(s[9]), FromBits<double>(s[10]),
-                                                        FromBits<double>(s[11]), FromBits<double>(s[12]), FromBits<double>(s[13])));
+                                                        FromBits<double>(s[11]), FromBits<double>(s[12]), FromBits<double>(s[13]),
+                                                        s[14], s[15], s[16], s[17], s[18], s[19], s[20], s[21]));
             }
 
             static R CallOriginal(S2M_ARGS)
@@ -421,36 +441,34 @@ namespace sourcepawn
                      reinterpret_cast<void*>(&C::CallOriginal), &C::Invoke };
         }
 
-        // By class: integer parameters take s[0..5] in order, SSE ones s[6..13].
+        // By class: integer parameters take s[0..5] in order, SSE ones s[6..13];
+        // what overflows its class takes the next stack slot, s[14..21].
         bool Layout(RawHook* hook, int* mask, std::string& error)
         {
             *mask = 0;
             hook->slot.clear();
-            int ni = 0, nf = 0;
+            int ni = 0, nf = 0, ns = 0;
             for (Type t : hook->params)
             {
-                if (IsSse(t))
-                {
-                    if (nf == 8)
-                    {
-                        error = "too many floating-point parameters (at most 8)";
-                        return false;
-                    }
-                    hook->slot.push_back(6 + nf++);
-                }
+                int slot;
+                if (IsSse(t) && nf < 8)
+                    slot = 6 + nf++;
+                else if (!IsSse(t) && ni < 6)
+                    slot = ni++;
+                else if (ns < 8)
+                    slot = 14 + ns++;
                 else
                 {
-                    if (ni == 6)
-                    {
-                        error = "too many integer and pointer parameters (at most 6)";
-                        return false;
-                    }
-                    hook->slot.push_back(ni++);
+                    error = "too many parameters (6 integer and 8 floating-point in registers, then 8 on the stack)";
+                    return false;
                 }
+                hook->slot.push_back(slot);
             }
             return true;
         }
 
+        // The bytes of stack arguments KHook copies for each callback: more
+        // than the stack arguments need (one slot per parameter, plus one).
         unsigned StackSize(const RawHook* hook)
         {
             return static_cast<unsigned>((hook->ret != T_Void ? 8 : 0) + 8 * hook->params.size());
@@ -461,17 +479,42 @@ namespace sourcepawn
 
         bool ValidType(cell_t t)
         {
-            return t >= T_Void && t <= T_Command && t != T_VectorValue;
+            return t >= T_Void && t <= T_FloatRef && t != T_VectorValue;
         }
 
-        cell_t NewHook(IPluginContext* ctx, void* address, void** vtable, int index, cell_t returnType)
+        bool IsRef(Type t)
         {
-            if (!ValidType(returnType) || returnType == T_String || returnType == T_Vector || returnType == T_BufferString || returnType == T_Command)
+            return t == T_IntRef || t == T_BoolRef || t == T_FloatRef;
+        }
+
+        // An optional string argument at params[n]: "" when the script was
+        // compiled against an include without it.
+        const char* OptionalString(IPluginContext* ctx, const cell_t* params, int n)
+        {
+            return params[0] >= n ? LocalString(ctx, params[n]) : "";
+        }
+
+        // A signature in a module, optionally only in one section (".text").
+        uintptr_t FindSignature(const char* moduleName, const char* signature, const char* section)
+        {
+            Source2ModModule module(moduleName);
+            if (!section || !*section)
+                return module.FindPattern(signature).GetAddr();
+            if (!module.GetSectionByName(section).IsValid())
+                return 0;
+            return module.FindPatternInSection(signature, section).GetAddr();
+        }
+
+        cell_t NewHook(IPluginContext* ctx, void* address, void** vtable, int index, cell_t returnType, void* instance = nullptr)
+        {
+            if (!ValidType(returnType) || returnType == T_String || returnType == T_Vector || returnType == T_BufferString || returnType == T_Command ||
+                IsRef(static_cast<Type>(returnType)))
                 return ctx->ThrowNativeError("Unsupported return type %d", returnType);
             auto* hook = new RawHook();
             hook->owner = CallerId(ctx);
             hook->address = address;
             hook->vtable = vtable;
+            hook->instance = instance;
             hook->index = index;
             hook->ret = static_cast<Type>(returnType);
             const cell_t h = Handles().Create(HookType(), hook, hook->owner);
@@ -488,23 +531,65 @@ namespace sourcepawn
             return addr ? NewHook(ctx, reinterpret_cast<void*>(addr), nullptr, -1, params[2]) : 0;
         }
 
+        // FromSignature(module, signature, returnType, const char[] section = "")
         cell_t N_HookFromSignature(IPluginContext* ctx, const cell_t* params)
         {
-            Source2ModModule module(LocalString(ctx, params[1]));
-            const uintptr_t addr = module.FindPattern(LocalString(ctx, params[2])).GetAddr();
+            const uintptr_t addr = FindSignature(LocalString(ctx, params[1]), LocalString(ctx, params[2]), OptionalString(ctx, params, 4));
             return addr ? NewHook(ctx, reinterpret_cast<void*>(addr), nullptr, -1, params[3]) : 0;
         }
 
-        // FromVirtual(module, vtableName, index, returnType)
-        cell_t N_HookFromVirtual(IPluginContext* ctx, const cell_t* params)
+        // FromSignatureRelative(module, signature, returnType, int offset = 1, int nextInstructionOffset = 5, const char[] section = "")
+        cell_t N_HookFromSignatureRelative(IPluginContext* ctx, const cell_t* params)
+        {
+            const uintptr_t match = FindSignature(LocalString(ctx, params[1]), LocalString(ctx, params[2]), OptionalString(ctx, params, 6));
+            if (!match)
+                return 0;
+            const uintptr_t addr = ISource2ModMemory(match).ResolveRelativeAddress(params[4], params[5]).GetAddr();
+            return addr ? NewHook(ctx, reinterpret_cast<void*>(addr), nullptr, -1, params[3]) : 0;
+        }
+
+        // FromSymbol(module, symbol, returnType)
+        cell_t N_HookFromSymbol(IPluginContext* ctx, const cell_t* params)
         {
             Source2ModModule module(LocalString(ctx, params[1]));
-            void** vtable = reinterpret_cast<void**>(module.GetVirtualTableByName(LocalString(ctx, params[2])).GetAddr());
-            if (!vtable)
-                return 0;
+            const uintptr_t addr = module.GetFunctionByName(LocalString(ctx, params[2])).GetAddr();
+            return addr ? NewHook(ctx, reinterpret_cast<void*>(addr), nullptr, -1, params[3]) : 0;
+        }
+
+        // FromVirtual(module, vtableName, index, returnType, const char[] baseName = "")
+        cell_t N_HookFromVirtual(IPluginContext* ctx, const cell_t* params)
+        {
             if (params[3] < 0)
                 return ctx->ThrowNativeError("Invalid vtable index %d", params[3]);
-            return NewHook(ctx, nullptr, vtable, params[3], params[4]);
+            Source2ModModule module(LocalString(ctx, params[1]));
+            const char* name = LocalString(ctx, params[2]);
+            const char* base = OptionalString(ctx, params, 5);
+            void** vtable = reinterpret_cast<void**>((*base ? module.GetVirtualTableByBase(name, base) : module.GetVirtualTableByName(name)).GetAddr());
+            return vtable ? NewHook(ctx, nullptr, vtable, params[3], params[4]) : 0;
+        }
+
+        // FromVirtualSecondary(module, vtableName, int offset, int index, returnType):
+        // the vtable at this offset-to-top (a secondary base's).
+        cell_t N_HookFromVirtualSecondary(IPluginContext* ctx, const cell_t* params)
+        {
+            if (params[4] < 0)
+                return ctx->ThrowNativeError("Invalid vtable index %d", params[4]);
+            Source2ModModule module(LocalString(ctx, params[1]));
+            void** vtable = reinterpret_cast<void**>(module.GetVirtualTableByOffset(LocalString(ctx, params[2]), params[3]).GetAddr());
+            return vtable ? NewHook(ctx, nullptr, vtable, params[4], params[5]) : 0;
+        }
+
+        // FromVirtualObject(any instance, int index, returnType): the vtable the
+        // object uses, the handlers only for calls on it.
+        cell_t N_HookFromVirtualObject(IPluginContext* ctx, const cell_t* params)
+        {
+            if (params[2] < 0)
+                return ctx->ThrowNativeError("Invalid vtable index %d", params[2]);
+            void* instance = SchemaObjectPointer(ctx, params[1]);
+            if (!instance)
+                return 0;
+            void** vtable = *static_cast<void***>(instance);
+            return vtable ? NewHook(ctx, nullptr, vtable, params[2], params[3], instance) : 0;
         }
 
         // FromAddress(Source2ModAddress address, Source2ModType returnType)
@@ -575,6 +660,13 @@ namespace sourcepawn
             return 0;
         }
 
+        // property bool Enabled: installed (ISource2ModHook::IsInstalled)
+        cell_t N_HookGetEnabled(IPluginContext* ctx, const cell_t* params)
+        {
+            RawHook* hook = HookOf(ctx, params[1]);
+            return hook && hook->id != KHook::INVALID_HOOK;
+        }
+
         // ---- Source2ModHookParams / Source2ModHookReturn ------------------------------
 
         Frame* ParamFrame(IPluginContext* ctx, const cell_t* params, int* slot, Type* type)
@@ -603,6 +695,13 @@ namespace sourcepawn
                 return static_cast<int8_t>(bits);
             case T_Int16:
                 return static_cast<int16_t>(bits);
+            // Out-parameters: the value they point at (0 for null).
+            case T_IntRef:
+                return bits ? *reinterpret_cast<const int32_t*>(bits) : 0;
+            case T_BoolRef:
+                return bits ? *reinterpret_cast<const bool*>(bits) : 0;
+            case T_FloatRef:
+                return bits ? static_cast<cell_t>(*reinterpret_cast<const float*>(bits)) : 0;
             default:
                 return static_cast<cell_t>(bits);
             }
@@ -610,7 +709,35 @@ namespace sourcepawn
 
         float FloatOf(uint64_t bits, Type t)
         {
+            if (t == T_FloatRef)
+                return bits ? *reinterpret_cast<const float*>(bits) : 0.0f;
             return t == T_Double ? static_cast<float>(FromBits<double>(bits)) : FromBits<float>(bits);
+        }
+
+        // An out-parameter written in place (no Action needed); false for
+        // another type. A null pointer is a script error.
+        bool SetRef(IPluginContext* ctx, uint64_t bits, Type t, cell_t value, bool isFloat)
+        {
+            if (!IsRef(t))
+                return false;
+            if (!bits)
+            {
+                ctx->ThrowNativeError("The out-parameter is null");
+                return true;
+            }
+            switch (t)
+            {
+            case T_IntRef:
+                *reinterpret_cast<int32_t*>(bits) = isFloat ? static_cast<int32_t>(sp_ctof(value)) : value;
+                break;
+            case T_BoolRef:
+                *reinterpret_cast<bool*>(bits) = value != 0;
+                break;
+            default:
+                *reinterpret_cast<float*>(bits) = isFloat ? sp_ctof(value) : static_cast<float>(value);
+                break;
+            }
+            return true;
         }
 
         cell_t EntityOf(uint64_t bits)
@@ -707,6 +834,8 @@ namespace sourcepawn
             Type t;
             if (Frame* f = ParamFrame(ctx, params, &slot, &t))
             {
+                if (SetRef(ctx, f->regs.s[slot], t, params[3], false))
+                    return 0;
                 f->regs.s[slot] = static_cast<uint64_t>(static_cast<int64_t>(t == T_Bool ? (params[3] != 0) : params[3]));
                 f->changed = true;
             }
@@ -719,6 +848,8 @@ namespace sourcepawn
             Type t;
             if (Frame* f = ParamFrame(ctx, params, &slot, &t))
             {
+                if (SetRef(ctx, f->regs.s[slot], t, params[3], true))
+                    return 0;
                 f->regs.s[slot] = t == T_Double ? ToBits<double>(sp_ctof(params[3])) : ToBits<float>(sp_ctof(params[3]));
                 f->changed = true;
             }
@@ -794,6 +925,95 @@ namespace sourcepawn
             return h;
         }
 
+        // SetObject(int num, SchemaObject value): an Object / Pointer parameter; 0 is null.
+        cell_t N_PSetObject(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            Frame* f = ParamFrame(ctx, params, &slot, &t);
+            if (!f)
+                return 0;
+            void* ptr = params[3] == 0 ? nullptr : SchemaObjectPointer(ctx, params[3]);
+            if (params[3] != 0 && !ptr)
+                return 0;
+            f->regs.s[slot] = reinterpret_cast<uintptr_t>(ptr);
+            f->changed = true;
+            return 0;
+        }
+
+        // SetString(int num, const char[] value): a String parameter points at a
+        // copy that lives until the hooked call is over.
+        cell_t N_PSetString(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            Frame* f = ParamFrame(ctx, params, &slot, &t);
+            if (!f)
+                return 0;
+            if (t != T_String)
+                return ctx->ThrowNativeError("Parameter %d is not a String", params[2]);
+            f->strings.push_back(std::make_unique<std::string>(LocalString(ctx, params[3])));
+            f->regs.s[slot] = reinterpret_cast<uintptr_t>(f->strings.back()->c_str());
+            f->changed = true;
+            return 0;
+        }
+
+        // SetInt64(int num, const char[] value): an Int64 parameter from decimal text.
+        cell_t N_PSetInt64(IPluginContext* ctx, const cell_t* params)
+        {
+            int slot;
+            Type t;
+            Frame* f = ParamFrame(ctx, params, &slot, &t);
+            if (!f)
+                return 0;
+            if (t != T_Int64)
+                return ctx->ThrowNativeError("Parameter %d is not an Int64", params[2]);
+            f->regs.s[slot] = static_cast<uint64_t>(strtoll(LocalString(ctx, params[3]), nullptr, 10));
+            f->changed = true;
+            return 0;
+        }
+
+        // A return value (eight bytes) as the cell a script gets for this type.
+        cell_t ReturnCell(uint64_t bits, Type t)
+        {
+            switch (t)
+            {
+            case T_Float:
+            case T_Double:
+                return sp_ftoc(FloatOf(bits, t));
+            case T_Entity:
+                return EntityOf(bits);
+            case T_Object:
+            case T_Pointer:
+                return SchemaObjectForPointer(reinterpret_cast<void*>(bits));
+            case T_Void:
+                return 0;
+            default:
+                return IntOf(bits, t);
+            }
+        }
+
+        // CallOriginal() (pre): the original now, past every hook, with the
+        // current parameters. Its value becomes the return value.
+        cell_t N_PCallOriginal(IPluginContext* ctx, const cell_t* params)
+        {
+            auto* f = static_cast<Frame*>(ReadHandle(ctx, params[1], ParamsType()));
+            if (!f)
+                return 0;
+            if (f->post)
+                return ctx->ThrowNativeError("CallOriginal is for pre handlers (in post the original has run)");
+            RawHook* hook = f->hook;
+            void* original = hook->vtable ? KHook::FindOriginal(KHook::FindOriginalVirtual(hook->vtable, hook->index)) : KHook::FindOriginal(hook->address);
+            if (!original || !hook->invoke)
+                return ctx->ThrowNativeError("The original function is not available");
+            const uint64_t value = hook->invoke(original, f->regs);
+            if (hook->ret == T_Void)
+                return 0;
+            f->ret = value;
+            f->retSet = true;
+            return ReturnCell(value, hook->ret);
+        }
+
         Frame* RetFrame(IPluginContext* ctx, cell_t handle)
         {
             auto* frame = static_cast<Frame*>(ReadHandle(ctx, handle, ReturnType()));
@@ -854,14 +1074,71 @@ namespace sourcepawn
             return 0;
         }
 
+        cell_t N_RGetObject(IPluginContext* ctx, const cell_t* params)
+        {
+            Frame* f = RetFrame(ctx, params[1]);
+            return f ? SchemaObjectForPointer(reinterpret_cast<void*>(f->ret)) : 0;
+        }
+
+        // SetObject(SchemaObject value); 0 is null.
+        cell_t N_RSetObject(IPluginContext* ctx, const cell_t* params)
+        {
+            Frame* f = RetFrame(ctx, params[1]);
+            if (!f)
+                return 0;
+            void* ptr = params[2] == 0 ? nullptr : SchemaObjectPointer(ctx, params[2]);
+            if (params[2] != 0 && !ptr)
+                return 0;
+            f->ret = reinterpret_cast<uintptr_t>(ptr);
+            f->retSet = true;
+            return 0;
+        }
+
+        // GetInt64(char[] buffer, int maxlen): decimal text.
+        cell_t N_RGetInt64(IPluginContext* ctx, const cell_t* params)
+        {
+            Frame* f = RetFrame(ctx, params[1]);
+            if (!f)
+                return 0;
+            const int64_t value = f->hook->ret == T_Int64 ? static_cast<int64_t>(f->ret) : IntOf(f->ret, f->hook->ret);
+            size_t written = 0;
+            ctx->StringToLocalUTF8(params[2], params[3], std::to_string(value).c_str(), &written);
+            return static_cast<cell_t>(written);
+        }
+
+        // SetInt64(const char[] value): from decimal text.
+        cell_t N_RSetInt64(IPluginContext* ctx, const cell_t* params)
+        {
+            if (Frame* f = RetFrame(ctx, params[1]))
+            {
+                f->ret = static_cast<uint64_t>(strtoll(LocalString(ctx, params[2]), nullptr, 10));
+                f->retSet = true;
+            }
+            return 0;
+        }
+
         const sp_nativeinfo_t g_rawHookNatives[] = {
             { "Source2ModHook.FromGameConfig", N_HookFromGameConfig },
             { "Source2ModHook.FromSignature", N_HookFromSignature },
+            { "Source2ModHook.FromSignatureRelative", N_HookFromSignatureRelative },
+            { "Source2ModHook.FromSymbol", N_HookFromSymbol },
             { "Source2ModHook.FromVirtual", N_HookFromVirtual },
+            { "Source2ModHook.FromVirtualSecondary", N_HookFromVirtualSecondary },
+            { "Source2ModHook.FromVirtualObject", N_HookFromVirtualObject },
             { "Source2ModHook.FromAddress", N_HookFromAddress },
             { "Source2ModHook.AddParam", N_HookAddParam },
             { "Source2ModHook.Enable", N_HookEnable },
             { "Source2ModHook.Disable", N_HookDisable },
+            { "Source2ModHook.Enabled.get", N_HookGetEnabled },
+            { "Source2ModHookParams.GetInt64", N_PGetString },
+            { "Source2ModHookParams.SetInt64", N_PSetInt64 },
+            { "Source2ModHookParams.SetObject", N_PSetObject },
+            { "Source2ModHookParams.SetString", N_PSetString },
+            { "Source2ModHookParams.CallOriginal", N_PCallOriginal },
+            { "Source2ModHookReturn.GetObject", N_RGetObject },
+            { "Source2ModHookReturn.SetObject", N_RSetObject },
+            { "Source2ModHookReturn.GetInt64", N_RGetInt64 },
+            { "Source2ModHookReturn.SetInt64", N_RSetInt64 },
             { "Source2ModHookParams.GetInt", N_PGetInt },
             { "Source2ModHookParams.GetFloat", N_PGetFloat },
             { "Source2ModHookParams.GetBool", N_PGetInt },

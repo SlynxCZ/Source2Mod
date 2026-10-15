@@ -89,6 +89,13 @@ namespace sourcepawn
         void OnPermissionsChanged(uint64 steamId) override;
         void OnGameServerSteamAPIActivated() override;
         void OnGameServerSteamAPIDeactivated() override;
+        void OnPluginLoad(PluginId id, const char* name) override;
+        void OnPluginUnload(PluginId id, const char* name) override;
+        void OnMetamodPluginLoad(PluginId id) override;
+        void OnMetamodPluginUnload(PluginId id) override;
+        void OnAllMetamodPluginsLoaded() override;
+        void OnStartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* session, const char* mapName) override;
+        void OnLoadEventsFromFile(IGameEventManager2* manager, const char* filename, bool searchAll) override;
 
         PluginId Id() const { return m_id; }
         const std::string& Path() const { return m_path; }
@@ -107,6 +114,8 @@ namespace sourcepawn
         void CallForward(const char* name);
         void CallForwardClient(const char* name, int client);
         void CallForwardString(const char* name, const char* value);
+        /// A plugin id, then its name when there is one.
+        void CallForwardPlugin(const char* name, PluginId id, const char* pluginName);
 
         /// Binds natives registered after this script loaded (CreateNative of
         /// a plugin loaded later, a native plugin's AddNatives).

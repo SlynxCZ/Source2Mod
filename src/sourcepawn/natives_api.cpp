@@ -18,10 +18,16 @@
 
 #include "core/commands.h"
 #include "core/convars.h"
+#include "core/shared.h"
+
+#include <source2mod/ISource2ModScheduler.h>
 
 #include <sp_callable.h>
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <string>
 
 using namespace SourcePawn;
@@ -337,6 +343,307 @@ namespace sourcepawn
             return convars::convarsManager.UnhookConVarChangeId(static_cast<Source2ModHookId>(params[1]));
         }
 
+        // ---- Source2ModTimer: the scheduler's Timer fields -------------------------
+
+        cell_t N_TimerInterval(IPluginContext* ctx, const cell_t* params)
+        {
+            Timer* t = ScriptTimer(ctx, params[1]);
+            return sp_ftoc(t ? t->Interval : 0.0f);
+        }
+
+        cell_t N_TimerExecTime(IPluginContext* ctx, const cell_t* params)
+        {
+            Timer* t = ScriptTimer(ctx, params[1]);
+            return sp_ftoc(t ? static_cast<float>(t->ExecTime) : 0.0f);
+        }
+
+        cell_t N_TimerFlags(IPluginContext* ctx, const cell_t* params)
+        {
+            Timer* t = ScriptTimer(ctx, params[1]);
+            return t ? t->Flags : 0;
+        }
+
+        cell_t N_TimerInExec(IPluginContext* ctx, const cell_t* params)
+        {
+            Timer* t = ScriptTimer(ctx, params[1]);
+            return t && t->InExec;
+        }
+
+        cell_t N_TimerKillMe(IPluginContext* ctx, const cell_t* params)
+        {
+            Timer* t = ScriptTimer(ctx, params[1]);
+            return !t || t->KillMe;
+        }
+
+        // ---- CGlobalVars (ISource2ModAPI::GetGlobalVars) ------------------------------
+
+        CGlobalVars* Globals(IPluginContext* ctx)
+        {
+            CGlobalVars* globals = shared::getGlobalVars();
+            if (!globals)
+                ctx->ThrowNativeError("The global variables are not available yet");
+            return globals;
+        }
+
+#define S2M_GLOBAL(field, conv)                                                    \
+        cell_t N_Globals_##field(IPluginContext* ctx, const cell_t*)               \
+        {                                                                          \
+            CGlobalVars* g = Globals(ctx);                                         \
+            return g ? conv(g->field) : 0;                                         \
+        }
+#define S2M_CELL(v) static_cast<cell_t>(v)
+        S2M_GLOBAL(realtime, sp_ftoc)
+        S2M_GLOBAL(framecount, S2M_CELL)
+        S2M_GLOBAL(absoluteframetime, sp_ftoc)
+        S2M_GLOBAL(absoluteframetime_unbounded, sp_ftoc)
+        S2M_GLOBAL(maxClients, S2M_CELL)
+        S2M_GLOBAL(m_nCurrentTickThisFrame, S2M_CELL)
+        S2M_GLOBAL(m_nTotalTicksThisFrame, S2M_CELL)
+        S2M_GLOBAL(curtime, sp_ftoc)
+        S2M_GLOBAL(frametime, sp_ftoc)
+        S2M_GLOBAL(interpolation_amount, sp_ftoc)
+        S2M_GLOBAL(m_bInSimulation, S2M_CELL)
+        S2M_GLOBAL(tickcount, S2M_CELL)
+        S2M_GLOBAL(m_flSubtickFraction, sp_ftoc)
+        S2M_GLOBAL(eLoadType, S2M_CELL)
+        S2M_GLOBAL(mp_teamplay, S2M_CELL)
+        S2M_GLOBAL(maxEntities, S2M_CELL)
+        S2M_GLOBAL(serverCount, S2M_CELL)
+#undef S2M_CELL
+#undef S2M_GLOBAL
+
+        template <string_t CGlobalVars::*FIELD>
+        cell_t N_GlobalsString(IPluginContext* ctx, const cell_t* params)
+        {
+            CGlobalVars* g = Globals(ctx);
+            return ToBuffer(ctx, params[2], params[3], g ? (g->*FIELD).ToCStr() : "");
+        }
+
+        // ---- the rest of ISource2ModConVars: typed values, flags, create, delete -------
+
+        // Through the interface, whose overloads have the slot default.
+        ISource2ModConVars& CV()
+        {
+            return convars::convarsManager;
+        }
+
+        bool IndexArg(IPluginContext* ctx, cell_t handle, uint16* index)
+        {
+            if (IndexOf(handle, index))
+                return true;
+            ctx->ThrowNativeError("Invalid ConVar handle %x", handle);
+            return false;
+        }
+
+        cell_t N_CVGetType(IPluginContext* ctx, const cell_t* params)
+        {
+            uint16 index;
+            return IndexArg(ctx, params[1], &index) ? CV().GetType(index) : EConVarType_Invalid;
+        }
+
+        // GetFlags(ConVar, int flags[2]) / SetFlags(ConVar, const int flags[2]): all 64 bits.
+        cell_t N_CVGetFlags(IPluginContext* ctx, const cell_t* params)
+        {
+            uint16 index;
+            if (!IndexArg(ctx, params[1], &index))
+                return 0;
+            const uint64 flags = CV().GetFlags(index);
+            cell_t* out;
+            ctx->LocalToPhysAddr(params[2], &out);
+            out[0] = static_cast<cell_t>(flags & 0xFFFFFFFFu);
+            out[1] = static_cast<cell_t>(flags >> 32);
+            return 0;
+        }
+
+        cell_t N_CVSetFlags(IPluginContext* ctx, const cell_t* params)
+        {
+            uint16 index;
+            if (!IndexArg(ctx, params[1], &index))
+                return 0;
+            cell_t* in;
+            ctx->LocalToPhysAddr(params[2], &in);
+            CV().SetFlags(index, static_cast<uint32_t>(in[0]) | (static_cast<uint64>(static_cast<uint32_t>(in[1])) << 32));
+            return 0;
+        }
+
+        cell_t N_CVGetDouble(IPluginContext* ctx, const cell_t* params)
+        {
+            uint16 index;
+            return IndexArg(ctx, params[1], &index) ? sp_ftoc(static_cast<float>(CV().GetDouble(index))) : 0;
+        }
+
+        cell_t N_CVSetDouble(IPluginContext* ctx, const cell_t* params)
+        {
+            uint16 index;
+            if (IndexArg(ctx, params[1], &index))
+                CV().SetDouble(index, sp_ctof(params[2]));
+            return 0;
+        }
+
+        void FloatsOut(IPluginContext* ctx, cell_t addr, const float* v, int n)
+        {
+            cell_t* out;
+            ctx->LocalToPhysAddr(addr, &out);
+            for (int i = 0; i < n; i++)
+                out[i] = sp_ftoc(v[i]);
+        }
+
+        void FloatsIn(IPluginContext* ctx, cell_t addr, float* v, int n)
+        {
+            cell_t* in;
+            ctx->LocalToPhysAddr(addr, &in);
+            for (int i = 0; i < n; i++)
+                v[i] = sp_ctof(in[i]);
+        }
+
+        // GetVector2 / GetVector3 / GetVector4 / GetQAngle (ConVar, float[N])
+        template <typename V, int N, V (ISource2ModConVars::*GET)(uint16, CSplitScreenSlot)>
+        cell_t N_CVGetFloats(IPluginContext* ctx, const cell_t* params)
+        {
+            uint16 index;
+            if (!IndexArg(ctx, params[1], &index))
+                return 0;
+            const V v = (CV().*GET)(index, CSplitScreenSlot(-1));
+            FloatsOut(ctx, params[2], reinterpret_cast<const float*>(&v), N);
+            return 0;
+        }
+
+        template <typename V, int N, void (ISource2ModConVars::*SET)(uint16, const V&, CSplitScreenSlot)>
+        cell_t N_CVSetFloats(IPluginContext* ctx, const cell_t* params)
+        {
+            uint16 index;
+            if (!IndexArg(ctx, params[1], &index))
+                return 0;
+            V v;
+            FloatsIn(ctx, params[2], reinterpret_cast<float*>(&v), N);
+            (CV().*SET)(index, v, CSplitScreenSlot(-1));
+            return 0;
+        }
+
+        cell_t N_CVGetColor(IPluginContext* ctx, const cell_t* params)
+        {
+            uint16 index;
+            if (!IndexArg(ctx, params[1], &index))
+                return 0;
+            const Color c = CV().GetColor(index);
+            cell_t* out;
+            ctx->LocalToPhysAddr(params[2], &out);
+            out[0] = c.r();
+            out[1] = c.g();
+            out[2] = c.b();
+            out[3] = c.a();
+            return 0;
+        }
+
+        cell_t N_CVSetColor(IPluginContext* ctx, const cell_t* params)
+        {
+            uint16 index;
+            if (!IndexArg(ctx, params[1], &index))
+                return 0;
+            cell_t* in;
+            ctx->LocalToPhysAddr(params[2], &in);
+            CV().SetColor(index, Color(in[0], in[1], in[2], in[3]));
+            return 0;
+        }
+
+        cell_t N_CVDeleteConVar(IPluginContext* ctx, const cell_t* params)
+        {
+            uint16 index;
+            if (IndexArg(ctx, params[1], &index))
+                CV().DeleteConVar(index);
+            return 0;
+        }
+
+        // A ConVar value of `type` read from text, laid out as CreateConVar wants it.
+        struct ConVarValue
+        {
+            alignas(16) uint8_t bytes[32] = {};
+            std::string text;
+
+            bool Parse(EConVarType type, const char* s)
+            {
+                float f[4] = {};
+                switch (type)
+                {
+                case EConVarType_Bool:
+                    *reinterpret_cast<bool*>(bytes) = std::strtol(s, nullptr, 10) != 0 || std::strcmp(s, "true") == 0;
+                    return true;
+                case EConVarType_Int16:
+                    *reinterpret_cast<int16*>(bytes) = static_cast<int16>(std::strtol(s, nullptr, 10));
+                    return true;
+                case EConVarType_UInt16:
+                    *reinterpret_cast<uint16*>(bytes) = static_cast<uint16>(std::strtoul(s, nullptr, 10));
+                    return true;
+                case EConVarType_Int32:
+                    *reinterpret_cast<int32*>(bytes) = static_cast<int32>(std::strtol(s, nullptr, 10));
+                    return true;
+                case EConVarType_UInt32:
+                    *reinterpret_cast<uint32*>(bytes) = static_cast<uint32>(std::strtoul(s, nullptr, 10));
+                    return true;
+                case EConVarType_Int64:
+                    *reinterpret_cast<int64*>(bytes) = std::strtoll(s, nullptr, 10);
+                    return true;
+                case EConVarType_UInt64:
+                    *reinterpret_cast<uint64*>(bytes) = std::strtoull(s, nullptr, 10);
+                    return true;
+                case EConVarType_Float32:
+                    *reinterpret_cast<float*>(bytes) = std::strtof(s, nullptr);
+                    return true;
+                case EConVarType_Float64:
+                    *reinterpret_cast<double*>(bytes) = std::strtod(s, nullptr);
+                    return true;
+                case EConVarType_String:
+                    text = s;
+                    return true;
+                case EConVarType_Color:
+                {
+                    int c[4] = { 0, 0, 0, 255 };
+                    std::sscanf(s, "%d %d %d %d", &c[0], &c[1], &c[2], &c[3]);
+                    *reinterpret_cast<Color*>(bytes) = Color(c[0], c[1], c[2], c[3]);
+                    return true;
+                }
+                case EConVarType_Vector2:
+                case EConVarType_Vector3:
+                case EConVarType_Vector4:
+                case EConVarType_Qangle:
+                case EConVarType_VectorWS:
+                    std::sscanf(s, "%f %f %f %f", &f[0], &f[1], &f[2], &f[3]);
+                    std::memcpy(bytes, f, sizeof(f));
+                    return true;
+                default:
+                    return false;
+                }
+            }
+
+            void* Pointer()
+            {
+                return text.empty() ? static_cast<void*>(bytes) : static_cast<void*>(text.data());
+            }
+        };
+
+        // CConVar.Create(name, type, flags, help, defaultValue, hasMin, min, hasMax, max): any
+        // EConVarType, the values as text ("1 2 3" for a vector, "r g b a" for a color).
+        cell_t N_CVCreate(IPluginContext* ctx, const cell_t* params)
+        {
+            const char* name = LocalString(ctx, params[1]);
+            if (cell_t h = Existing(name))
+                return h;
+            const auto type = static_cast<EConVarType>(params[2]);
+            ConVarValue def, min, max;
+            if (!def.Parse(type, LocalString(ctx, params[5])))
+                return ctx->ThrowNativeError("Invalid ConVar type %d", params[2]);
+            const bool hasMin = params[6] != 0 && type != EConVarType_String;
+            const bool hasMax = params[8] != 0 && type != EConVarType_String;
+            if (hasMin)
+                min.Parse(type, LocalString(ctx, params[7]));
+            if (hasMax)
+                max.Parse(type, LocalString(ctx, params[9]));
+            // An empty string default still needs a valid char*.
+            void* defValue = type == EConVarType_String ? static_cast<void*>(def.text.data()) : def.Pointer();
+            return Created(ctx, name, CV().CreateConVar(name, type, LocalString(ctx, params[4]), static_cast<uint32_t>(params[3]) | kRegisterFlags,
+                                                        hasMin, hasMax, defValue, hasMin ? min.Pointer() : nullptr, hasMax ? max.Pointer() : nullptr));
+        }
+
         const sp_nativeinfo_t g_apiNatives[] = {
             // source2mod/commands.inc
             { "Source2ModCommands.RegisterConCommand", N_RegisterConCommand },
@@ -364,6 +671,49 @@ namespace sourcepawn
             { "CConVarRef.IsConVarDataAvailable", N_RefIsConVarDataAvailable },
             { "Source2ModConVars.HookConVarChange", N_HookConVarChange },
             { "Source2ModConVars.UnhookConVarChange", N_UnhookConVarChange },
+            { "CConVar.Create", N_CVCreate },
+            // source2mod/scheduler.inc
+            { "Source2ModTimer.Interval.get", N_TimerInterval },
+            { "Source2ModTimer.ExecTime.get", N_TimerExecTime },
+            { "Source2ModTimer.Flags.get", N_TimerFlags },
+            { "Source2ModTimer.InExec.get", N_TimerInExec },
+            { "Source2ModTimer.KillMe.get", N_TimerKillMe },
+            // source2mod/api.inc
+            { "CGlobalVars.realtime.get", N_Globals_realtime },
+            { "CGlobalVars.framecount.get", N_Globals_framecount },
+            { "CGlobalVars.absoluteframetime.get", N_Globals_absoluteframetime },
+            { "CGlobalVars.absoluteframetime_unbounded.get", N_Globals_absoluteframetime_unbounded },
+            { "CGlobalVars.maxClients.get", N_Globals_maxClients },
+            { "CGlobalVars.m_nCurrentTickThisFrame.get", N_Globals_m_nCurrentTickThisFrame },
+            { "CGlobalVars.m_nTotalTicksThisFrame.get", N_Globals_m_nTotalTicksThisFrame },
+            { "CGlobalVars.curtime.get", N_Globals_curtime },
+            { "CGlobalVars.frametime.get", N_Globals_frametime },
+            { "CGlobalVars.interpolation_amount.get", N_Globals_interpolation_amount },
+            { "CGlobalVars.m_bInSimulation.get", N_Globals_m_bInSimulation },
+            { "CGlobalVars.tickcount.get", N_Globals_tickcount },
+            { "CGlobalVars.m_flSubtickFraction.get", N_Globals_m_flSubtickFraction },
+            { "CGlobalVars.eLoadType.get", N_Globals_eLoadType },
+            { "CGlobalVars.mp_teamplay.get", N_Globals_mp_teamplay },
+            { "CGlobalVars.maxEntities.get", N_Globals_maxEntities },
+            { "CGlobalVars.serverCount.get", N_Globals_serverCount },
+            { "CGlobalVars.GetMapName", N_GlobalsString<&CGlobalVars::mapname> },
+            { "CGlobalVars.GetStartSpot", N_GlobalsString<&CGlobalVars::startspot> },
+            { "Source2ModConVars.GetType", N_CVGetType },
+            { "Source2ModConVars.GetFlags", N_CVGetFlags },
+            { "Source2ModConVars.SetFlags", N_CVSetFlags },
+            { "Source2ModConVars.GetDouble", N_CVGetDouble },
+            { "Source2ModConVars.SetDouble", N_CVSetDouble },
+            { "Source2ModConVars.GetVector2", N_CVGetFloats<Vector2D, 2, &ISource2ModConVars::GetVector2> },
+            { "Source2ModConVars.GetVector3", N_CVGetFloats<Vector, 3, &ISource2ModConVars::GetVector3> },
+            { "Source2ModConVars.GetVector4", N_CVGetFloats<Vector4D, 4, &ISource2ModConVars::GetVector4> },
+            { "Source2ModConVars.GetQAngle", N_CVGetFloats<QAngle, 3, &ISource2ModConVars::GetQAngle> },
+            { "Source2ModConVars.GetColor", N_CVGetColor },
+            { "Source2ModConVars.SetVector2", N_CVSetFloats<Vector2D, 2, &ISource2ModConVars::SetVector2> },
+            { "Source2ModConVars.SetVector3", N_CVSetFloats<Vector, 3, &ISource2ModConVars::SetVector3> },
+            { "Source2ModConVars.SetVector4", N_CVSetFloats<Vector4D, 4, &ISource2ModConVars::SetVector4> },
+            { "Source2ModConVars.SetQAngle", N_CVSetFloats<QAngle, 3, &ISource2ModConVars::SetQAngle> },
+            { "Source2ModConVars.SetColor", N_CVSetColor },
+            { "Source2ModConVars.DeleteConVar", N_CVDeleteConVar },
             { nullptr, nullptr },
         };
     }
