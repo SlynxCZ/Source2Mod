@@ -44,6 +44,7 @@
 #endif
 
 std::shared_ptr<spdlog::logger> log::m_FP_logger;
+std::shared_ptr<spdlog::logger> log::m_FP_fileLogger;
 
 void log::Init() {
 #if defined(_WIN32)
@@ -69,10 +70,16 @@ void log::Init() {
     m_FP_logger->set_level(spdlog::level::trace);
     m_FP_logger->flush_on(spdlog::level::info);
 
+    // Same file, same name in it, not registered (the name is taken).
+    m_FP_fileLogger = std::make_shared<spdlog::logger>("Source2Mod", file_sink);
+    m_FP_fileLogger->set_level(spdlog::level::trace);
+    m_FP_fileLogger->flush_on(spdlog::level::info);
+
     spdlog::cfg::load_env_levels();
 }
 
 void log::Close() {
     spdlog::drop("Source2Mod");
     m_FP_logger.reset();
+    m_FP_fileLogger.reset();
 }

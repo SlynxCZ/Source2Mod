@@ -46,9 +46,13 @@ public:
     static void Close();
 
     static std::shared_ptr<spdlog::logger>& GetLogger() { return m_FP_logger; }
+    // Source2Mod.log only: for lines that reach the console some other way
+    // (a SourcePawn LogMessage goes there like a C++ plugin's Log does).
+    static std::shared_ptr<spdlog::logger>& GetFileLogger() { return m_FP_fileLogger; }
 
 private:
     static std::shared_ptr<spdlog::logger> m_FP_logger;
+    static std::shared_ptr<spdlog::logger> m_FP_fileLogger;
 };
 
 #define FP_TRACE(fmt, ...)    ::log::GetLogger()->trace(fmt, ##__VA_ARGS__)

@@ -493,11 +493,16 @@ namespace sourcepawn
             return 0;
         }
 
+        // The console line looks like a C++ plugin's SOURCE2MOD_LOG ("[Name]
+        // text"); Source2Mod.log still gets it with the time and the file name.
         cell_t N_LogMessage(IPluginContext* ctx, const cell_t* params)
         {
             std::string msg;
-            if (FormatTo(ctx, params, 1, msg))
-                FP_INFO("[{}] {}", Plugin(ctx) ? Plugin(ctx)->FileName() : "?", msg);
+            if (!FormatTo(ctx, params, 1, msg))
+                return 0;
+            ScriptPlugin* plugin = Plugin(ctx);
+            ConMsg("[%s] %s\n", plugin ? plugin->GetName() : "?", msg.c_str());
+            ::log::GetFileLogger()->info("[{}] {}", plugin ? plugin->FileName() : "?", msg);
             return 0;
         }
 
