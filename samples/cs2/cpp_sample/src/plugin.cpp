@@ -1651,38 +1651,117 @@ void SamplePlugin::SetupMySQL()
  *
  * ========================================================================== */
 
+// A menu is an object of the plugin's: a CenterHtmlMenu filled with options,
+// or -- as here -- a class derived from it that overrides the handlers.
+// Keys: the page's numbered options, 7 Back (previous page, else the parent
+// menu), 8 Next, 9 Exit.
+static CCSPlayerPawn *LivingPawnOf(CCSPlayerController *pPlayer)
+{
+    CCSPlayerPawn *pPawn = pPlayer->GetPlayerPawn();
+    return pPawn && pPlayer->m_bPawnIsAlive() ? pPawn : nullptr;
+}
+
+static void GiveItem(CCSPlayerController *pPlayer, const char *pszItem)
+{
+    if (CCSPlayerPawn *pPawn = LivingPawnOf(pPlayer); pPawn && pPawn->m_pItemServices())
+        pPawn->m_pItemServices()->GiveNamedItem(pszItem);
+}
+
+static const char *MenuEndReasonName(MenuEndReason reason)
+{
+    switch (reason)
+    {
+        case MenuEndReason::Selected:     return "an option closed it";
+        case MenuEndReason::Exit:         return "exit";
+        case MenuEndReason::Replaced:     return "another menu replaced it";
+        case MenuEndReason::Closed:       return "closed by a plugin";
+        case MenuEndReason::Disconnected: return "the player left";
+        case MenuEndReason::Timeout:      return "timed out";
+    }
+    return "?";
+}
+
+class SampleMenu : public CenterHtmlMenu
+{
+public:
+    SampleMenu() : CenterHtmlMenu("cpp_sample menu")
+    {
+        // A line of text: never picked, takes no number.
+        AddText("7 back, 8 next, 9 exit");
+
+        // Text, disabled and visible worked out for the player it is shown to:
+        // the health in the label, and no healing at full health.
+        AddDynamicOption(
+            [](CCSPlayerController *pPlayer)
+            {
+                CCSPlayerPawn *pPawn = LivingPawnOf(pPlayer);
+                return "Heal to 100 (now " + std::to_string(pPawn ? pPawn->m_iHealth() : 0) + ")";
+            },
+            [](CCSPlayerController *pPlayer, ChatMenuOption &)
+            {
+                if (CCSPlayerPawn *pPawn = LivingPawnOf(pPlayer))
+                    pPawn->m_iHealth = 100;
+            },
+            [](CCSPlayerController *pPlayer)
+            {
+                CCSPlayerPawn *pPawn = LivingPawnOf(pPlayer);
+                return !pPawn || pPawn->m_iHealth() >= 100;
+            });
+
+        // Opens the submenu; its Back (7) comes back here.
+        AddSubmenu("Weapons", &m_Weapons);
+
+        // Shown, but cannot be picked.
+        AddMenuOption("Not today", nullptr, true);
+
+        // A pick in the submenu closes the whole menu (MenuEndReason::Selected).
+        m_Weapons.AddMenuOption("AK-47", [](CCSPlayerController *pPlayer, ChatMenuOption &) { GiveItem(pPlayer, "weapon_ak47"); }).CloseOnSelect = true;
+        m_Weapons.AddMenuOption("M4A1-S", [](CCSPlayerController *pPlayer, ChatMenuOption &) { GiveItem(pPlayer, "weapon_m4a1_silencer"); }).CloseOnSelect = true;
+        m_Weapons.AddMenuOption("Desert Eagle", [](CCSPlayerController *pPlayer, ChatMenuOption &) { GiveItem(pPlayer, "weapon_deagle"); }).CloseOnSelect = true;
+
+        // Options a page (1-6), seconds until it closes by itself (0 = never),
+        // and what a pick does here: stay, so the health label updates.
+        SetItemsPerPage(4);
+        SetTimeout(30);
+        SetPostSelectAction(PostSelectAction::Nothing);
+    }
+
+    // The title each player sees.
+    std::string DisplayTitle(CCSPlayerController *pPlayer) override
+    {
+        return std::string("cpp_sample menu for ") + pPlayer->GetPlayerName();
+    }
+
+    // The menu went away for a player -- not called when the plugin unloads.
+    void OnMenuEnd(CCSPlayerController *pPlayer, MenuEndReason reason) override
+    {
+        SOURCE2MOD_LOG(&g_Plugin, "Menu closed for %s: %s\n", pPlayer ? pPlayer->GetPlayerName() : "?", MenuEndReasonName(reason));
+    }
+
+private:
+    CenterHtmlMenu m_Weapons{"Weapons"};
+};
+
 // The menu lives as long as the library: the core closes it for whoever has
 // it open when the plugin unloads, and that happens after Unload().
-static CenterHtmlMenu s_SampleMenu("cpp_sample menu");
+static SampleMenu s_SampleMenu;
 
 void SamplePlugin::SetupMenus()
 {
-    s_SampleMenu.AddMenuOption("Heal to 100", [](CCSPlayerController *pPlayer, ChatMenuOption &option)
-    {
-        CCSPlayerPawn *pPawn = pPlayer->GetPlayerPawn();
-        if (pPawn && pPlayer->m_bPawnIsAlive())
-            pPawn->m_iHealth = 100;
-    });
-
-    s_SampleMenu.AddMenuOption("Give an AK-47", [](CCSPlayerController *pPlayer, ChatMenuOption &option)
-    {
-        CCSPlayerPawn *pPawn = pPlayer->GetPlayerPawn();
-        if (pPawn && pPlayer->m_bPawnIsAlive() && pPawn->m_pItemServices())
-            pPawn->m_pItemServices()->GiveNamedItem("weapon_ak47");
-    });
-
-    // Shown, but cannot be picked.
-    s_SampleMenu.AddMenuOption("Not today", [](CCSPlayerController *, ChatMenuOption &) {}, true);
-
-    // What happens after a pick: close, go back to the first page, or stay.
-    s_SampleMenu.SetPostSelectAction(PostSelectAction::Close);
-
+    // sample_menu opens it, or closes it when it is already open.
     g_pSource2ModCommands->RegisterConCommand("sample_menu", [](const Source2ModCommandContext& context, const Source2ModCommandArgs& args, bool post)
     {
-        if (CCSPlayerController *pCaller = CallerOf(context))
-            OPEN_CENTER_HTML_MENU(pCaller, &s_SampleMenu);
-        else
+        CCSPlayerController *pCaller = CallerOf(context);
+        if (!pCaller)
+        {
             Reply(context, "Menus are for players.");
+            return;
+        }
+
+        if (g_pSource2ModMenus->IsMenuOpen(pCaller, &s_SampleMenu))
+            CLOSE_ACTIVE_MENU(pCaller);
+        else
+            OPEN_CENTER_HTML_MENU(pCaller, &s_SampleMenu);
     });
 
     // sample_hud: hooks the button clicks of every custom HUD layout on the

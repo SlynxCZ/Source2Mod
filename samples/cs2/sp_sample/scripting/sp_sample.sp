@@ -1510,7 +1510,7 @@ void SetupPathsAndPermissions()
 {
 	// Absolute paths, no trailing separator. PluginConfigDirectory() is this
 	// plugin's own folder under configs/, made on first use.
-	char path[256];
+	char path[PLATFORM_MAX_PATH];
 	Source2ModPaths.RootDirectory(path, sizeof(path));
 	Source2ModApi.Log("Root: %s", path);
 	Source2ModPaths.ConfigsDirectory(path, sizeof(path));
@@ -1937,20 +1937,50 @@ public void OnTxnFailure(const char[] error, int failIndex, any slot)
  * ========================================================================== */
 
 // Built once, the script's until deleted; deleting it would close it for
-// everyone who has it open. It goes with the plugin.
+// everyone who has it open. It goes with the plugin. Keys: the page's
+// numbered options, 7 Back (previous page, else the parent menu), 8 Next,
+// 9 Exit.
 CenterHtmlMenu g_Menu;
+CenterHtmlMenu g_WeaponsMenu;
 
 void SetupMenus()
 {
 	g_Menu = new CenterHtmlMenu("sp_sample menu");
-	g_Menu.AddMenuOption("Heal to 100", Menu_Heal);
-	g_Menu.AddMenuOption("Give an AK-47", Menu_GiveAk);
+
+	// The title each player sees.
+	g_Menu.SetDynamicTitle(Menu_Title);
+
+	// A line of text: never picked, takes no number.
+	g_Menu.AddText("7 back, 8 next, 9 exit");
+
+	// Text and disabled state worked out for the player it is shown to: the
+	// health in the label, and no healing at full health.
+	g_Menu.AddDynamicOption(Menu_HealText, Menu_Heal, 0, Menu_HealDisabled);
+
+	// Opens the submenu; its Back (7) comes back here.
+	g_WeaponsMenu = new CenterHtmlMenu("Weapons");
+	g_Menu.AddSubmenu("Weapons", g_WeaponsMenu);
 
 	// Shown, but cannot be picked.
 	g_Menu.AddMenuOption("Not today", Menu_Heal, 0, true);
 
-	// What happens after a pick: close, go back to the first page, or stay.
-	g_Menu.PostSelect = PostSelect_Close;
+	// A pick in the submenu closes the whole menu (MenuEnd_Selected). The item
+	// rides along as the option's data.
+	int option = g_WeaponsMenu.AddMenuOption("AK-47", Menu_Give, 0);
+	g_WeaponsMenu.SetOptionFlags(option, MenuOption_Close);
+	option = g_WeaponsMenu.AddMenuOption("M4A1-S", Menu_Give, 1);
+	g_WeaponsMenu.SetOptionFlags(option, MenuOption_Close);
+	option = g_WeaponsMenu.AddMenuOption("Desert Eagle", Menu_Give, 2);
+	g_WeaponsMenu.SetOptionFlags(option, MenuOption_Close);
+
+	// Options a page (1-6), seconds until it closes by itself (0 = never),
+	// and what a pick does here: stay, so the health label updates.
+	g_Menu.ItemsPerPage = 4;
+	g_Menu.Timeout = 30;
+	g_Menu.PostSelect = PostSelect_Nothing;
+
+	// The menu went away for a player -- not called when the plugin unloads.
+	g_Menu.OnEnd(Menu_End);
 
 	Source2ModCommands.RegisterConCommand("sp_menu", Cmd_Menu);
 
@@ -1959,31 +1989,74 @@ void SetupMenus()
 	Source2ModCommands.RegisterConCommand("sp_hud", Cmd_Hud);
 }
 
-public void Menu_Heal(CCSPlayerController player, CenterHtmlMenu menu, int option, any data)
+CCSPlayerPawn LivingPawnOf(CCSPlayerController player)
 {
 	CCSPlayerPawn pawn = player.GetPlayerPawn();
-	if (pawn != NULL_ENTITY && player.m_bPawnIsAlive)
+	return pawn != NULL_ENTITY && player.m_bPawnIsAlive ? pawn : view_as<CCSPlayerPawn>(NULL_ENTITY);
+}
+
+public void Menu_Title(CCSPlayerController player, CenterHtmlMenu menu, int option, char[] buffer, int maxlen, any data)
+{
+	char name[128];
+	player.GetPlayerName(name, sizeof(name));
+	Source2ModApi.Format(buffer, maxlen, "sp_sample menu for %s", name);
+}
+
+public void Menu_HealText(CCSPlayerController player, CenterHtmlMenu menu, int option, char[] buffer, int maxlen, any data)
+{
+	CCSPlayerPawn pawn = LivingPawnOf(player);
+	Source2ModApi.Format(buffer, maxlen, "Heal to 100 (now %d)", pawn != NULL_ENTITY ? pawn.m_iHealth : 0);
+}
+
+public bool Menu_HealDisabled(CCSPlayerController player, CenterHtmlMenu menu, int option, any data)
+{
+	CCSPlayerPawn pawn = LivingPawnOf(player);
+	return pawn == NULL_ENTITY || pawn.m_iHealth >= 100;
+}
+
+public void Menu_Heal(CCSPlayerController player, CenterHtmlMenu menu, int option, any data)
+{
+	CCSPlayerPawn pawn = LivingPawnOf(player);
+	if (pawn != NULL_ENTITY)
 		pawn.m_iHealth = 100;
 }
 
-public void Menu_GiveAk(CCSPlayerController player, CenterHtmlMenu menu, int option, any data)
+public void Menu_Give(CCSPlayerController player, CenterHtmlMenu menu, int option, any data)
 {
-	CCSPlayerPawn pawn = player.GetPlayerPawn();
-	if (pawn == NULL_ENTITY || !player.m_bPawnIsAlive)
+	static const char items[][] = { "weapon_ak47", "weapon_m4a1_silencer", "weapon_deagle" };
+
+	CCSPlayerPawn pawn = LivingPawnOf(player);
+	if (pawn == NULL_ENTITY)
 		return;
 
-	CPlayer_ItemServices items = pawn.m_pItemServices;
-	if (!items.IsNull)
-		items.GiveNamedItem("weapon_ak47");
+	CPlayer_ItemServices services = pawn.m_pItemServices;
+	if (!services.IsNull)
+		services.GiveNamedItem(items[data]);
 }
 
+public void Menu_End(CCSPlayerController player, CenterHtmlMenu menu, CenterHtmlMenuEnd reason)
+{
+	static const char reasons[][] = { "an option closed it", "exit", "another menu replaced it", "closed by a plugin", "the player left", "timed out" };
+
+	char name[128];
+	player.GetPlayerName(name, sizeof(name));
+	Source2ModApi.Log("Menu closed for %s: %s", name, reasons[reason]);
+}
+
+// sp_menu opens it, or closes it when it is already open.
 public void Cmd_Menu(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
 {
 	CCSPlayerController caller = CallerOf(context);
-	if (caller != NULL_ENTITY)
-		Source2ModMenus.OpenCenterHtmlMenu(caller, g_Menu);
-	else
+	if (caller == NULL_ENTITY)
+	{
 		Reply(context, "Menus are for players.");
+		return;
+	}
+
+	if (g_Menu.IsOpenFor(caller))
+		g_Menu.Close(caller);
+	else
+		Source2ModMenus.OpenCenterHtmlMenu(caller, g_Menu);
 }
 
 public void Cmd_Hud(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
