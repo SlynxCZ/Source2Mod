@@ -33,6 +33,7 @@ build_test/
 *.so
 *.dylib
 *.dll
+*.smx
 
 # Fortran module files
 *.mod
