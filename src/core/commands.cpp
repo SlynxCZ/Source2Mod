@@ -45,6 +45,7 @@
 #include "raytrace.h"
 #include "shared.h"
 #include "slowguard.h"
+#include "utils/consoletable.h"
 #include "utils/log.h"
 
 #include <dynlibutils/module.hpp>
@@ -115,6 +116,30 @@ static void Source2ModReply(const Source2ModCommandContext& ctx, const char* psz
     ConMsg("%s%s" C_RESET "\n", pszColor, buf);
 }
 
+// A table goes out line by line, the frame dim and the cells as coloured as
+// the caller made them; consoletable lines it up by display width, so it
+// still lines up on a client's console once the colours are stripped.
+static void ReplyTable(const Source2ModCommandContext& ctx, const consoletable::Table& table)
+{
+    for (const std::string& line : table.Render(C_DIM, C_RESET))
+        Source2ModReply(ctx, C_RESET, "%s", line.c_str());
+}
+
+static void ReplyBanner(const Source2ModCommandContext& ctx)
+{
+    static const char* const kBanner[] = {
+        " ____                                   ____   __  __             _ ",
+        "/ ___|   ___   _   _  _ __   ___   ___ |___ \\ |  \\/  |  ___    __| |",
+        "\\___ \\  / _ \\ | | | || '__| / __| / _ \\  __) || |\\/| | / _ \\  / _` |",
+        " ___) || (_) || |_| || |   | (__ |  __/ / __/ | |  | || (_) || (_| |",
+        "|____/  \\___/  \\__,_||_|    \\___| \\___||_____||_|  |_| \\___/  \\__,_|",
+    };
+    Source2ModReply(ctx, C_RESET, " ");
+    for (const char* line : kBanner)
+        Source2ModReply(ctx, C_LINK, "  %s", line);
+    Source2ModReply(ctx, C_RESET, " ");
+}
+
 // The line's base colour; the parts of it are coloured inline (C_*).
 #define REPLY_INFO(fmt, ...)  Source2ModReply(ctx, C_RESET, fmt, ##__VA_ARGS__)
 #define REPLY_OK(fmt, ...)    Source2ModReply(ctx, C_OK,    fmt, ##__VA_ARGS__)
@@ -175,26 +200,27 @@ namespace commands {
 
         if (argc < 2)
         {
-            REPLY_INFO(C_HEAD "Source2Mod commands:");
-            REPLY_INFO("  " C_CMD "s2m list");
-
+            using consoletable::Table;
+            Table help({ { "Command" }, { "Arguments" }, { "Description", consoletable::Align::Left, 60 } });
+            help.SetTitle(C_HEAD "Source2Mod commands");
+            help.AddRow({ C_CMD "s2m list", "", "Loaded plugins" });
             if (!bFromPlayer)
             {
-                REPLY_INFO("  " C_CMD "s2m load" C_DIM " <name>");
-                REPLY_INFO("  " C_CMD "s2m unload" C_DIM " <id>");
+                help.AddRow({ C_CMD "s2m load", C_DIM "<name>", "Load a plugin from plugins/" });
+                help.AddRow({ C_CMD "s2m unload", C_DIM "<id>", "Unload a plugin" });
             }
-
-            REPLY_INFO("  " C_CMD "s2m info" C_DIM " <id>");
-
+            help.AddRow({ C_CMD "s2m info", C_DIM "<id>", "Everything about one plugin" });
             if (!bFromPlayer)
             {
-                REPLY_INFO("  " C_CMD "s2m refresh");
-                REPLY_INFO("  " C_CMD "s2m hookdebug" C_DIM " <game hook|all|off>");
-                REPLY_INFO("  " C_CMD "s2m admins" C_DIM " <list|reload|info <slot|steamid>>");
+                help.AddRow({ C_CMD "s2m refresh", "", "Load the plugins that are not loaded yet" });
+                help.AddRow({ C_CMD "s2m hookdebug", C_DIM "<game hook|all|off>", "Log every call of matching game hooks" });
+                help.AddRow({ C_CMD "s2m admins", C_DIM "<list|reload|info <slot|steamid>>", "Players' permissions" });
             }
+            help.AddRow({ C_CMD "s2m version", "", "Build, API and Metamod versions" });
+            help.AddRow({ C_CMD "s2m credits", "", "Who made Source2Mod" });
 
-            REPLY_INFO("  " C_CMD "s2m version");
-            REPLY_INFO("  " C_CMD "s2m credits");
+            ReplyBanner(ctx);
+            ReplyTable(ctx, help);
             return;
         }
 
@@ -214,18 +240,21 @@ namespace commands {
                 return;
             }
 
-            REPLY_INFO(C_HEAD "Listing %zu plugin(s):", pluginManager.m_plugins.size());
+            using consoletable::Align;
+            consoletable::Table list({ { "Id", Align::Right }, { "Name" }, { "Version" }, { "Author", Align::Left, 40 }, { "Type", Align::Center } });
+
+            char title[64];
+            V_snprintf(title, sizeof(title), C_HEAD "%zu plugin(s) loaded", pluginManager.m_plugins.size());
+            list.SetTitle(title);
 
             for (auto& p : pluginManager.m_plugins)
             {
                 auto* api = p->api;
-
-                REPLY_INFO("  " C_ID "[%d]" C_RESET " " C_NAME "%s" C_DIM " (%s) by %s",
-                    p->id,
-                    api->GetName(),
-                    api->GetVersion(),
-                    api->GetAuthor());
+                list.AddRow({ C_ID + std::to_string(p->id), std::string(C_NAME) + api->GetName(), std::string(C_DIM) + api->GetVersion(),
+                              std::string(C_DIM) + api->GetAuthor(), p->script ? C_WARN "SourcePawn" : C_OK "Native" });
             }
+
+            ReplyTable(ctx, list);
         }
 
         else if (strcmp(cmd, "load") == 0)
@@ -297,33 +326,40 @@ namespace commands {
                 {
                     auto* api = p->api;
 
-                    REPLY_INFO(C_HEAD "Plugin " C_ID "%d" C_HEAD " info:", id);
-                    REPLY_INFO("  " C_LABEL "Name: " C_NAME "%s", api->GetName());
-                    REPLY_INFO("  " C_LABEL "Version: " C_NAME "%s", api->GetVersion());
-                    REPLY_INFO("  " C_LABEL "Author: " C_NAME "%s", api->GetAuthor());
-                    REPLY_INFO("  " C_LABEL "Description: " C_NAME "%s", api->GetDescription());
-                    REPLY_INFO("  " C_LABEL "Path: " C_DIM "%s", p->path.c_str());
+                    char title[64];
+                    V_snprintf(title, sizeof(title), C_HEAD "Plugin " C_ID "%d", id);
+                    consoletable::Table info = consoletable::KeyValue(title);
+
+                    info.AddRow({ C_LABEL "Name", std::string(C_NAME) + api->GetName() });
+                    info.AddRow({ C_LABEL "Version", std::string(C_NAME) + api->GetVersion() });
+                    info.AddRow({ C_LABEL "Author", std::string(C_NAME) + api->GetAuthor() });
+                    info.AddRow({ C_LABEL "Description", std::string(C_NAME) + api->GetDescription() });
+                    info.AddRow({ C_LABEL "Type", p->script ? C_WARN "SourcePawn" : C_OK "Native" });
+                    info.AddRow({ C_LABEL "Path", C_DIM + p->path });
                     // API 2 plugins say what they were built against; the tier
                     // tells the admin whether an engine or KHook change means a
                     // rebuild of this plugin or only of the core.
                     if (p->apiVersion >= 2)
                     {
                         const int rawHooks = api->GetRawHookCount();
-                        REPLY_INFO("  " C_LABEL "Plugin API: " C_NAME "%d", p->apiVersion);
-                        REPLY_INFO("  " C_LABEL "KHook: " C_DIM "%s", api->GetKHookCommit());
+                        info.AddRow({ C_LABEL "Plugin API", C_NAME + std::to_string(p->apiVersion) });
+                        const char* khook = api->GetKHookCommit();
+                        info.AddRow({ C_LABEL "KHook", khook && *khook ? std::string(C_DIM) + khook : C_DIM "(none of its own)" });
                         if (rawHooks)
-                            REPLY_INFO("  " C_LABEL "Own KHook hooks: " C_NAME "%d " C_WARN "(raw tier: rebuild on a KHook or engine change)", rawHooks);
+                            info.AddRow({ C_LABEL "Own KHook hooks", C_NAME + std::to_string(rawHooks) + C_WARN " (raw tier: rebuild on a KHook or engine change)" });
                         else
-                            REPLY_INFO("  " C_LABEL "Own KHook hooks: " C_NAME "0 " C_OK "(stable tier)");
+                            info.AddRow({ C_LABEL "Own KHook hooks", C_NAME "0 " C_OK "(stable tier)" });
                     }
                     else
                     {
-                        REPLY_INFO("  " C_LABEL "Plugin API: " C_NAME "%d " C_WARN "(built against an older SDK)", p->apiVersion);
+                        info.AddRow({ C_LABEL "Plugin API", C_NAME + std::to_string(p->apiVersion) + C_WARN " (built against an older SDK)" });
                     }
-                    std::string ifaces;
-                    for (const auto& name : p->ifaces)
-                        ifaces += (ifaces.empty() ? "" : ", ") + name;
-                    REPLY_INFO("  " C_LABEL "Interfaces: " C_DIM "%s", ifaces.empty() ? "(none)" : ifaces.c_str());
+                    if (p->ifaces.empty())
+                        info.AddRow({ C_LABEL "Interfaces", C_DIM "(none)" });
+                    for (size_t i = 0; i < p->ifaces.size(); i++)
+                        info.AddRow({ i ? "" : C_LABEL "Interfaces", C_DIM + p->ifaces[i] });
+
+                    ReplyTable(ctx, info);
                     return;
                 }
             }
@@ -425,40 +461,50 @@ namespace commands {
             if (g_SMAPI)
                 g_SMAPI->GetApiVersions(mmApiMajor, mmApiMinor, mmPlVers, mmPlMin);
 
-            REPLY_INFO(C_HEAD "Source2Mod Version Information");
-            REPLY_INFO("   " C_LABEL "Source2Mod version " C_NAME "%s", VERSION_STRING);
-            REPLY_INFO("   " C_LABEL "Plugin API version: " C_NAME "%d" C_DIM " (%s)", SOURCE2MOD_PLAPI_VERSION, SOURCE2MOD_INTERFACE_NAME);
-            REPLY_INFO("   " C_LABEL "Hooks: " C_NAME "KHook" C_DIM ", metamod's detour engine, served to plugins as %s", SOURCE2MOD_KHOOK_INTERFACE);
-            REPLY_INFO("   " C_LABEL "Metamod:Source plugin interface: " C_NAME "%d:%d", mmPlVers, mmPlMin);
-            REPLY_INFO("   " C_LABEL "Loaded As: " C_NAME "Metamod:Source plugin");
-            REPLY_INFO("   " C_LABEL "Path: " C_DIM "%s", Source2ModModulePath());
-            REPLY_INFO("   " C_LABEL "Compiled on: " C_NAME "%s", BUILD_TIMESTAMP);
+            char buf[128];
+            consoletable::Table version = consoletable::KeyValue(C_HEAD "Source2Mod Version Information");
+
+            version.AddRow({ C_LABEL "Source2Mod version", C_NAME VERSION_STRING });
+            V_snprintf(buf, sizeof(buf), C_NAME "%d" C_DIM " (%s)", SOURCE2MOD_PLAPI_VERSION, SOURCE2MOD_INTERFACE_NAME);
+            version.AddRow({ C_LABEL "Plugin API version", buf });
+            version.AddRow({ C_LABEL "Hooks", std::string(C_NAME "KHook" C_DIM ", served to plugins as ") + SOURCE2MOD_KHOOK_INTERFACE });
+            V_snprintf(buf, sizeof(buf), C_NAME "%d:%d", mmPlVers, mmPlMin);
+            version.AddRow({ C_LABEL "Metamod:Source plugin interface", buf });
+            version.AddRow({ C_LABEL "Loaded as", C_NAME "Metamod:Source plugin" });
+            version.AddRow({ C_LABEL "Path", std::string(C_DIM) + Source2ModModulePath() });
+            version.AddRow({ C_LABEL "Compiled on", C_NAME BUILD_TIMESTAMP });
 
             // GITHUB_SHA is "Local" on anything but a CI build, and a commit
             // URL built out of that would point nowhere.
             if (strcmp(GITHUB_SHA, "Local") == 0)
-                REPLY_INFO("   " C_LABEL "Built from: " C_WARN "local working tree");
+                version.AddRow({ C_LABEL "Built from", C_WARN "local working tree" });
             else
-                REPLY_INFO("   " C_LABEL "Built from: " C_DIM "%s/commit/" C_NAME "%s", SOURCE2MOD_REPO, GITHUB_SHA);
+                version.AddRow({ C_LABEL "Built from", std::string(C_DIM SOURCE2MOD_REPO "/commit/" C_NAME) + GITHUB_SHA });
 
-            REPLY_INFO("   " C_LABEL "Build ID: " C_DIM "%s", BUILD_ID);
-            REPLY_INFO("   " C_LINK "%s", SOURCE2MOD_WEBSITE);
+            version.AddRow({ C_LABEL "Build ID", std::string(C_DIM) + BUILD_ID });
+            version.AddSeparator();
+            version.AddRow({ C_LABEL "Website", C_LINK SOURCE2MOD_WEBSITE });
+
+            ReplyBanner(ctx);
+            ReplyTable(ctx, version);
         }
 
         else if (strcmp(cmd, "credits") == 0)
         {
             // Keep this in step with ACKNOWLEDGEMENTS.md -- it is the same
             // list, short enough to read in a console.
-            REPLY_INFO(C_HEAD "Source2Mod was developed by:");
-            REPLY_INFO("   " C_LABEL "Core, plugin system and SDK: " C_NAME "%s", reinterpret_cast<const char*>(u8"Michal \"Slynx (˙·٠● S l y n x ●٠·˙)\" Přikryl"));
-            REPLY_INFO("   " C_LABEL "Metamod:Source: " C_NAME "David \"BAILOPAN\" Anderson, Scott \"DS\" Ehlert");
-            REPLY_INFO("   " C_LABEL "KHook: " C_NAME "Benoist \"Kenzzer\" André");
-            REPLY_INFO("   " C_LABEL "SourceMod (plugin API, include set): " C_NAME "AlliedModders LLC.");
-            REPLY_INFO("   " C_LABEL "SourcePawn (language, compiler, VM): " C_NAME "AlliedModders LLC.");
-            REPLY_INFO("   " C_LABEL "HL2SDK and engine research: " C_NAME "AlliedModders LLC.");
-            REPLY_INFO(C_DIM "For the full list, see ACKNOWLEDGEMENTS.md");
-            REPLY_INFO(C_DIM "For more information, see the official website");
-            REPLY_INFO(C_LINK "%s", SOURCE2MOD_WEBSITE);
+            consoletable::Table credits = consoletable::KeyValue(C_HEAD "Source2Mod was developed by");
+            credits.AddRow({ C_LABEL "Core, plugin system and SDK", C_NAME + std::string(reinterpret_cast<const char*>(u8"Michal \"Slynx (˙·٠● S l y n x ●٠·˙)\" Přikryl")) });
+            credits.AddRow({ C_LABEL "Metamod:Source", C_NAME "David \"BAILOPAN\" Anderson, Scott \"DS\" Ehlert" });
+            credits.AddRow({ C_LABEL "KHook", C_NAME + std::string(reinterpret_cast<const char*>(u8"Benoist \"Kenzzer\" André")) });
+            credits.AddRow({ C_LABEL "SourceMod (plugin API, include set)", C_NAME "AlliedModders LLC." });
+            credits.AddRow({ C_LABEL "SourcePawn (language, compiler, VM)", C_NAME "AlliedModders LLC." });
+            credits.AddRow({ C_LABEL "HL2SDK and engine research", C_NAME "AlliedModders LLC." });
+            credits.AddSeparator();
+            credits.AddRow({ C_LABEL "Full list", C_DIM "ACKNOWLEDGEMENTS.md" });
+            credits.AddRow({ C_LABEL "Website", C_LINK SOURCE2MOD_WEBSITE });
+
+            ReplyTable(ctx, credits);
         }
 
         else
