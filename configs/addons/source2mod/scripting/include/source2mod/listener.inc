@@ -29,13 +29,20 @@ forward void Source2Mod_OnStartupServer(const char[] mapName);
 
 /**
  * Pre ISource2GameClients::ClientConnect: a player asks to join (the engine
- * does not call it for bots). Return false to refuse; what is written into
- * rejectReason is what the player is shown. The first plugin to refuse ends
- * it -- the ones after it are not asked.
+ * does not call it for bots), right after OnClientConnected. networkId is
+ * the player's "ip:port" here. Return false to refuse; the reason goes into
+ * rejectReason (the CS2 client shows its own "rejected by game" text
+ * whatever it says). The first plugin to refuse ends it -- the ones after it
+ * are not asked.
  */
 forward bool Source2Mod_OnClientConnect(CPlayerSlot slot, const char[] name, const char[] xuid, const char[] networkId, bool unk1, char[] rejectReason, int maxlen);
 
-/** Post ISource2GameClients::OnClientConnected: the slot is taken, by a player or a bot (fakePlayer); address is the player's "ip:port". */
+/**
+ * Post ISource2GameClients::OnClientConnected: a player or a bot (fakePlayer)
+ * got a slot. For a player the engine calls this before ClientConnect, so it
+ * also comes for a connection that is then refused. networkId is the SteamID
+ * ("[U:1:...]"), address the player's "ip:port".
+ */
 forward void Source2Mod_OnClientConnected(CPlayerSlot slot, const char[] name, const char[] xuid, const char[] networkId, const char[] address, bool fakePlayer);
 
 /** Post ISource2GameClients::ClientPutInServer: the player (type 0) or bot (type 1) is in the game and has a controller. */
