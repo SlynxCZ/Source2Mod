@@ -1673,8 +1673,10 @@ void SetupGameSystems()
 {
 	if (Source2ModGameSystems.IsAvailable())
 	{
-		SchemaObject spawnGroups = Source2ModGameSystems.FindByName("SpawnGroupManagerGameSystem");
-		LogMessage("SpawnGroupManagerGameSystem: %s", spawnGroups.IsNull ? "missing" : "found");
+		// Only systems whose factory keeps a static instance can be found;
+		// SoundOpGameSystem does, GameRulesGameSystem for one does not.
+		SchemaObject soundOps = Source2ModGameSystems.FindByName("SoundOpGameSystem");
+		LogMessage("SoundOpGameSystem: %s", soundOps.IsNull ? "missing" : "found");
 	}
 
 	// UTIL_Remove by the address the core resolved -- section 8 calls by

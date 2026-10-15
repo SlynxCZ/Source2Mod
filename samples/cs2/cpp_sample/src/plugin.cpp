@@ -1450,8 +1450,10 @@ void SamplePlugin::SetupGameSystems()
 {
     if (g_pSource2ModGameSystems->IsAvailable())
     {
-        IGameSystem *pSpawnGroups = g_pSource2ModGameSystems->FindByName("SpawnGroupManagerGameSystem");
-        SOURCE2MOD_LOG(this, "SpawnGroupManagerGameSystem: %s\n", pSpawnGroups ? "found" : "missing");
+        // Only systems whose factory keeps a static instance can be found;
+        // SoundOpGameSystem does, GameRulesGameSystem for one does not.
+        IGameSystem *pSoundOps = g_pSource2ModGameSystems->FindByName("SoundOpGameSystem");
+        SOURCE2MOD_LOG(this, "SoundOpGameSystem: %s\n", pSoundOps ? "found" : "missing");
     }
 
     // sample_remove: removes what is under the crosshair through UTIL_Remove,
