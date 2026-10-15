@@ -23,6 +23,13 @@
  *  10. Timers           next frame, delayed, repeating
  *  11. Transmit         hiding players and entities per viewer, CheckTransmit hook
  *  12. Script natives   using cpp_sample's natives, library and handle type
+ *  13. Paths, permissions  the folders, permission checks, groups, a gated command
+ *  14. Traces           a ray from the eyes, what it hit, contents at a point
+ *  15. Game systems, addresses  finding a game system, calling a resolved function
+ *  16. JSON, HTTP       parsing a document, a GET with headers and a JSON reply
+ *  17. MySQL            serverless query with parameters, connection, transaction
+ *  18. Menus, custom HUD  a center HTML menu, clicks on a custom HUD layout
+ *  19. Scripts          cs_script source run from the plugin, messages both ways
  *
  * The commands are cpp_sample's with "sp_" in place of "sample_", the convars
  * "sp_sample_..." -- both plugins can be loaded side by side.
@@ -148,6 +155,13 @@ public void OnPluginStart()
 	SetupTimers();
 	SetupTransmit();
 	SetupScriptNatives();
+	SetupPathsAndPermissions();
+	SetupTraces();
+	SetupGameSystems();
+	SetupJsonAndHttp();
+	SetupMySQL();
+	SetupMenus();
+	SetupScripts();
 
 	LogMessage("All hooks started!");
 }
@@ -1455,4 +1469,599 @@ public void OnLibraryRemoved(const char[] name)
 {
 	if (StrEqual(name, "cpp_sample"))
 		LogMessage("cpp_sample is gone: its natives are errors until it is back.");
+}
+
+/* ============================================================================
+ *
+ *   Shared helper for the asynchronous sections (16, 17)
+ *
+ * ========================================================================== */
+
+// A reply that arrives frames later: the command context is gone by then, so
+// the slot travels with the request (as `data`) -- the player's chat, or the
+// console for -1. The player may have left in between; then nobody is told.
+void ReplyToSlot(int slot, const char[] format, any ...)
+{
+	char buffer[512];
+	VFormat(buffer, sizeof(buffer), format, 3);
+
+	if (slot < 0)
+	{
+		PrintToServer("%s", buffer);
+		return;
+	}
+
+	CCSPlayerController player = PlayerInSlot(slot);
+	if (player != NULL_ENTITY)
+		player.PrintToChat(buffer);
+}
+
+int SlotOf(Source2ModCommandContext context)
+{
+	CPlayerSlot slot = context.GetPlayerSlot();
+	return slot.IsValid() ? slot.Get() : -1;
+}
+
+/* ============================================================================
+ *
+ *   13. Paths and permissions
+ *
+ *   Where Source2Mod keeps its files, and who may do what: dotted
+ *   permissions ("sp_sample.admin"), groups that hold them, immunity, and
+ *   commands that check them for you. What this plugin creates or grants is
+ *   tagged with it. SteamIDs are 64-bit, so they are decimal text here.
+ *
+ * ========================================================================== */
+
+void SetupPathsAndPermissions()
+{
+	// Absolute paths, no trailing separator. PluginConfigDirectory() is this
+	// plugin's own folder under configs/, made on first use.
+	char path[PLATFORM_MAX_PATH];
+	Source2ModPaths.RootDirectory(path, sizeof(path));
+	LogMessage("Root: %s", path);
+	Source2ModPaths.ConfigsDirectory(path, sizeof(path));
+	LogMessage("Configs: %s", path);
+	Source2ModPaths.PluginConfigDirectory(path, sizeof(path));
+	LogMessage("My configs: %s", path);
+
+	// A group of our own that holds a permission of our own. permissions.json
+	// can grant the same group to admins; sp_vip below adds you at runtime.
+	Source2ModPermissions.CreateGroup("sp_sample_vip", 10);
+	Source2ModPermissions.AddGroupPermission("sp_sample_vip", "sp_sample.admin");
+
+	// A command with a permission: the core checks it before the handler
+	// runs, and permissions.json's "Overrides" can re-assign it.
+	Source2ModCommands.RegisterConCommand("sp_admin", Cmd_Admin, "sp_sample.admin");
+
+	// What a player who lacks it is told, instead of the core's default line.
+	Source2ModPermissions.SetAccessDeniedHandler(OnAccessDenied);
+
+	// What the caller holds.
+	Source2ModCommands.RegisterConCommand("sp_perm", Cmd_Perm);
+
+	// Joining and leaving the group. Runtime grants are not written to
+	// permissions.json; "s2m admins reload" keeps them.
+	Source2ModCommands.RegisterConCommand("sp_vip", Cmd_Vip);
+}
+
+public void Cmd_Admin(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
+{
+	Reply(context, "You have sp_sample.admin.");
+}
+
+public void OnAccessDenied(Source2ModCommandContext context, Source2ModCommandArgs args, const char[] permission)
+{
+	char command[64];
+	args.Arg(0, command, sizeof(command));
+	Reply(context, "%s needs %s -- try sp_vip.", command, permission);
+}
+
+public void Cmd_Perm(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
+{
+	CPlayerSlot slot = context.GetPlayerSlot();
+	if (!slot.IsValid())
+	{
+		Reply(context, "The console holds everything.");
+		return;
+	}
+
+	// "0" until the player is authorized with Steam.
+	char steamId[32], permission[64];
+	Source2ModPermissions.GetPlayerSteamID(slot, steamId, sizeof(steamId));
+	Arg1(args, permission, sizeof(permission));
+	if (!permission[0])
+		strcopy(permission, sizeof(permission), "sp_sample.admin");
+
+	Reply(context, "%s: authorized %d, %s %d, sp_sample_vip %d, immunity %d",
+	      steamId, Source2ModPermissions.IsPlayerAuthorized(slot), permission,
+	      Source2ModPermissions.PlayerHasPermission(slot, permission),
+	      Source2ModPermissions.InGroup(steamId, "sp_sample_vip"),
+	      Source2ModPermissions.GetImmunity(steamId));
+}
+
+public void Cmd_Vip(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
+{
+	CPlayerSlot slot = context.GetPlayerSlot();
+	char steamId[32] = "0";
+	if (slot.IsValid())
+		Source2ModPermissions.GetPlayerSteamID(slot, steamId, sizeof(steamId));
+
+	if (StrEqual(steamId, "0"))
+	{
+		Reply(context, "For authorized players only.");
+		return;
+	}
+
+	if (Source2ModPermissions.InGroup(steamId, "sp_sample_vip"))
+		Source2ModPermissions.RemoveFromGroup(steamId, "sp_sample_vip");
+	else
+		Source2ModPermissions.AddToGroup(steamId, "sp_sample_vip");
+
+	Reply(context, "sp_sample_vip: %s", Source2ModPermissions.InGroup(steamId, "sp_sample_vip") ? "in" : "out");
+}
+
+/* ============================================================================
+ *
+ *   14. Traces
+ *
+ *   A ray (or a box) through the world: what it hit, where, and what the
+ *   world is made of at a point. Options and results are handles.
+ *
+ * ========================================================================== */
+
+void SetupTraces()
+{
+	Source2ModCommands.RegisterConCommand("sp_trace", Cmd_Trace);
+}
+
+public void Cmd_Trace(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
+{
+	CCSPlayerPawn pawn = AlivePawnOf(context);
+	if (pawn == NULL_ENTITY)
+		return;
+
+	// From the eyes, along the view, until something stops it. MASK_SHOT is
+	// the default -- what a bullet hits; the pawn itself is skipped.
+	float start[3], angles[3];
+	pawn.GetEyePosition(start);
+	pawn.GetEyeAngles(angles);
+
+	TraceOptions options = new TraceOptions();
+	TraceResult tr = Source2ModTrace.TraceShape(start, angles, pawn, options);
+	delete options;
+
+	if (!tr.DidHit())
+	{
+		Reply(context, "Nothing in the way.");
+		delete tr;
+		return;
+	}
+
+	char hit[64] = "the world";
+	CEntityInstance hitEntity = tr.HitEntity();
+	if (hitEntity != NULL_ENTITY)
+		hitEntity.GetClassname(hit, sizeof(hit));
+
+	float end[3];
+	tr.EndPos(end);
+	delete tr;
+
+	// The contents at the end point, filtered by a mask: is it water?
+	int water[2], contents[2];
+	Mask_Water(water);
+	Source2ModTrace.PointContents(end, water, contents);
+	bool inWater = contents[0] != 0 || contents[1] != 0;
+
+	Reply(context, "Hit %s at %.0f units (%.0f %.0f %.0f)%s",
+	      hit, GetVectorDistance(start, end), end[0], end[1], end[2], inWater ? ", in water" : "");
+}
+
+/* ============================================================================
+ *
+ *   15. Game systems and addresses
+ *
+ *   Game systems are engine singletons, reached by their factory name. And
+ *   the game functions the core resolved from its own gamedata
+ *   (Address_*): no signature of your own, a core update after a game update.
+ *
+ * ========================================================================== */
+
+Source2ModFunction g_UtilRemove;
+
+void SetupGameSystems()
+{
+	if (Source2ModGameSystems.IsAvailable())
+	{
+		SchemaObject spawnGroups = Source2ModGameSystems.FindByName("SpawnGroupManagerGameSystem");
+		LogMessage("SpawnGroupManagerGameSystem: %s", spawnGroups.IsNull ? "missing" : "found");
+	}
+
+	// UTIL_Remove by the address the core resolved -- section 8 calls by
+	// gamedata name, this is the third way. Unresolved on this game version =
+	// the function stays null.
+	if (Source2ModAddresses.IsResolved(Address_UTIL_Remove))
+	{
+		g_UtilRemove = Source2ModFunction.FromAddress(Address_UTIL_Remove, Source2ModType_Void);
+		if (g_UtilRemove != null)
+			g_UtilRemove.AddParam(Source2ModType_Entity);
+	}
+
+	// sp_remove: removes what is under the crosshair.
+	Source2ModCommands.RegisterConCommand("sp_remove", Cmd_Remove);
+}
+
+public void Cmd_Remove(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
+{
+	CCSPlayerController caller = CallerOf(context);
+	if (caller == NULL_ENTITY)
+		return;
+
+	char classname[64];
+	CBaseEntity target = Source2ModEntities.FindPickerEntity(caller);
+	if (target != NULL_ENTITY)
+		target.GetClassname(classname, sizeof(classname));
+
+	if (target == NULL_ENTITY || StrEqual(classname, "player"))
+	{
+		Reply(context, "Aim at something that is not a player.");
+		return;
+	}
+
+	if (g_UtilRemove != null)
+	{
+		Reply(context, "Removing #%d %s.", target.GetIndex(), classname);
+		g_UtilRemove.Call(target);
+	}
+}
+
+/* ============================================================================
+ *
+ *   16. JSON and HTTP
+ *
+ *   Parsing a document and walking its values; a request with headers whose
+ *   answer comes back on a later frame, already parsed when it is JSON.
+ *
+ * ========================================================================== */
+
+void SetupJsonAndHttp()
+{
+	// A document owns its values: read them while it lives, delete it once.
+	ISource2ModJSONDocument doc = Source2ModJSON.Parse("{ \"name\": \"sp_sample\", \"sections\": [1, 2, 3], \"nested\": { \"ok\": true } }");
+	if (doc.IsValid())
+	{
+		ISource2ModJSONValue root = doc.Root();
+		ISource2ModJSONValue sections = root.Get("sections");
+		ISource2ModJSONValue nested = root.Get("nested");
+
+		int sum = 0;
+		int count = sections != null ? sections.Count() : 0;
+		for (int i = 0; i < count; i++)
+			sum += sections.At(i).AsInt();
+
+		char name[64];
+		root.GetString("name", name, sizeof(name));
+		LogMessage("JSON: %s, %d sections summing to %d, nested.ok %d", name, count, sum, nested != null ? nested.GetBool("ok") : false);
+	}
+	else
+	{
+		char error[256];
+		doc.GetError(error, sizeof(error));
+		LogMessage("JSON error: %s", error);
+	}
+	delete doc;
+
+	// sp_http [url]: a GET through Steam's HTTP client, off the game thread;
+	// the callback runs on a game frame. GitHub wants a User-Agent.
+	Source2ModCommands.RegisterConCommand("sp_http", Cmd_Http);
+}
+
+public void Cmd_Http(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
+{
+	if (!Source2ModHTTP.IsAvailable())
+	{
+		Reply(context, "Steam's HTTP client is not up yet.");
+		return;
+	}
+
+	char url[256];
+	Arg1(args, url, sizeof(url));
+	if (!url[0])
+		strcopy(url, sizeof(url), "https://api.github.com/repos/alliedmodders/sourcepawn");
+
+	// The request copies the headers: they can go right after.
+	Source2ModHTTPHeaders headers = new Source2ModHTTPHeaders();
+	headers.Add("User-Agent", "Source2Mod-sp_sample");
+	Source2ModHTTP.Get(url, OnHttpResponse, SlotOf(context), headers);
+	delete headers;
+}
+
+public void OnHttpResponse(Source2ModHTTPResponse response, any slot)
+{
+	if (!response.Success())
+	{
+		ReplyToSlot(slot, "The request failed.");
+		return;
+	}
+
+	// Json() is the body parsed, valid during this callback only.
+	ISource2ModJSONValue json = response.Json();
+	if (json != null)
+	{
+		char fullName[128];
+		json.GetString("full_name", fullName, sizeof(fullName), "?");
+		ReplyToSlot(slot, "HTTP %d: %s, %d stars", response.StatusCode(), fullName, json.GetInt("stargazers_count"));
+	}
+	else
+	{
+		ReplyToSlot(slot, "HTTP %d: %d bytes, not JSON", response.StatusCode(), response.BodyLength());
+	}
+}
+
+/* ============================================================================
+ *
+ *   17. MySQL
+ *
+ *   Queries run off the game thread; their callbacks come back on a game
+ *   frame. Serverless connects per query; a connection stays open and runs
+ *   transactions. Set sp_sample_mysql_* to a server to try it.
+ *
+ * ========================================================================== */
+
+CConVar sp_sample_mysql_host;
+CConVar sp_sample_mysql_user;
+CConVar sp_sample_mysql_pass;
+CConVar sp_sample_mysql_db;
+
+// Made on first use, gone with the plugin.
+ISource2ModMySQLServerless g_Serverless;
+ISource2ModMySQLConnection g_Connection;
+
+void SetupMySQL()
+{
+	sp_sample_mysql_host = CConVar.CreateString("sp_sample_mysql_host", FCVAR_PROTECTED, "MySQL host for 17. MySQL (empty = off)", "");
+	sp_sample_mysql_user = CConVar.CreateString("sp_sample_mysql_user", FCVAR_PROTECTED, "MySQL user", "root");
+	sp_sample_mysql_pass = CConVar.CreateString("sp_sample_mysql_pass", FCVAR_PROTECTED, "MySQL password", "");
+	sp_sample_mysql_db = CConVar.CreateString("sp_sample_mysql_db", FCVAR_PROTECTED, "MySQL database", "test");
+
+	// sp_mysql [text]: one query with a "?" parameter, escaped for you.
+	Source2ModCommands.RegisterConCommand("sp_mysql", Cmd_MySQL);
+
+	// sp_mysql_txn: a connection, then two queries as one transaction.
+	Source2ModCommands.RegisterConCommand("sp_mysql_txn", Cmd_MySQLTxn);
+}
+
+// The four convars, or false (and the caller told) when the host is empty.
+bool MySQLSettings(Source2ModCommandContext context, char host[64], char user[64], char pass[64], char db[64])
+{
+	sp_sample_mysql_host.GetString(host, sizeof(host));
+	if (!host[0])
+	{
+		Reply(context, "Set sp_sample_mysql_host (and _user, _pass, _db) first.");
+		return false;
+	}
+
+	sp_sample_mysql_user.GetString(user, sizeof(user));
+	sp_sample_mysql_pass.GetString(pass, sizeof(pass));
+	sp_sample_mysql_db.GetString(db, sizeof(db));
+	return true;
+}
+
+public void Cmd_MySQL(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
+{
+	char host[64], user[64], pass[64], db[64];
+	if (!MySQLSettings(context, host, user, pass, db))
+		return;
+
+	if (g_Serverless == null)
+		g_Serverless = Source2ModMySQL.CreateServerless(host, user, pass, db);
+
+	char params[1][64];
+	Arg1(args, params[0], sizeof(params[]));
+	if (!params[0][0])
+		strcopy(params[0], sizeof(params[]), "hello");
+
+	g_Serverless.QueryWithParams("SELECT ? AS greeting, NOW() AS now", params, 1, OnMySQLGreeting, SlotOf(context));
+}
+
+public void OnMySQLGreeting(bool success, int errorCode, const char[] error, ISource2ModMySQLQuery query, any slot)
+{
+	if (!success)
+	{
+		ReplyToSlot(slot, "MySQL error %d: %s", errorCode, error);
+		return;
+	}
+
+	ISource2ModMySQLResult rows = query != null ? query.GetResultSet() : null;
+	if (rows != null && rows.FetchRow())
+	{
+		char greeting[64], now[64];
+		rows.GetString(0, greeting, sizeof(greeting));
+		rows.GetString(1, now, sizeof(now));
+		ReplyToSlot(slot, "MySQL says %s at %s", greeting, now);
+	}
+}
+
+public void Cmd_MySQLTxn(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
+{
+	char host[64], user[64], pass[64], db[64];
+	if (!MySQLSettings(context, host, user, pass, db))
+		return;
+
+	if (g_Connection == null)
+		g_Connection = Source2ModMySQL.CreateConnection(host, user, pass, db);
+
+	g_Connection.Connect(OnMySQLConnected, SlotOf(context));
+}
+
+public void OnMySQLConnected(bool connected, any slot)
+{
+	if (!connected)
+	{
+		ReplyToSlot(slot, "Could not connect.");
+		return;
+	}
+
+	// ExecuteTransaction runs a copy: the transaction can go right after.
+	Source2ModMySQLTransaction txn = new Source2ModMySQLTransaction();
+	txn.AddQuery("SELECT VERSION()");
+	txn.AddQuery("SELECT COUNT(*) FROM information_schema.tables");
+	g_Connection.ExecuteTransaction(txn, OnTxnSuccess, OnTxnFailure, slot);
+	delete txn;
+}
+
+public void OnTxnSuccess(ArrayList queries, any slot)
+{
+	// One result per query, in order.
+	ISource2ModMySQLQuery versionQuery = queries.Get(0);
+	ISource2ModMySQLQuery tablesQuery = queries.Get(1);
+	ISource2ModMySQLResult version = versionQuery.GetResultSet();
+	ISource2ModMySQLResult tables = tablesQuery.GetResultSet();
+
+	if (version != null && version.FetchRow() && tables != null && tables.FetchRow())
+	{
+		char text[64];
+		version.GetString(0, text, sizeof(text));
+		ReplyToSlot(slot, "MySQL %s, %d tables", text, tables.GetInt(0));
+	}
+}
+
+public void OnTxnFailure(const char[] error, int failIndex, any slot)
+{
+	ReplyToSlot(slot, "Transaction failed at query %d: %s", failIndex, error);
+}
+
+/* ============================================================================
+ *
+ *   18. Menus and custom HUD
+ *
+ *   A center HTML menu picked with the slot keys, and clicks on the buttons
+ *   of a custom HUD layout (a custom_hud_layout entity a map or a plugin
+ *   placed).
+ *
+ * ========================================================================== */
+
+// Built once, the script's until deleted; deleting it would close it for
+// everyone who has it open. It goes with the plugin.
+CenterHtmlMenu g_Menu;
+
+void SetupMenus()
+{
+	g_Menu = new CenterHtmlMenu("sp_sample menu");
+	g_Menu.AddMenuOption("Heal to 100", Menu_Heal);
+	g_Menu.AddMenuOption("Give an AK-47", Menu_GiveAk);
+
+	// Shown, but cannot be picked.
+	g_Menu.AddMenuOption("Not today", Menu_Heal, 0, true);
+
+	// What happens after a pick: close, go back to the first page, or stay.
+	g_Menu.PostSelect = PostSelect_Close;
+
+	Source2ModCommands.RegisterConCommand("sp_menu", Cmd_Menu);
+
+	// sp_hud: hooks the button clicks of every custom HUD layout on the map.
+	// The hook goes with the layout entity, or with the plugin.
+	Source2ModCommands.RegisterConCommand("sp_hud", Cmd_Hud);
+}
+
+public void Menu_Heal(CCSPlayerController player, CenterHtmlMenu menu, int option, any data)
+{
+	CCSPlayerPawn pawn = player.GetPlayerPawn();
+	if (pawn != NULL_ENTITY && player.m_bPawnIsAlive)
+		pawn.m_iHealth = 100;
+}
+
+public void Menu_GiveAk(CCSPlayerController player, CenterHtmlMenu menu, int option, any data)
+{
+	CCSPlayerPawn pawn = player.GetPlayerPawn();
+	if (pawn == NULL_ENTITY || !player.m_bPawnIsAlive)
+		return;
+
+	CPlayer_ItemServices items = pawn.m_pItemServices;
+	if (!items.IsNull)
+		items.GiveNamedItem("weapon_ak47");
+}
+
+public void Cmd_Menu(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
+{
+	CCSPlayerController caller = CallerOf(context);
+	if (caller != NULL_ENTITY)
+		Source2ModMenus.OpenCenterHtmlMenu(caller, g_Menu);
+	else
+		Reply(context, "Menus are for players.");
+}
+
+public void Cmd_Hud(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
+{
+	int hooked = 0;
+
+	CBaseEntity entity = NULL_ENTITY;
+	while ((entity = Source2ModEntities.FindEntityByClassname(entity, "custom_hud_layout")) != NULL_ENTITY)
+	{
+		Source2ModCustomHud.HookCustomHudClick(view_as<CCSCustomHudLayout>(entity), OnHudClick);
+		hooked++;
+	}
+
+	Reply(context, "Hooked %d custom HUD layout(s).", hooked);
+}
+
+public void OnHudClick(CCSPlayerController player, CCSCustomHudLayout layout, const char[] buttonId)
+{
+	char name[64] = "?";
+	if (player != NULL_ENTITY)
+		player.GetPlayerName(name, sizeof(name));
+
+	LogMessage("%s clicked \"%s\" on a custom HUD layout", name, buttonId);
+}
+
+/* ============================================================================
+ *
+ *   19. Scripts
+ *
+ *   CS2's map logic is JavaScript (cs_script, point_script entities). A
+ *   plugin can run scripts of its own, fire inputs into them and hear what
+ *   they send back through "source2mod_script <channel> <payload>".
+ *
+ * ========================================================================== */
+
+void SetupScripts()
+{
+	// Everything a script sends on "sp_sample", a frame or more later.
+	Source2ModScripts.HookScriptMessage("sp_sample", OnScriptMessage);
+
+	// sp_script: runs the source below as a point_script named
+	// sp_sample_script; running it again replaces it (a hot reload).
+	Source2ModCommands.RegisterConCommand("sp_script", Cmd_Script);
+
+	// sp_script_ping: native -> script; the script answers "pong".
+	Source2ModCommands.RegisterConCommand("sp_script_ping", Cmd_ScriptPing);
+}
+
+public void OnScriptMessage(const char[] channel, const char[] payload)
+{
+	LogMessage("Script message on %s: %s", channel, payload);
+}
+
+public void Cmd_Script(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
+{
+	if (!Source2ModScripts.CanRunSource())
+	{
+		Reply(context, "This server cannot compile cs_script source.");
+		return;
+	}
+
+	char source[512];
+	Format(source, sizeof(source), "%s\n%s\n%s\n",
+	       "import { Instance } from \"cs_script/point_script\";",
+	       "Instance.ServerCommand(\"source2mod_script sp_sample \" + encodeURIComponent(\"hello from cs_script\"));",
+	       "Instance.OnScriptInput(\"ping\", () => Instance.ServerCommand(\"source2mod_script sp_sample pong\"));");
+
+	CCSPointScriptEntity script = Source2ModScripts.RunSource("sp_sample_script", "scripts/sp_sample_script.vjs", source);
+	Reply(context, "sp_sample_script: %s", script != NULL_ENTITY ? "running" : "failed");
+}
+
+public void Cmd_ScriptPing(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
+{
+	if (!Source2ModScripts.FireInput("sp_sample_script", "ping"))
+		Reply(context, "Run sp_script first.");
 }

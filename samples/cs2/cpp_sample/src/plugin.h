@@ -22,6 +22,13 @@
  *  10. Timers           next frame, delayed, repeating
  *  11. Transmit         hiding players and entities per viewer, CheckTransmit hook
  *  12. Script natives   natives, a library and a handle type for .sp plugins
+ *  13. Paths, permissions  the folders, permission checks, groups, a gated command
+ *  14. Traces           a ray from the eyes, what it hit, contents at a point
+ *  15. Game systems, addresses  finding a game system, calling a resolved function
+ *  16. JSON, HTTP       parsing a document, a GET with headers and a JSON reply
+ *  17. MySQL            serverless query with parameters, connection, transaction
+ *  18. Menus, custom HUD  a center HTML menu, clicks on a custom HUD layout
+ *  19. Scripts          cs_script source run from the plugin, messages both ways
  *
  * ../sp_sample is the same plugin in SourcePawn: the same sections, numbered
  * the same, doing the same things through the script API.
@@ -64,6 +71,10 @@
 #include "source2mod/ISource2ModScheduler.h"
 #include "source2mod/ISource2ModSounds.h"
 #include "source2mod/ISource2ModTrace.h"
+#include "source2mod/ISource2ModPaths.h"
+#include "source2mod/ISource2ModPermissions.h"
+#include "source2mod/ISource2ModScripts.h"
+#include "source2mod/ISource2ModTransmit.h"
 
 #include "source2mod/schema/entity/classes/CBaseEntity.h"
 #include "source2mod/schema/entity/classes/CCSPlayerPawn.h"
@@ -136,6 +147,13 @@ private: // one per section of plugin.cpp, called from Load() in this order
 	void SetupTimers();
 	void SetupTransmit();
 	void SetupScriptNatives();
+	void SetupPathsAndPermissions();
+	void SetupTraces();
+	void SetupGameSystems();
+	void SetupJsonAndHttp();
+	void SetupMySQL();
+	void SetupMenus();
+	void SetupScripts();
 
 private:
 	// Raw KHook hooks, for what Source2Mod has no callback for: two engine
@@ -195,6 +213,10 @@ private:
 	// 10. timers -- a Timer* is only good while the timer lives; see SetupTimers().
 	Timer *m_pCountdownTimer = nullptr;
 	int m_nCountdown = 0;
+
+	// 17. MySQL -- made on first use, gone with the plugin.
+	ISource2ModMySQLServerless *m_pServerless = nullptr;
+	ISource2ModMySQLConnection *m_pConnection = nullptr;
 
 public:
 	const char *GetAuthor() override { return PLUGIN_AUTHOR; }
