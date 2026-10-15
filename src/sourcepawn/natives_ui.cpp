@@ -100,16 +100,18 @@ namespace sourcepawn
         /// The script menus by their CenterHtmlMenu, for GetActiveMenu.
         std::unordered_map<const IMenu*, ScriptMenu*> g_menus;
 
-        void CloseEverywhere(const IMenu* menu)
+        /// Closes a script menu wherever it is open (also as a submenu) and
+        /// unlinks it from the script menus that open it as a submenu.
+        void CloseEverywhere(CenterHtmlMenu* menu)
         {
-            for (int slot = 0; slot < kMaxClients; slot++)
+            menus::menuManager.CloseMenu(menu);
+            for (auto& [key, other] : g_menus)
             {
-                auto* player = CBaseEntity::FromIndex<CCSPlayerController>(slot + 1);
-                if (!player)
-                    continue;
-                IMenuInstance* open = menus::menuManager.GetActiveMenu(player);
-                if (open && open->Menu() == menu)
-                    menus::menuManager.CloseActiveMenu(player);
+                for (ChatMenuOption& opt : other->menu.Options())
+                {
+                    if (opt.Submenu == menu)
+                        opt.Submenu = nullptr;
+                }
             }
         }
 
@@ -159,20 +161,60 @@ namespace sourcepawn
 
         constexpr cell_t kInvalidFunction = -1;     // INVALID_FUNCTION
 
-        /// A DisabledEvaluator calling the script's (menu, option, data) -> bool; run each time the menu is drawn.
-        std::function<bool()> Evaluator(ScriptMenu* m, IPluginFunction* fn, cell_t option, cell_t data)
+        /// An unset function argument: INVALID_FUNCTION compiles to 0 with this spcomp, -1 with others.
+        bool IsUnset(cell_t id)
         {
-            return [m, fn, option, data]() -> bool
+            return id == kInvalidFunction || id == 0;
+        }
+
+        /// An evaluator calling the script's (player, menu, option, data) -> bool;
+        /// run each time the menu is drawn. @p whenDead answers once the menu is deleted.
+        std::function<bool(CCSPlayerController*)> Evaluator(ScriptMenu* m, IPluginFunction* fn, cell_t option, cell_t data, bool whenDead)
+        {
+            return [m, fn, option, data, whenDead](CCSPlayerController* player) -> bool
             {
                 if (m->dead)
-                    return true;
+                    return whenDead;
                 sp::CallArgs args;
+                args.PushCell(IndexOf(player));
                 args.PushCell(m->handle);
                 args.PushCell(option);
                 args.PushCell(data);
                 cell_t res = 0;
                 Invoke(fn, args, &res);
                 return res != 0;
+            };
+        }
+
+        /// Text from the script's (player, menu, option, buffer, maxlen, data); option -1 is the title.
+        std::function<std::string(CCSPlayerController*)> TextFrom(ScriptMenu* m, IPluginFunction* fn, cell_t option, cell_t data)
+        {
+            return [m, fn, option, data](CCSPlayerController* player) -> std::string
+            {
+                if (m->dead)
+                    return {};
+                char buffer[256] = {};
+                sp::CallArgs args;
+                args.PushCell(IndexOf(player));
+                args.PushCell(m->handle);
+                args.PushCell(option);
+                args.PushString(buffer, sizeof(buffer), SM_PARAM_STRING_UTF8 | SM_PARAM_STRING_COPY | SM_PARAM_COPYBACK);
+                args.PushCell(sizeof(buffer));
+                args.PushCell(data);
+                Invoke(fn, args);
+                buffer[sizeof(buffer) - 1] = '\0';
+                return buffer;
+            };
+        }
+
+        /// The option handler for AddMenuOption-style options.
+        std::function<void(CCSPlayerController*, ChatMenuOption&)> Handler(ScriptMenu* m, IPluginFunction* fn, cell_t option, cell_t data)
+        {
+            if (!fn)
+                return nullptr;
+            return [m, fn, option, data](CCSPlayerController* player, ChatMenuOption&)
+            {
+                SelectOption(m, fn, option, data, player);
             };
         }
 
@@ -230,7 +272,7 @@ namespace sourcepawn
                 return -1;
             IPluginFunction* eval = nullptr;
             // INVALID_FUNCTION compiles to 0 with this spcomp, -1 with others: both are "none".
-            if (params[0] >= 7 && params[7] != kInvalidFunction && params[7] != 0 && !(eval = Function(ctx, params[7])))
+            if (params[0] >= 7 && !IsUnset(params[7]) && !(eval = Function(ctx, params[7])))
                 return -1;
             const cell_t option = static_cast<cell_t>(m->menu.Options().size());
             const cell_t data = params[4];
@@ -247,7 +289,7 @@ namespace sourcepawn
                 }
             }, params[5] != 0);
             if (eval)
-                m->menu.Options().back().DisabledEvaluator = Evaluator(m, eval, option, data);
+                m->menu.Options().back().DisabledEvaluator = Evaluator(m, eval, option, data, true);
             return option;
         }
 
@@ -299,14 +341,185 @@ namespace sourcepawn
             if (!m || !OptionOk(ctx, m, params[2]))
                 return 0;
             ChatMenuOption& opt = m->menu.Options()[params[2]];
-            if (params[3] == kInvalidFunction || params[3] == 0)
+            if (IsUnset(params[3]))
             {
                 opt.DisabledEvaluator = nullptr;
                 return 0;
             }
             if (IPluginFunction* fn = Function(ctx, params[3]))
-                opt.DisabledEvaluator = Evaluator(m, fn, params[2], params[4]);
+                opt.DisabledEvaluator = Evaluator(m, fn, params[2], params[4], true);
             return 0;
+        }
+
+        // AddSubmenu(text, submenu, disabled)
+        cell_t N_MenuAddSubmenu(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptMenu* m = MenuOf(ctx, params[1]);
+            ScriptMenu* sub = m ? MenuOf(ctx, params[3]) : nullptr;
+            if (!sub)
+                return -1;
+            if (sub == m)
+                return ctx->ThrowNativeError("A menu cannot be its own submenu");
+            const cell_t option = static_cast<cell_t>(m->menu.Options().size());
+            m->menu.AddSubmenu(LocalString(ctx, params[2]), &sub->menu, params[0] >= 4 && params[4]);
+            return option;
+        }
+
+        cell_t N_MenuAddText(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptMenu* m = MenuOf(ctx, params[1]);
+            if (!m)
+                return -1;
+            const cell_t option = static_cast<cell_t>(m->menu.Options().size());
+            m->menu.AddText(LocalString(ctx, params[2]));
+            return option;
+        }
+
+        // AddDynamicOption(text, handler, data, disabled, visible)
+        cell_t N_MenuAddDynamicOption(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptMenu* m = MenuOf(ctx, params[1]);
+            IPluginFunction* text = m ? Function(ctx, params[2]) : nullptr;
+            if (!text)
+                return -1;
+            IPluginFunction *handler = nullptr, *disabled = nullptr, *visible = nullptr;
+            if ((params[0] >= 3 && !IsUnset(params[3]) && !(handler = Function(ctx, params[3])))
+                || (params[0] >= 5 && !IsUnset(params[5]) && !(disabled = Function(ctx, params[5])))
+                || (params[0] >= 6 && !IsUnset(params[6]) && !(visible = Function(ctx, params[6]))))
+                return -1;
+            const cell_t option = static_cast<cell_t>(m->menu.Options().size());
+            const cell_t data = params[0] >= 4 ? params[4] : 0;
+            m->menu.AddDynamicOption(TextFrom(m, text, option, data), Handler(m, handler, option, data),
+                                     disabled ? Evaluator(m, disabled, option, data, true) : nullptr,
+                                     visible ? Evaluator(m, visible, option, data, false) : nullptr);
+            return option;
+        }
+
+        // Option flags (menus.inc MenuOption_*).
+        constexpr cell_t kOptDisabled = 1 << 0;
+        constexpr cell_t kOptHidden = 1 << 1;
+        constexpr cell_t kOptClose = 1 << 2;
+        constexpr cell_t kOptStay = 1 << 3;
+
+        cell_t N_MenuSetOptionFlags(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptMenu* m = MenuOf(ctx, params[1]);
+            if (!m || !OptionOk(ctx, m, params[2]))
+                return 0;
+            ChatMenuOption& opt = m->menu.Options()[params[2]];
+            const cell_t flags = params[3];
+            opt.Disabled = (flags & kOptDisabled) != 0;
+            opt.Hidden = (flags & kOptHidden) != 0;
+            opt.CloseOnSelect = (flags & kOptClose) != 0;
+            opt.StayOnPage = (flags & kOptStay) != 0;
+            return 0;
+        }
+
+        cell_t N_MenuGetOptionFlags(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptMenu* m = MenuOf(ctx, params[1]);
+            if (!m || !OptionOk(ctx, m, params[2]))
+                return 0;
+            const ChatMenuOption& opt = m->menu.Options()[params[2]];
+            return (opt.Disabled ? kOptDisabled : 0) | (opt.Hidden ? kOptHidden : 0) | (opt.CloseOnSelect ? kOptClose : 0)
+                 | (opt.StayOnPage ? kOptStay : 0);
+        }
+
+        // SetDynamicTitle(text, data): INVALID_FUNCTION goes back to the fixed title.
+        cell_t N_MenuSetDynamicTitle(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptMenu* m = MenuOf(ctx, params[1]);
+            if (!m)
+                return 0;
+            if (IsUnset(params[2]))
+            {
+                m->menu.SetDynamicTitle(nullptr);
+                return 0;
+            }
+            if (IPluginFunction* fn = Function(ctx, params[2]))
+                m->menu.SetDynamicTitle(TextFrom(m, fn, -1, params[0] >= 3 ? params[3] : 0));
+            return 0;
+        }
+
+        // OnEnd(callback): (player, menu, reason); INVALID_FUNCTION removes it.
+        cell_t N_MenuOnEnd(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptMenu* m = MenuOf(ctx, params[1]);
+            if (!m)
+                return 0;
+            if (IsUnset(params[2]))
+            {
+                m->menu.SetEndHandler(nullptr);
+                return 0;
+            }
+            IPluginFunction* fn = Function(ctx, params[2]);
+            if (!fn)
+                return 0;
+            m->menu.SetEndHandler([m, fn](CCSPlayerController* player, MenuEndReason reason)
+            {
+                if (m->dead)
+                    return;
+                sp::CallArgs args;
+                args.PushCell(IndexOf(player));
+                args.PushCell(m->handle);
+                args.PushCell(static_cast<cell_t>(reason));
+                Invoke(fn, args);
+            });
+            return 0;
+        }
+
+        cell_t N_MenuItemsPerPageGet(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptMenu* m = MenuOf(ctx, params[1]);
+            return m ? m->menu.GetItemsPerPage() : 0;
+        }
+
+        cell_t N_MenuItemsPerPageSet(IPluginContext* ctx, const cell_t* params)
+        {
+            if (ScriptMenu* m = MenuOf(ctx, params[1]))
+                m->menu.SetItemsPerPage(params[2]);
+            return 0;
+        }
+
+        cell_t N_MenuTimeoutGet(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptMenu* m = MenuOf(ctx, params[1]);
+            return m ? m->menu.GetTimeout() : 0;
+        }
+
+        cell_t N_MenuTimeoutSet(IPluginContext* ctx, const cell_t* params)
+        {
+            if (ScriptMenu* m = MenuOf(ctx, params[1]))
+                m->menu.SetTimeout(params[2]);
+            return 0;
+        }
+
+        // Close(player = NULL_ENTITY): one player, or everyone.
+        cell_t N_MenuClose(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptMenu* m = MenuOf(ctx, params[1]);
+            if (!m)
+                return 0;
+            const cell_t index = params[0] >= 2 ? params[2] : -1;
+            if (index < 0)
+            {
+                menus::menuManager.CloseMenu(&m->menu);
+                return 0;
+            }
+            CCSPlayerController* player = PlayerArg(ctx, index);
+            if (player && menus::menuManager.IsMenuOpen(player, &m->menu))
+            {
+                menus::menuManager.CloseActiveMenu(player);
+                player->PrintToCenterHtml(" ", 3, true);
+            }
+            return 0;
+        }
+
+        cell_t N_MenuIsOpenFor(IPluginContext* ctx, const cell_t* params)
+        {
+            ScriptMenu* m = MenuOf(ctx, params[1]);
+            CCSPlayerController* player = m ? PlayerArg(ctx, params[2]) : nullptr;
+            return player && menus::menuManager.IsMenuOpen(player, &m->menu);
         }
 
         cell_t N_MenuPostSelectGet(IPluginContext* ctx, const cell_t* params)
@@ -389,10 +602,10 @@ namespace sourcepawn
         cell_t N_MenusGetActiveMenu(IPluginContext* ctx, const cell_t* params)
         {
             CCSPlayerController* player = PlayerArg(ctx, params[1]);
-            IMenuInstance* open = player ? menus::menuManager.GetActiveMenu(player) : nullptr;
+            IMenu* open = player ? menus::menuManager.GetOpenMenu(player) : nullptr;
             if (!open)
                 return 0;
-            auto it = g_menus.find(open->Menu());
+            auto it = g_menus.find(open);
             return it != g_menus.end() && it->second->owner == CallerId(ctx) ? it->second->handle : 0;
         }
 
@@ -582,6 +795,19 @@ namespace sourcepawn
             { "CenterHtmlMenu.SetOptionDisabled", N_MenuSetOptionDisabled },
             { "CenterHtmlMenu.IsOptionDisabled", N_MenuIsOptionDisabled },
             { "CenterHtmlMenu.SetOptionDisabledEvaluator", N_MenuSetOptionDisabledEvaluator },
+            { "CenterHtmlMenu.AddSubmenu", N_MenuAddSubmenu },
+            { "CenterHtmlMenu.AddText", N_MenuAddText },
+            { "CenterHtmlMenu.AddDynamicOption", N_MenuAddDynamicOption },
+            { "CenterHtmlMenu.SetOptionFlags", N_MenuSetOptionFlags },
+            { "CenterHtmlMenu.GetOptionFlags", N_MenuGetOptionFlags },
+            { "CenterHtmlMenu.SetDynamicTitle", N_MenuSetDynamicTitle },
+            { "CenterHtmlMenu.OnEnd", N_MenuOnEnd },
+            { "CenterHtmlMenu.ItemsPerPage.get", N_MenuItemsPerPageGet },
+            { "CenterHtmlMenu.ItemsPerPage.set", N_MenuItemsPerPageSet },
+            { "CenterHtmlMenu.Timeout.get", N_MenuTimeoutGet },
+            { "CenterHtmlMenu.Timeout.set", N_MenuTimeoutSet },
+            { "CenterHtmlMenu.Close", N_MenuClose },
+            { "CenterHtmlMenu.IsOpenFor", N_MenuIsOpenFor },
             { "CenterHtmlMenu.PostSelect.get", N_MenuPostSelectGet },
             { "CenterHtmlMenu.PostSelect.set", N_MenuPostSelectSet },
             { "CenterHtmlMenu.ExitButton.get", N_MenuExitButtonGet },

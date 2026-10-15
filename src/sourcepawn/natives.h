@@ -73,7 +73,6 @@ namespace sourcepawn
     const sp_nativeinfo_t* GetUtilNatives();         // natives_utils.cpp
     const sp_nativeinfo_t* GetClientNatives();       // natives_clients.cpp
     const sp_nativeinfo_t* GetTargetingNatives();    // natives_targeting.cpp
-    const sp_nativeinfo_t* GetMenuBuilderNatives();  // natives_menubuilder.cpp
 
     /// A float operator native the x64 JIT cannot inline: bound with SP_NTVFLAG_EPHEMERAL.
     bool IsEphemeralMathNative(const char* name);

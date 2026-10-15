@@ -37,52 +37,59 @@
 #include <playerslot.h>
 #include <source2mod/ISource2ModMenus.h>
 
+#include <chrono>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace menus {
     // AddMenuOptionWithCooldown lives in IBaseMenu now, so the local
     // BaseMenu that used to supply it is gone.
 
+    /// One player's view of a CenterHtmlMenu: the submenu path and the page
+    /// in each. Keys: the numbered options of the page, 7 Back (a previous
+    /// page, else the parent menu), 8 Next, 9 Exit.
     class CenterHtmlMenuInstance : public IMenuInstance
     {
     public:
-        CenterHtmlMenuInstance(CCSPlayerController *player, CenterHtmlMenu *menu, uint64_t serial)
-            : IMenuInstance(player, menu), chMenu_(menu), serial_(serial)
-        {
-        }
+        CenterHtmlMenuInstance(CCSPlayerController *player, CenterHtmlMenu *menu, uint64_t serial);
+        ~CenterHtmlMenuInstance() override;
 
         void Display() override;
         void OnKeyPress(CCSPlayerController* player, int key) override;
         void Close() override;
+        void OnFrame() override;
+        void OnEnd(MenuEndReason reason) override;
+        /// Back to the root menu's first page.
+        void Reset() override;
 
-    protected:
-        int NumPerPage() const override { return 5; }
-
-        int MenuItemsPerPage() const override
-        {
-            const bool exit = HasExitButton();
-            const bool both = HasPrevButton() && HasNextButton();
-            return (exit ? 0 : 1) + (both ? (NumPerPage() - 1) : NumPerPage());
-        }
-
-        // Hides IMenuInstance::HasNextButton, which counts NumPerPage() items
-        // per page and misses the extra slot a menu without an exit button
-        // gets in MenuItemsPerPage(). With exactly six options left it showed
-        // all six plus a Next that led to an empty page. Kept out of the SDK
-        // header so IMenuInstance stays as plugins were built against it.
-        bool HasNextButton() const
-        {
-            const int remaining = static_cast<int>(menu_->Options().size()) - currentOffset_;
-            return remaining > (HasExitButton() ? 0 : 1) + NumPerPage();
-        }
+        /// The menu the player is looking at (the submenu they are in).
+        IBaseMenu* Current() const { return path_.back().menu; }
+        /// Whether @p menu is the root or on the submenu path.
+        bool Uses(const IMenu* menu) const;
 
     private:
+        struct Level
+        {
+            IBaseMenu* menu;
+            int page;
+        };
+
+        /// The options on the current page by index; text lines as -1 - index.
+        /// False when a plugin callback closed the menu meanwhile.
+        bool PageItems(std::vector<int>& items, int& pages);
+        bool Enabled(const ChatMenuOption& option, bool& alive);
+        /// Closes it (destroying this) with a reason for OnMenuEnd.
+        void End(MenuEndReason reason);
+
         CenterHtmlMenu *chMenu_;
 
         /// Which opening of a menu this is, see MenuManager::IsOpen.
         uint64_t serial_;
+
+        std::vector<Level> path_;
+        std::chrono::steady_clock::time_point opened_;
     };
 
     class MenuManager : public ISource2ModMenus
@@ -93,6 +100,9 @@ namespace menus {
         void CloseActiveMenu(CCSPlayerController *player) override;
         void OnKeyPress(CCSPlayerController *player, int key) override;
         void OpenMenu(PluginId owner, CCSPlayerController* player, IMenuInstance* instance) override;
+        void CloseMenu(IMenu* menu) override;
+        bool IsMenuOpen(CCSPlayerController* player, IMenu* menu) override;
+        IMenu* GetOpenMenu(CCSPlayerController* player) override;
     public:
         /// The plugin whose menu the player has open, 0 for none.
         PluginId OwnerOf(CCSPlayerController* player) const;
@@ -116,6 +126,12 @@ namespace menus {
         /// allocator, so comparing pointers is not enough.
         bool IsOpen(CCSPlayerController *player, uint64_t serial) const;
 
+        /// Closes the player's menu: takes it out first, then tells it why
+        /// (unless @p notify is false), then destroys it -- so whatever the
+        /// plugin does in OnMenuEnd, opening another menu included, finds the
+        /// bookkeeping already settled.
+        void CloseWith(int slot, MenuEndReason reason, bool notify = true);
+
     protected:
         /// An instance is freed through IMenuInstance::Destroy(), so one
         /// another library built (OpenMenu) is deleted where it was allocated.
@@ -131,11 +147,19 @@ namespace menus {
             std::unique_ptr<IMenuInstance, InstanceDeleter> instance;
         };
 
+        /// Puts @p instance in as the player's menu, closing (Replaced) what was there.
+        void Install(PluginId owner, CCSPlayerController* player, IMenuInstance* instance, uint64_t serial);
+
         std::unordered_map<int, ActiveMenu> activeMenus;
         uint64_t nextSerial_ = 0;
 
+        /// The core's own instances, to tell them from ones other libraries built.
+        std::unordered_set<const IMenuInstance*> ownInstances_;
+
         /// (slot, serial) pairs Tick() walks, kept to avoid a per-frame allocation.
         std::vector<std::pair<int, uint64_t>> tickSnapshot_;
+
+        friend class CenterHtmlMenuInstance;
     };
 
     extern MenuManager menuManager;

@@ -49,6 +49,153 @@ namespace menus
 {
     MenuManager menuManager;
 
+    namespace
+    {
+        constexpr int kMaxPerPage = 6;   // 7, 8, 9 are Back, Next, Exit
+
+        std::string Escape(const std::string& text)
+        {
+            std::string out;
+            out.reserve(text.size());
+            for (char c : text)
+            {
+                if (c == '<')
+                    out += "&lt;";
+                else if (c == '>')
+                    out += "&gt;";
+                else
+                    out += c;
+            }
+            return out;
+        }
+    }
+
+    // ---- CenterHtmlMenuInstance -----------------------------------------------------------
+    //
+    // Every evaluator and handler is plugin code and may close this menu, open
+    // another one or rebuild the options; after each call the instance checks
+    // it is still the open one (IsOpen) before touching anything of itself,
+    // and it copies an option before calling into it.
+
+    CenterHtmlMenuInstance::CenterHtmlMenuInstance(CCSPlayerController *player, CenterHtmlMenu *menu, uint64_t serial)
+        : IMenuInstance(player, menu), chMenu_(menu), serial_(serial), opened_(std::chrono::steady_clock::now())
+    {
+        path_.push_back({ menu, 0 });
+        menuManager.ownInstances_.insert(this);
+    }
+
+    CenterHtmlMenuInstance::~CenterHtmlMenuInstance()
+    {
+        menuManager.ownInstances_.erase(this);
+    }
+
+    bool CenterHtmlMenuInstance::Uses(const IMenu* menu) const
+    {
+        return std::any_of(path_.begin(), path_.end(), [menu](const Level& l) { return l.menu == menu; });
+    }
+
+    void CenterHtmlMenuInstance::Reset()
+    {
+        IMenuInstance::Reset();
+        path_.resize(1);
+        path_[0].page = 0;
+    }
+
+    void CenterHtmlMenuInstance::OnEnd(MenuEndReason reason)
+    {
+        if (chMenu_)
+            chMenu_->OnMenuEnd(player_, reason);
+    }
+
+    void CenterHtmlMenuInstance::End(MenuEndReason reason)
+    {
+        CCSPlayerController* player = player_;
+        if (!player)
+            return;
+        // Destroys this instance.
+        menuManager.CloseWith(player->GetSlot(), reason);
+        player->PrintToCenterHtml(" ", 3, true);
+    }
+
+    void CenterHtmlMenuInstance::Close()
+    {
+        End(MenuEndReason::Closed);
+    }
+
+    void CenterHtmlMenuInstance::OnFrame()
+    {
+        const int timeout = chMenu_->GetTimeout();
+        if (timeout > 0 && std::chrono::steady_clock::now() - opened_ >= std::chrono::seconds(timeout))
+        {
+            End(MenuEndReason::Timeout);
+            return;
+        }
+        Display();
+    }
+
+    bool CenterHtmlMenuInstance::Enabled(const ChatMenuOption& option, bool& alive)
+    {
+        alive = true;
+        if (option.Disabled || option.IsText)
+            return false;
+        if (!option.DisabledEvaluator)
+            return true;
+        CCSPlayerController* player = player_;
+        const uint64_t serial = serial_;
+        const auto evaluator = option.DisabledEvaluator;
+        const bool disabled = evaluator(player);
+        alive = menuManager.IsOpen(player, serial);
+        return !disabled;
+    }
+
+    bool CenterHtmlMenuInstance::PageItems(std::vector<int>& items, int& pages)
+    {
+        CCSPlayerController* player = player_;
+        const uint64_t serial = serial_;
+        IBaseMenu* menu = Current();
+
+        std::vector<int> visible;
+        for (int i = 0; i < static_cast<int>(menu->Options().size()); i++)
+        {
+            const ChatMenuOption& opt = menu->Options()[i];
+            if (opt.Hidden)
+                continue;
+            if (opt.VisibleEvaluator)
+            {
+                const auto evaluator = opt.VisibleEvaluator;
+                const bool show = evaluator(player);
+                if (!menuManager.IsOpen(player, serial))
+                    return false;
+                if (!show)
+                    continue;
+            }
+            visible.push_back(i);
+        }
+
+        // Pages of up to ItemsPerPage numbered options; text lines ride along.
+        const int perPage = std::clamp(menu->GetItemsPerPage(), 1, kMaxPerPage);
+        std::vector<std::vector<int>> split(1);
+        int numbered = 0;
+        for (int i : visible)
+        {
+            const bool isText = menu->Options()[i].IsText;
+            if (!isText && numbered == perPage)
+            {
+                split.emplace_back();
+                numbered = 0;
+            }
+            split.back().push_back(isText ? -1 - i : i);
+            if (!isText)
+                numbered++;
+        }
+
+        pages = static_cast<int>(split.size());
+        Level& level = path_.back();
+        level.page = std::clamp(level.page, 0, pages - 1);
+        items = split[level.page];
+        return true;
+    }
+
     void CenterHtmlMenuInstance::Display()
     {
         if (!player_ || !menu_) return;
@@ -59,67 +206,65 @@ namespace menus
             return;
         }
 
-        // The evaluators are plugin code and may close this menu or open
-        // another one for the player, which destroys this instance.
         CCSPlayerController* player = player_;
         const uint64_t serial = serial_;
+        IBaseMenu* menu = Current();
 
-        auto& options = menu_->Options();
-        for (size_t i = 0; i < options.size(); ++i)
-        {
-            auto& opt = options[i];
-            if (!opt.DisabledEvaluator) continue;
+        const std::string title = menu->DisplayTitle(player);
+        if (!menuManager.IsOpen(player, serial))
+            return;
 
-            opt.Disabled = opt.DisabledEvaluator();
-            if (!menuManager.IsOpen(player, serial)) return;
-        }
-
-        const auto& opts = menu_->Options();
-        const int total = static_cast<int>(opts.size());
+        std::vector<int> items;
+        int pages = 1;
+        if (!PageItems(items, pages))
+            return;
 
         std::string html;
         html.reserve(512);
-        html += "<b><font color='";
-        html += chMenu_->TitleColor;
-        html += "'>";
-        html += chMenu_->Title();
-        html += "</font></b><br>\n";
+        html += "<b><font color='" + chMenu_->TitleColor + "'>" + Escape(title) + "</font></b><br>\n";
 
-        int keyOffset = 1;
-        const int pageEnd = (std::min)(currentOffset_ + MenuItemsPerPage(), total);
-        for (int i = currentOffset_; i < pageEnd; ++i)
+        int key = 1;
+        for (int entry : items)
         {
-            const auto& opt = opts[i];
-            const std::string& color = opt.Disabled ? chMenu_->DisabledColor : chMenu_->EnabledColor;
-            html += "<font color='";
-            html += color;
-            html += "'>!";
-            html += std::to_string(keyOffset++);
-            html += "</font> ";
-            html += opt.Text;
+            const bool isText = entry < 0;
+            const int index = isText ? -1 - entry : entry;
+            if (index >= static_cast<int>(menu->Options().size()))
+                continue;
+            const ChatMenuOption opt = menu->Options()[index];
+
+            std::string text = opt.Text;
+            if (opt.TextEvaluator)
+            {
+                text = opt.TextEvaluator(player);
+                if (!menuManager.IsOpen(player, serial))
+                    return;
+            }
+            if (isText)
+            {
+                html += "<font color='" + chMenu_->DisabledColor + "'>" + Escape(text) + "</font><br>\n";
+                continue;
+            }
+
+            bool alive;
+            const bool enabled = Enabled(opt, alive);
+            if (!alive)
+                return;
+            const std::string& color = enabled ? chMenu_->EnabledColor : chMenu_->DisabledColor;
+            html += "<font color='" + color + "'>!" + std::to_string(key++) + "</font> " + Escape(text);
+            if (opt.Submenu)
+                html += " &gt;";
             html += "<br>\n";
         }
 
-        if (HasPrevButton())
-        {
-            html += "<font color='";
-            html += chMenu_->PrevPageColor;
-            html += "'>!7</font> &#60;- Prev<br>\n";
-        }
-        if (HasNextButton())
-        {
-            html += "<font color='";
-            html += chMenu_->NextPageColor;
-            html += "'>!8</font> -> Next<br>\n";
-        }
-        if (HasExitButton())
-        {
-            html += "<font color='";
-            html += chMenu_->CloseColor;
-            html += "'>!9</font> -> Close<br>\n";
-        }
+        const Level& level = path_.back();
+        if (level.page > 0 || path_.size() > 1)
+            html += "<font color='" + chMenu_->PrevPageColor + "'>!7</font> &lt;- Back<br>\n";
+        if (level.page < pages - 1)
+            html += "<font color='" + chMenu_->NextPageColor + "'>!8</font> -&gt; Next<br>\n";
+        if (chMenu_->GetExitButton())
+            html += "<font color='" + chMenu_->CloseColor + "'>!9</font> -&gt; Close<br>\n";
 
-        player_->PrintToCenterHtml(html.c_str(), 3, true);
+        player->PrintToCenterHtml(html.c_str(), 3, true);
     }
 
     void CenterHtmlMenuInstance::OnKeyPress(CCSPlayerController* p, int key)
@@ -127,81 +272,102 @@ namespace menus
         if (p != player_) return;
         if (!menu_) return;
 
-        // 8 = Next, 7 = Prev, 9 = Close (matches C#)
-        if (key == 8 && HasNextButton())
-        {
-            NextPage();
-            return;
-        }
-        if (key == 7 && HasPrevButton())
-        {
-            PrevPage();
-            return;
-        }
-        if (key == 9 && HasExitButton())
-        {
-            Close();
-            return;
-        }
-
-        // Item keys are only the ones Display() printed for this page. C#
-        // accepts 1..9 here, so !6, or !7 without a Prev button, picked an
-        // option from the next page that the player never saw.
-        if (key < 1 || key > MenuItemsPerPage()) return;
-
-        const int idx = currentOffset_ + (key - 1);
-        auto& options = menu_->Options();
-        if (idx < 0 || idx >= (int)options.size()) return;
-
-        auto& opt = options[idx];
-        if (opt.Disabled || !opt.OnSelect) return;
-
-        // The handler may close this menu or open another one for the player
-        // (a submenu), and either destroys this instance. Nothing of `this`
-        // may be touched after the call unless it is still the open menu.
         CCSPlayerController* player = player_;
         const uint64_t serial = serial_;
 
-        // Called through a copy: a handler that rebuilds this same menu in
-        // place (ClearOptions + AddMenuOption) destroys the std::function it
-        // is running from.
-        const auto onSelect = opt.OnSelect;
+        std::vector<int> items;
+        int pages = 1;
+        if (!PageItems(items, pages))
+            return;
+        Level& level = path_.back();
+
+        if (key == 7 && (level.page > 0 || path_.size() > 1))
+        {
+            if (level.page > 0)
+                level.page--;
+            else
+                path_.pop_back();
+            Display();
+            return;
+        }
+        if (key == 8 && level.page < pages - 1)
+        {
+            level.page++;
+            Display();
+            return;
+        }
+        if (key == 9 && chMenu_->GetExitButton())
+        {
+            End(MenuEndReason::Exit);
+            return;
+        }
+        if (key < 1 || key > kMaxPerPage)
+            return;
+
+        // The key-th numbered option of the page: only what Display() showed.
+        int index = -1;
+        int numbered = 0;
+        for (int entry : items)
+        {
+            if (entry >= 0 && ++numbered == key)
+            {
+                index = entry;
+                break;
+            }
+        }
+        IBaseMenu* menu = Current();
+        if (index < 0 || index >= static_cast<int>(menu->Options().size()))
+            return;
+
+        bool alive;
+        if (!Enabled(menu->Options()[index], alive) || !alive)
+            return;
+
+        // Re-read after the evaluator: it may have rebuilt the options.
+        if (index >= static_cast<int>(menu->Options().size()))
+            return;
+        if (IBaseMenu* submenu = menu->Options()[index].Submenu)
+        {
+            path_.push_back({ submenu, 0 });
+            Display();
+            return;
+        }
+
+        // Through a copy: a handler that rebuilds this same menu in place
+        // (ClearOptions + AddMenuOption) destroys the option it is running from.
+        ChatMenuOption opt = menu->Options()[index];
         {
             ::slow::Guard slowGuard("menu option", opt.Text.c_str(), menuManager.OwnerOf(player));
-            onSelect(player, opt);
+            menu->OnOptionSelected(player, opt, index);
         }
 
         if (!menuManager.IsOpen(player, serial))
             return;
 
-        // Apply PostSelectAction just like CSSharp BaseMenuInstance
-        switch (menu_->GetPostSelectAction())
+        if (opt.CloseOnSelect)
         {
-        case PostSelectAction::Close:
-            Close();
-            break;
-        case PostSelectAction::Reset:
-            while (!prevPageOffsets_.empty()) prevPageOffsets_.pop();
-            page_ = 0;
-            currentOffset_ = 0;
-            break;
-        case PostSelectAction::Nothing:
-        default:
-            break;
+            End(MenuEndReason::Selected);
+            return;
         }
+        if (!opt.StayOnPage)
+        {
+            switch (Current()->GetPostSelectAction())
+            {
+            case PostSelectAction::Close:
+                End(MenuEndReason::Selected);
+                return;
+            case PostSelectAction::Reset:
+                path_.back().page = 0;
+                break;
+            case PostSelectAction::Nothing:
+            default:
+                break;
+            }
+        }
+        Display();
     }
 
-    void CenterHtmlMenuInstance::Close()
-    {
-        // CloseActiveMenu destroys this instance.
-        CCSPlayerController* player = player_;
-        menuManager.CloseActiveMenu(player);
-        if (player)
-        {
-            player->PrintToCenterHtml(" ", 3, true);
-        }
-    }
-
+    // ---- MenuManager ------------------------------------------------------------------------
 
     PluginId MenuManager::OwnerOf(CCSPlayerController* player) const
     {
@@ -211,37 +377,58 @@ namespace menus
         return it == activeMenus.end() ? 0 : it->second.owner;
     }
 
+    void MenuManager::CloseWith(int slot, MenuEndReason reason, bool notify)
+    {
+        auto it = activeMenus.find(slot);
+        if (it == activeMenus.end())
+            return;
+
+        std::unique_ptr<IMenuInstance, InstanceDeleter> instance = std::move(it->second.instance);
+        activeMenus.erase(it);
+        if (!instance)
+            return;
+
+        instance->Reset();
+        if (notify)
+            instance->OnEnd(reason);
+        // instance is Destroy()ed here.
+    }
+
     void MenuManager::OnClientDisconnect(CPlayerSlot slot)
     {
-        auto it = activeMenus.find(slot.Get());
-        if (it != activeMenus.end())
-            activeMenus.erase(it);
+        CloseWith(slot.Get(), MenuEndReason::Disconnected);
+    }
+
+    void MenuManager::Install(PluginId owner, CCSPlayerController* player, IMenuInstance* instance, uint64_t serial)
+    {
+        const int slot = player->GetSlot();
+
+        // What OnMenuEnd(Replaced) opens is replaced in turn; give up after a
+        // few rounds rather than let two plugins reopen each other forever.
+        for (int round = 0; round < 4 && activeMenus.count(slot); round++)
+            CloseWith(slot, MenuEndReason::Replaced);
+        CloseWith(slot, MenuEndReason::Replaced, false);
+
+        auto& active = activeMenus[slot];
+        active.owner = owner;
+        active.serial = serial;
+        active.instance.reset(instance);
+        active.instance->Display();
     }
 
     void MenuManager::OpenCenterHtmlMenu(PluginId owner, CCSPlayerController* player, CenterHtmlMenu* menu)
     {
         if (!player || !menu) return;
-        CloseActiveMenu(player);
 
         const uint64_t serial = ++nextSerial_;
-
-        auto& active = activeMenus[player->GetSlot()];
-        active.owner = owner;
-        active.serial = serial;
-        active.instance.reset(new CenterHtmlMenuInstance(player, menu, serial));
-        active.instance->Display();
+        Install(owner, player, new CenterHtmlMenuInstance(player, menu, serial), serial);
     }
 
     void MenuManager::OpenMenu(PluginId owner, CCSPlayerController* player, IMenuInstance* instance)
     {
         if (!player || !instance) return;
-        CloseActiveMenu(player);
 
-        auto& active = activeMenus[player->GetSlot()];
-        active.owner = owner;
-        active.serial = ++nextSerial_;
-        active.instance.reset(instance);
-        active.instance->Display();
+        Install(owner, player, instance, ++nextSerial_);
     }
 
     bool MenuManager::IsOpen(CCSPlayerController* player, uint64_t serial) const
@@ -264,12 +451,48 @@ namespace menus
     {
         if (!player) return;
 
-        auto it = activeMenus.find(player->GetSlot());
-        if (it != activeMenus.end())
+        CloseWith(player->GetSlot(), MenuEndReason::Closed);
+    }
+
+    void MenuManager::CloseMenu(IMenu* menu)
+    {
+        if (!menu) return;
+
+        std::vector<int> slots;
+        for (const auto& [slot, active] : activeMenus)
         {
-            it->second.instance->Reset();
-            activeMenus.erase(it);
+            const IMenuInstance* inst = active.instance.get();
+            if (!inst)
+                continue;
+            const bool uses = ownInstances_.count(inst) ? static_cast<const CenterHtmlMenuInstance*>(inst)->Uses(menu)
+                                                        : inst->Menu() == menu;
+            if (uses)
+                slots.push_back(slot);
         }
+        for (int slot : slots)
+        {
+            auto it = activeMenus.find(slot);
+            CCSPlayerController* player = (it != activeMenus.end() && it->second.instance) ? it->second.instance->Player() : nullptr;
+            CloseWith(slot, MenuEndReason::Closed);
+            if (player)
+                player->PrintToCenterHtml(" ", 3, true);
+        }
+    }
+
+    bool MenuManager::IsMenuOpen(CCSPlayerController* player, IMenu* menu)
+    {
+        IMenuInstance* inst = GetActiveMenu(player);
+        if (!inst || !menu)
+            return false;
+        return ownInstances_.count(inst) ? static_cast<CenterHtmlMenuInstance*>(inst)->Uses(menu) : inst->Menu() == menu;
+    }
+
+    IMenu* MenuManager::GetOpenMenu(CCSPlayerController* player)
+    {
+        IMenuInstance* inst = GetActiveMenu(player);
+        if (!inst)
+            return nullptr;
+        return ownInstances_.count(inst) ? static_cast<CenterHtmlMenuInstance*>(inst)->Current() : inst->Menu();
     }
 
     void MenuManager::OnKeyPress(CCSPlayerController* player, int key)
@@ -290,8 +513,8 @@ namespace menus
 
     void MenuManager::Tick()
     {
-        // Display() runs the plugins' DisabledEvaluators, which may open or
-        // close menus and so change activeMenus under a live iterator. Walk a
+        // Display() runs the plugins' evaluators, which may open or close
+        // menus and so change activeMenus under a live iterator. Walk a
         // snapshot and skip whatever was closed or replaced meanwhile.
         tickSnapshot_.clear();
         for (const auto& kv : activeMenus)
@@ -309,20 +532,22 @@ namespace menus
 
     void MenuManager::RemoveAllForPlugin(PluginId id)
     {
-        for (auto it = activeMenus.begin(); it != activeMenus.end(); )
+        std::vector<int> slots;
+        for (const auto& [slot, active] : activeMenus)
         {
-            if (it->second.owner != id)
-            {
-                ++it;
-                continue;
-            }
+            if (active.owner == id)
+                slots.push_back(slot);
+        }
 
-            // Clears the panel the player is looking at, the same as closing
-            // it by hand would.
-            if (it->second.instance)
-                it->second.instance->Reset();
-
-            it = activeMenus.erase(it);
+        // Without OnMenuEnd: the plugin is going away. Clears the panel the
+        // player is looking at, the same as closing it by hand would.
+        for (int slot : slots)
+        {
+            auto it = activeMenus.find(slot);
+            CCSPlayerController* player = (it != activeMenus.end() && it->second.instance) ? it->second.instance->Player() : nullptr;
+            CloseWith(slot, MenuEndReason::Closed, false);
+            if (player)
+                player->PrintToCenterHtml(" ", 3, true);
         }
     }
 }

@@ -38,7 +38,6 @@
 #include "utils.h"
 #include "clients.h"
 #include "targeting.h"
-#include "menubuilder.h"
 #include "pluginapi.h"
 
 #include "addresses.h"
@@ -322,7 +321,6 @@ namespace
             { SOURCE2MOD_UTILS_INTERFACE, &utils::utilsManager },
             { SOURCE2MOD_CLIENTS_INTERFACE, &clients::clientsManager },
             { SOURCE2MOD_TARGETING_INTERFACE, &targeting::targetingManager },
-            { SOURCE2MOD_MENUBUILDER_INTERFACE, &menubuilder::menuBuilderManager },
             { SOURCE2MOD_PATHS_INTERFACE, &paths::pathsManager },
             { SOURCE2MOD_PERMISSIONS_INTERFACE, &permissions::permissionsManager },
             { SOURCE2MOD_NATIVES_INTERFACE, sourcepawn::NativesInterface() },
