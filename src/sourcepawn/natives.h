@@ -63,6 +63,8 @@ namespace sourcepawn
     const sp_nativeinfo_t* GetGeoIPNatives();        // natives_geoip.cpp
     const sp_nativeinfo_t* GetCookieNatives();       // natives_cookies.cpp
     const sp_nativeinfo_t* GetTranslationNatives();  // natives_translations.cpp
+    const sp_nativeinfo_t* GetFileNatives();         // natives_files.cpp
+    const sp_nativeinfo_t* GetUtilNatives();         // natives_utils.cpp
 
     /// A float operator native the x64 JIT cannot inline: bound with SP_NTVFLAG_EPHEMERAL.
     bool IsEphemeralMathNative(const char* name);
@@ -122,6 +124,9 @@ namespace sourcepawn
      * cells owned by `owner`. Returns the handle, 0 after a script error.
      */
     cell_t FillStringList(SourcePawn::IPluginContext* ctx, cell_t handle, const std::vector<std::string>& items, bool clear, cell_t blocksize, PluginId owner);
+
+    /// The items of an ArrayList read as strings (natives_adt.cpp); false (and a script error) for a bad handle.
+    bool ReadStringList(SourcePawn::IPluginContext* ctx, cell_t handle, std::vector<std::string>& items);
 
     /// The ConVar handle for an access index, made on first use.
     cell_t ConVarHandle(uint16_t accessIndex);

@@ -1,15 +1,29 @@
 /**
- * Source2Mod SourcePawn API: text, time and logging helpers (ISource2ModUtils).
+ * Source2Mod SourcePawn API: text, time, sorting, regex, profiling and
+ * logging helpers (ISource2ModUtils).
  *
- * The same helpers C++ plugins get. Regex, profiling, sorting and IntMap are
- * SourceMod's methodmaps and natives (regex.inc, profiler.inc, sorting.inc,
- * adt_trie.inc) on the same core code.
+ * The same helpers C++ plugins get. ArrayList sorting is ArrayList's own
+ * (Sort / SortCustom); these sort plain arrays.
  */
 
 #if defined _source2mod_utils_included
  #endinput
 #endif
 #define _source2mod_utils_included
+
+/** How Sort* orders. */
+enum Source2ModSortOrder
+{
+	SortOrder_Ascending = 0,
+	SortOrder_Descending = 1,
+	SortOrder_Random = 2
+}
+
+/**
+ * Compares two elements of the array being sorted: < 0 when a goes first,
+ * > 0 when b does, 0 when equal.
+ */
+typedef Source2ModSortFunc = function int (int a, int b, const int[] array, any data);
 
 methodmap Source2ModUtils
 {
@@ -31,6 +45,8 @@ methodmap Source2ModUtils
 	/** -1 when search is not in text. */
 	public static native int Find(const char[] text, const char[] search, bool caseSensitive = true);
 
+	public static native bool Equal(const char[] a, const char[] b, bool caseSensitive = true);
+
 	/** Seconds since 1970. */
 	public static native int GetTime();
 
@@ -48,4 +64,63 @@ methodmap Source2ModUtils
 	 * game folder unless absolute); missing folders are made.
 	 */
 	public static native bool LogToFile(const char[] path, const char[] format, any ...);
+
+	public static native void SortInts(int[] array, int size, Source2ModSortOrder order = SortOrder_Ascending);
+	public static native void SortFloats(float[] array, int size, Source2ModSortOrder order = SortOrder_Ascending);
+
+	/** Byte-wise (strcmp) order. */
+	public static native void SortStrings(char[][] array, int count, Source2ModSortOrder order = SortOrder_Ascending);
+
+	/** func compares two values of array. */
+	public static native void SortCustom(int[] array, int size, Source2ModSortFunc func, any data = 0);
+}
+
+/** Regex flags (SOURCE2MOD_REGEX_*). */
+#define RegexFlag_Caseless  0x01
+#define RegexFlag_Multiline 0x02   /**< ^ and $ match at line breaks */
+#define RegexFlag_DotAll    0x04   /**< . matches line breaks too */
+
+/**
+ * A compiled pattern (ECMAScript syntax, as std::regex) and its last matches.
+ * delete releases it.
+ */
+methodmap Source2ModRegex < Handle
+{
+	/** @return null (and why in error) for a bad pattern */
+	public static native Source2ModRegex Compile(const char[] pattern, int flags = 0, char[] error = "", int maxlen = 0);
+
+	/**
+	 * Finds the first match at or after offset (bytes).
+	 * @return Substrings of the match (whole match + captures); 0 for none
+	 */
+	public native int Match(const char[] text, int offset = 0);
+
+	/** Finds every match. @return How many */
+	public native int MatchAll(const char[] text);
+
+	/** Matches found by the last Match / MatchAll. */
+	public native int MatchCount();
+
+	/** Substrings of a match (whole match + captures). */
+	public native int CaptureCount(int match = 0);
+
+	/** Substring index of a match (0 = the whole match). @return false out of range */
+	public native bool GetSubString(int index, char[] buffer, int maxlen, int match = 0);
+
+	/** Where a match ends in the text (bytes). */
+	public native int MatchEnd(int match = 0);
+}
+
+/** A stopwatch. delete releases it. */
+methodmap Source2ModProfiler < Handle
+{
+	public native Source2ModProfiler();
+	public native void Start();
+	public native void Stop();
+
+	/** Seconds between the last Start and Stop (or now, while running). */
+	property float Time
+	{
+		public native get();
+	}
 }

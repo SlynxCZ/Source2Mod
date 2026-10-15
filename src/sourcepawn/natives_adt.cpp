@@ -1308,6 +1308,20 @@ namespace sourcepawn
         return result;
     }
 
+    bool ReadStringList(IPluginContext* ctx, cell_t handle, std::vector<std::string>& items)
+    {
+        CellArray* array = ArrayOf(ctx, handle);
+        if (!array)
+            return false;
+        const size_t bytes = array->blocksize * sizeof(cell_t);
+        for (size_t i = 0; i < array->size(); i++)
+        {
+            const char* text = reinterpret_cast<const char*>(array->at(i));
+            items.emplace_back(text, strnlen(text, bytes));
+        }
+        return true;
+    }
+
     const sp_nativeinfo_t* GetAdtNatives()
     {
         return g_adtNatives;

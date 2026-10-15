@@ -34,6 +34,8 @@
  * Project: Source2Mod
  */
 #include "translations.h"
+#include "files.h"
+#include "utils.h"
 #include "pluginapi.h"
 
 #include "addresses.h"
@@ -313,6 +315,8 @@ namespace
             { SOURCE2MOD_TRACE_INTERFACE, &raytrace::rayTrace },
             { SOURCE2MOD_TRANSMIT_INTERFACE, &transmit::transmitManager },
             { SOURCE2MOD_TRANSLATIONS_INTERFACE, &translations::translationsManager },
+            { SOURCE2MOD_FILES_INTERFACE, &files::filesManager },
+            { SOURCE2MOD_UTILS_INTERFACE, &utils::utilsManager },
             { SOURCE2MOD_PATHS_INTERFACE, &paths::pathsManager },
             { SOURCE2MOD_PERMISSIONS_INTERFACE, &permissions::permissionsManager },
             { SOURCE2MOD_NATIVES_INTERFACE, sourcepawn::NativesInterface() },
