@@ -21,7 +21,9 @@ namespace utils
     class Regex final : public ISource2ModRegex
     {
     public:
-        explicit Regex(std::regex re) : m_re(std::move(re)) {}
+        /// @p lineAnchors: ^ and $ also match at line breaks (MULTILINE where
+        /// the library has no std::regex::multiline).
+        Regex(std::regex re, bool lineAnchors) : m_re(std::move(re)), m_lineAnchors(lineAnchors) {}
 
         int Match(const char* text, size_t offset = 0) override;
         int MatchAll(const char* text) override;
@@ -38,7 +40,12 @@ namespace utils
             size_t end = 0;
         };
 
+        /// The leftmost match at or after @p from; @p base is where m's positions count from.
+        bool Search(const std::string& subject, size_t from, std::smatch& m, size_t& base) const;
+        void Keep(const std::smatch& m, size_t base);
+
         std::regex m_re;
+        bool m_lineAnchors = false;
         std::vector<Found> m_matches;
     };
 

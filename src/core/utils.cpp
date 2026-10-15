@@ -73,6 +73,31 @@ namespace utils
                 syntax |= R::multiline;
         }
 
+        /// MULTILINE without std::regex::multiline: an unescaped $ outside a
+        /// class becomes "before a line break or at the end" (a lookahead).
+        /// ^ is handled by Regex::Search, which starts a search at each line.
+        std::string LineEnds(const std::string& pattern)
+        {
+            std::string out;
+            bool inClass = false;
+            for (size_t i = 0; i < pattern.size(); i++)
+            {
+                const char c = pattern[i];
+                if (c == '\\' && i + 1 < pattern.size())
+                {
+                    out += c;
+                    out += pattern[++i];
+                    continue;
+                }
+                if (c == '[')
+                    inClass = true;
+                else if (c == ']')
+                    inClass = false;
+                out += (c == '$' && !inClass) ? std::string("(?=\\n|$)") : std::string(1, c);
+            }
+            return out;
+        }
+
         /// DOTALL: an unescaped . outside a class matches newlines too.
         std::string DotAll(const std::string& pattern)
         {
@@ -195,6 +220,52 @@ namespace utils
 
     // ---- regex ----------------------------------------------------------------------
 
+    bool Regex::Search(const std::string& subject, size_t from, std::smatch& m, size_t& base) const
+    {
+        const auto flagsAt = [](size_t pos)
+        {
+            // ^ and \b see the character before the range unless it is the start.
+            return pos > 0 ? std::regex_constants::match_prev_avail : std::regex_constants::match_default;
+        };
+
+        if (!m_lineAnchors)
+        {
+            base = from;
+            return std::regex_search(subject.begin() + from, subject.end(), m, m_re, flagsAt(from));
+        }
+
+        // A search started at a line's start lets ^ match there (no prev_avail),
+        // and a match that begins on that line is the leftmost one there is.
+        // One that begins on a later line is found again, correctly anchored,
+        // by the search started at that line.
+        size_t pos = from;
+        while (true)
+        {
+            const bool lineStart = pos == 0 || subject[pos - 1] == '\n';
+            const auto flags = lineStart ? std::regex_constants::match_default : std::regex_constants::match_prev_avail;
+            const bool found = std::regex_search(subject.begin() + pos, subject.end(), m, m_re, flags);
+            const size_t newline = subject.find('\n', pos);
+            if (found && (newline == std::string::npos || pos + m.position(0) <= newline))
+            {
+                base = pos;
+                return true;
+            }
+            // Nothing that begins on this line: a ^ match may still begin on the next.
+            if (newline == std::string::npos)
+                return false;
+            pos = newline + 1;
+        }
+    }
+
+    void Regex::Keep(const std::smatch& m, size_t base)
+    {
+        Found f;
+        for (const auto& sub : m)
+            f.groups.push_back(sub.str());
+        f.end = base + m.position(0) + m.length(0);
+        m_matches.push_back(std::move(f));
+    }
+
     int Regex::Match(const char* text, size_t offset)
     {
         m_matches.clear();
@@ -202,20 +273,17 @@ namespace utils
         if (offset > subject.size())
             return 0;
         std::smatch m;
+        size_t base = 0;
         try
         {
-            if (!std::regex_search(subject.begin() + offset, subject.end(), m, m_re))
+            if (!Search(subject, offset, m, base))
                 return 0;
         }
         catch (...)   // error_complexity / error_stack on a pathological text
         {
             return 0;
         }
-        Found f;
-        for (const auto& sub : m)
-            f.groups.push_back(sub.str());
-        f.end = offset + m.position(0) + m.length(0);
-        m_matches.push_back(std::move(f));
+        Keep(m, base);
         return static_cast<int>(m.size());
     }
 
@@ -225,13 +293,16 @@ namespace utils
         const std::string subject = text ? text : "";
         try
         {
-            for (auto it = std::sregex_iterator(subject.begin(), subject.end(), m_re); it != std::sregex_iterator(); ++it)
+            size_t pos = 0;
+            std::smatch m;
+            size_t base = 0;
+            while (pos <= subject.size() && Search(subject, pos, m, base))
             {
-                Found f;
-                for (const auto& sub : *it)
-                    f.groups.push_back(sub.str());
-                f.end = it->position(0) + it->length(0);
-                m_matches.push_back(std::move(f));
+                Keep(m, base);
+                const size_t start = base + m.position(0);
+                const size_t end = start + m.length(0);
+                // An empty match moves on by one, or it is found forever.
+                pos = end > start ? end : end + 1;
             }
         }
         catch (...)
@@ -380,6 +451,7 @@ namespace utils
             syntax |= std::regex::icase;
         if (flags & SOURCE2MOD_REGEX_MULTILINE)
             AddMultiline<std::regex>(syntax);
+        const bool lineAnchors = (flags & SOURCE2MOD_REGEX_MULTILINE) && !HasMultiline<std::regex>::value;
         if (const std::string problem = CheckPattern(p); !problem.empty())
         {
             if (error)
@@ -388,9 +460,11 @@ namespace utils
         }
         if (flags & SOURCE2MOD_REGEX_DOTALL)
             p = DotAll(p);
+        if (lineAnchors)
+            p = LineEnds(p);
         try
         {
-            return new Regex(std::regex(p, syntax));
+            return new Regex(std::regex(p, syntax), lineAnchors);
         }
         catch (const std::regex_error& e)
         {
