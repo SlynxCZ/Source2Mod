@@ -74,6 +74,14 @@ public:
     /// handler (ISource2ModPermissions::SetAccessDeniedHandler).
     std::string AccessDeniedMessage = "You do not have access to this command.";
 
+    /// The GeoLite2 database (.mmdb) GeoIP lookups read; relative paths are
+    /// under addons/source2mod. Not shipped -- see ISource2ModGeoIP.h.
+    std::string GeoIPDatabase = "geoip/GeoLite2-City.mmdb";
+
+    /// The SQLite file client preferences (cookies) are kept in; relative
+    /// paths are under addons/source2mod.
+    std::string ClientPrefsDatabase = "data/clientprefs.sq3";
+
     using json = nlohmann::json;
     CCoreConfig(const std::string& path);
     ~CCoreConfig();

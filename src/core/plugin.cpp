@@ -38,6 +38,7 @@
 #include "addresses.h"
 #include "commands.h"
 #include "convars.h"
+#include "cookies.h"
 #include "core/paths.h"
 #include "core/scheduler.h"
 #include "crashhandler.h"
@@ -46,8 +47,10 @@
 #include "gameconfig.h"
 #include "gamehooks.h"
 #include "gamesystems.h"
+#include "geoip.h"
 #include "http.h"
 #include "inlinehooks.h"
+#include "maps.h"
 #include "mysql.h"
 #include "networkmessages.h"
 #include "patches.h"
@@ -184,6 +187,10 @@ bool Source2ModCore::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen
     // Before plugins load: their Load() may already grant and check.
     permissions::permissionsManager.Init();
 
+    // Not fatal: without a database every lookup says no.
+    geoip::geoIpManager.Init();
+    cookies::cookiesManager.Init();
+
     // Not fatal: without the script loader, compiled assets still run.
     scripts::scriptsManager.Init();
 
@@ -235,9 +242,13 @@ bool Source2ModCore::Unload(char* error, size_t maxlen)
     http::httpManager.Shutdown();
     // Takes the Steam ticket callback back out.
     permissions::permissionsManager.Shutdown();
+    // Its last writes go out through the SQL layer, so before that shuts down.
+    cookies::cookiesManager.Shutdown();
     // Joins the worker threads. They run code from this library, so leaving
     // one running is a crash the moment Metamod unmaps it.
     mysql::mysqlManager.Shutdown();
+    maps::mapsManager.Shutdown();
+    geoip::geoIpManager.Shutdown();
 
     if (shared::g_pEntitySystem)
         shared::g_pEntitySystem->RemoveListenerEntity(&virtualhooks::entityListener);
@@ -278,6 +289,7 @@ void Source2ModCore::OnLevelInit(char const* pMapName, char const* pMapEntities,
                               char const* pLandmarkName, bool loadGame, bool background)
 {
     scripts::scriptsManager.OnLevelInit();
+    maps::mapsManager.OnLevelInit(pMapName);
 
     pluginManager.OnLevelInit(pMapName, pMapEntities, pOldLevel, pLandmarkName, loadGame, background);
 }

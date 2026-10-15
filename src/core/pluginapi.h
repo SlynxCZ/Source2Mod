@@ -50,6 +50,9 @@ public:
     /// asks for and names it in its messages. Null outside a Load().
     static void SetLoadingPlugin(Source2ModPlugin* plugin);
 
+    /// Whether Source2ModFactory() would hand an interface out, without its logging (ISource2ModFeatures).
+    static bool IsInterfaceServed(const char* iface);
+
     void Log(ISource2ModPlugin *plugin, const char* msg, ...) override;
     void ConPrint(const char* msg) override;
     void ConPrintf(const char* fmt, ...) override;

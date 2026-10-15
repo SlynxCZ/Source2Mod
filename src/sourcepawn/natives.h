@@ -58,6 +58,10 @@ namespace sourcepawn
     const sp_nativeinfo_t* GetNetNatives();          // natives_net.cpp
     const sp_nativeinfo_t* GetUiNatives();           // natives_ui.cpp
     const sp_nativeinfo_t* GetMathNatives();         // natives_math.cpp
+    const sp_nativeinfo_t* GetFeatureNatives();      // natives_features.cpp
+    const sp_nativeinfo_t* GetMapNatives();          // natives_maps.cpp
+    const sp_nativeinfo_t* GetGeoIPNatives();        // natives_geoip.cpp
+    const sp_nativeinfo_t* GetCookieNatives();       // natives_cookies.cpp
 
     /// A float operator native the x64 JIT cannot inline: bound with SP_NTVFLAG_EPHEMERAL.
     bool IsEphemeralMathNative(const char* name);
@@ -101,11 +105,25 @@ namespace sourcepawn
     /// A new ArrayList (block size 1) holding `items`, owned by `owner` (natives_adt.cpp).
     cell_t NewCellList(const std::vector<cell_t>& items, PluginId owner);
 
+    /**
+     * Strings into an ArrayList (natives_adt.cpp): into `handle` when it is
+     * one (cleared first with `clear`), else into a new one of `blocksize`
+     * cells owned by `owner`. Returns the handle, 0 after a script error.
+     */
+    cell_t FillStringList(SourcePawn::IPluginContext* ctx, cell_t handle, const std::vector<std::string>& items, bool clear, cell_t blocksize, PluginId owner);
+
     /// The ConVar handle for an access index, made on first use.
     cell_t ConVarHandle(uint16_t accessIndex);
 
     namespace pluginsys
     {
+        /// A plugin native (CreateNative / ISource2ModNatives) by name: -1 when
+        /// none was ever registered, 0 while its plugin is unloaded, 1 when callable.
+        int NativeStatus(const char* name);
+
+        /// Whether some loaded plugin registered the library.
+        bool LibraryAvailable(const char* name);
+
         /// Binds the native at `index` if a plugin registered one by that name.
         bool BindNative(sp::BaseRuntime* runtime, uint32_t index, const char* name);
 

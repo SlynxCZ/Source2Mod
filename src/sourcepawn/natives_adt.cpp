@@ -1283,6 +1283,31 @@ namespace sourcepawn
         return h;
     }
 
+    cell_t FillStringList(IPluginContext* ctx, cell_t handle, const std::vector<std::string>& items, bool clear, cell_t blocksize, PluginId owner)
+    {
+        CellArray* array = nullptr;
+        cell_t result = handle;
+        if (handle != kInvalidHandle)
+        {
+            if (!(array = ArrayOf(ctx, handle)))
+                return 0;
+            if (clear)
+                array->data.clear();
+        }
+        else
+        {
+            array = new CellArray(static_cast<size_t>(blocksize > 0 ? blocksize : 1));
+            if (!(result = Handles().Create(Types().arrayList, array, owner)))
+            {
+                delete array;
+                return ctx->ThrowNativeError("Handle limit reached");
+            }
+        }
+        for (const std::string& item : items)
+            WriteStringBlock(array, array->push(), 0, item.c_str(), array->blocksize * sizeof(cell_t));
+        return result;
+    }
+
     const sp_nativeinfo_t* GetAdtNatives()
     {
         return g_adtNatives;

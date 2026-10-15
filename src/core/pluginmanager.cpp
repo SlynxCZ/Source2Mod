@@ -37,6 +37,7 @@
 
 #include "commands.h"
 #include "convars.h"
+#include "cookies.h"
 #include "core/gamehooks.h"
 #include "core/http.h"
 #include "core/menus.h"
@@ -356,6 +357,7 @@ bool PluginManager::AddPlugin(const char* fullPath, LibHandle lib, const void* m
         menus::menuManager.RemoveAllForPlugin(failedId);
         gamehooks::gameHooksManager.RemoveAllForPlugin(failedId);
         permissions::permissionsManager.RemoveAllForPlugin(failedId);
+        cookies::cookiesManager.RemoveAllForPlugin(failedId);
         sourcepawn::RemoveAllForPlugin(failedId);
 
         m_plugins.pop_back();
@@ -477,6 +479,7 @@ bool PluginManager::ReloadPlugin(int id)
         menus::menuManager.RemoveAllForPlugin(id);
         gamehooks::gameHooksManager.RemoveAllForPlugin(id);
         permissions::permissionsManager.RemoveAllForPlugin(id);
+        cookies::cookiesManager.RemoveAllForPlugin(id);
         sourcepawn::RemoveAllForPlugin(id);
 
         CloseLibNextFrame(**it, path);
@@ -539,6 +542,7 @@ bool PluginManager::UnloadPlugin(PluginId id)
         menus::menuManager.RemoveAllForPlugin(id);
         gamehooks::gameHooksManager.RemoveAllForPlugin(id);
         permissions::permissionsManager.RemoveAllForPlugin(id);
+        cookies::cookiesManager.RemoveAllForPlugin(id);
         sourcepawn::RemoveAllForPlugin(id);
 
         CloseLibNextFrame(*p);
@@ -668,6 +672,7 @@ void PluginManager::UnloadAll()
         menus::menuManager.RemoveAllForPlugin(p->id);
         gamehooks::gameHooksManager.RemoveAllForPlugin(p->id);
         permissions::permissionsManager.RemoveAllForPlugin(p->id);
+        cookies::cookiesManager.RemoveAllForPlugin(p->id);
         sourcepawn::RemoveAllForPlugin(p->id);
     }
 

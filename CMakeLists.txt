@@ -36,6 +36,15 @@ add_subdirectory(${SOURCE2MOD_SDK_DIR} ${CMAKE_BINARY_DIR}/source2mod-sdk)
 add_subdirectory(vendor/dynlibutils)
 add_subdirectory(vendor/spdlog)
 
+# GeoIP: libmaxminddb as a static library, nothing else of it (tests, the
+# mmdblookup binary, install rules).
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(MAXMINDDB_BUILD_BINARIES OFF CACHE BOOL "" FORCE)
+set(MAXMINDDB_INSTALL OFF CACHE BOOL "" FORCE)
+set(MSVC_STATIC_RUNTIME ON CACHE BOOL "" FORCE)
+add_subdirectory(vendor/maxminddb EXCLUDE_FROM_ALL)
+
 # SQLite, the amalgamation (SourceMod's copy, 3.47.0): client preferences, and
 # the SQL layer's SQLite driver.
 add_library(sqlite3 STATIC vendor/sqlite/sqlite3.c)
@@ -301,6 +310,7 @@ target_link_libraries(${PROJECT_NAME}
         source2mod-config
         source2mod-sdk
         sp-vm
+        maxminddb
         sqlite3
         ${source2mod_link_libraries}
 )
@@ -314,7 +324,7 @@ if (UNIX AND NOT APPLE)
     # export table so another crash handler loaded next to Source2Mod
     # (Accelerator, AcceleratorLocal) cannot bind to this copy of it.
     target_link_options(${PROJECT_NAME} PRIVATE
-            -Wl,--exclude-libs=libbreakpad.a:libbreakpad-client.a:libdisasm.a:libsp-vm.a:libsp-zlib.a:libsqlite3.a
+            -Wl,--exclude-libs=libbreakpad.a:libbreakpad-client.a:libdisasm.a:libsp-vm.a:libsp-zlib.a:libmaxminddb.a:libsqlite3.a
     )
 endif ()
 

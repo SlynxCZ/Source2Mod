@@ -481,8 +481,7 @@ namespace sourcepawn
 
         cell_t N_LibraryExists(IPluginContext* ctx, const cell_t* params)
         {
-            auto it = g_libraries.find(LocalString(ctx, params[1]));
-            return it != g_libraries.end() && !it->second.owners.empty();
+            return pluginsys::LibraryAvailable(LocalString(ctx, params[1]));
         }
 
         // ---- forwards ---------------------------------------------------------
@@ -1005,8 +1004,7 @@ namespace sourcepawn
 
             bool LibraryExists(const char* name) override
             {
-                auto it = g_libraries.find(name ? name : "");
-                return it != g_libraries.end() && !it->second.owners.empty();
+                return pluginsys::LibraryAvailable(name);
             }
 
             PluginId GetScriptPlugin(IPluginContext* ctx) override
@@ -1059,6 +1057,25 @@ namespace sourcepawn
 
     namespace pluginsys
     {
+        int NativeStatus(const char* name)
+        {
+            auto it = g_dynamicNatives.find(name ? name : "");
+            if (it == g_dynamicNatives.end())
+                return -1;
+            return it->second->Alive() ? 1 : 0;
+        }
+
+        bool LibraryAvailable(const char* name)
+        {
+            if (!name)
+                return false;
+            // SourceMod's CanTestFeatures(): GetFeatureStatus is there.
+            if (!strcmp(name, "__CanTestFeatures__"))
+                return true;
+            auto it = g_libraries.find(name);
+            return it != g_libraries.end() && !it->second.owners.empty();
+        }
+
         bool BindNative(sp::BaseRuntime* runtime, uint32_t index, const char* name)
         {
             auto it = g_dynamicNatives.find(name);

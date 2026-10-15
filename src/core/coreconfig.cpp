@@ -85,6 +85,8 @@ bool CCoreConfig::Init(char* conf_error, int conf_error_size)
         SlowCallbackWarnMs = m_json.value("SlowCallbackWarnMs", SlowCallbackWarnMs);
         SteamAuthMode = m_json.value("SteamAuthMode", SteamAuthMode);
         AccessDeniedMessage = m_json.value("AccessDeniedMessage", AccessDeniedMessage);
+        GeoIPDatabase = m_json.value("GeoIPDatabase", GeoIPDatabase);
+        ClientPrefsDatabase = m_json.value("ClientPrefsDatabase", ClientPrefsDatabase);
     }
     catch (const std::exception& ex)
     {

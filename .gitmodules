@@ -10,3 +10,6 @@
 [submodule "vendor/sourcepawn"]
 	path = vendor/sourcepawn
 	url = https://github.com/SlynxCZ/sourcepawn.git
+[submodule "vendor/maxminddb"]
+	path = vendor/maxminddb
+	url = https://github.com/maxmind/libmaxminddb.git

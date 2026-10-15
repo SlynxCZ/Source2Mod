@@ -36,6 +36,7 @@
 #include "permissions.h"
 
 #include "commands.h"
+#include "cookies.h"
 #include "pluginmanager.h"
 #include "shared.h"
 #include "utils/log.h"
@@ -591,6 +592,9 @@ namespace permissions
         const bool changed = st.steamId != steamId;
         st.steamId = steamId;
 
+        // Before the plugins: a cookie read in their OnClientAuthorized finds
+        // the values loading, and the cached forward follows next frame.
+        cookies::cookiesManager.OnClientAuthorized(CPlayerSlot(slot), steamId);
         pluginManager.OnClientAuthorized(CPlayerSlot(slot), steamId);
         if (changed)
             Changed(steamId);

@@ -46,6 +46,7 @@
 #include "http.h"
 #include "mysql.h"
 #include "networkmessages.h"
+#include "cookies.h"
 #include "permissions.h"
 #include "plugin.h"
 #include "pluginmanager.h"
@@ -549,6 +550,7 @@ namespace virtualhooks
 
         // After the plugins: theirs is the last look at who the player was.
         permissions::permissionsManager.OnClientDisconnect(slot);
+        cookies::cookiesManager.OnClientDisconnect(slot);
 
         return { KHook::Action::Ignore };
     }

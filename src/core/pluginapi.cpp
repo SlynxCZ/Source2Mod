@@ -38,15 +38,19 @@
 #include "addresses.h"
 #include "commands.h"
 #include "convars.h"
+#include "cookies.h"
 #include "core/paths.h"
 #include "core/scheduler.h"
 #include "customhud.h"
 #include "entities.h"
 #include "events.h"
+#include "features.h"
 #include "gamehooks.h"
 #include "gamesystems.h"
+#include "geoip.h"
 #include "http.h"
 #include "json.h"
+#include "maps.h"
 #include "menus.h"
 #include "module.h"
 #include "mysql.h"
@@ -287,14 +291,18 @@ namespace
             { SOURCE2MOD_ADDRESSES_INTERFACE, &addresses::source2modAddresses },
             { SOURCE2MOD_COMMANDS_INTERFACE, &commands::commandsManager },
             { SOURCE2MOD_CONVARS_INTERFACE, &convars::convarsManager },
+            { SOURCE2MOD_COOKIES_INTERFACE, &cookies::cookiesManager },
             { SOURCE2MOD_CUSTOMHUD_INTERFACE, &customhud::customHudManager },
             { SOURCE2MOD_ENTITIES_INTERFACE, &entities::entitiesManager },
             { SOURCE2MOD_EVENTS_INTERFACE, &events::eventManager },
+            { SOURCE2MOD_FEATURES_INTERFACE, &features::featuresManager },
             { SOURCE2MOD_GAMECONFIG_INTERFACE, shared::g_pGameConfig },
             { SOURCE2MOD_GAMESYSTEMS_INTERFACE, &gamesystems::gameSystemsManager },
+            { SOURCE2MOD_GEOIP_INTERFACE, &geoip::geoIpManager },
             { SOURCE2MOD_GAMEHOOKS_INTERFACE, &gamehooks::gameHooksManager },
             { SOURCE2MOD_HTTP_INTERFACE, &http::httpManager },
             { SOURCE2MOD_JSON_INTERFACE, &json::jsonManager },
+            { SOURCE2MOD_MAPS_INTERFACE, &maps::mapsManager },
             { SOURCE2MOD_MENUS_INTERFACE, &menus::menuManager },
             { SOURCE2MOD_SQL_INTERFACE, &mysql::mysqlManager },
             { SOURCE2MOD_NETWORKMESSAGES_INTERFACE, &networkmessages::networkMessagesManager },
@@ -324,6 +332,36 @@ namespace
         revision = atoi(iface + nameLen);
         return true;
     }
+}
+
+bool PluginApi::IsInterfaceServed(const char* iface)
+{
+    if (!iface || !*iface)
+        return false;
+
+    if (!strcmp(iface, SOURCE2MOD_KHOOK_INTERFACE) || !strcmp(iface, SOURCE2MOD_KHOOK_HEADER_INTERFACE) || !strcmp(iface, SOURCE2MOD_KHOOK_VERSION_INTERFACE))
+        return true;
+
+    size_t count = 0;
+    const CurrentInterface* current = CurrentInterfaces(count);
+    for (size_t i = 0; i < count; i++)
+    {
+        if (!strcmp(iface, current[i].iface))
+            return current[i].ptr != nullptr;
+    }
+
+    // A plugin's: asked the way Source2ModFactory() asks, minus the logging
+    // and the record of what the loading plugin uses.
+    for (auto& p : pluginManager.m_plugins)
+    {
+        for (auto* l : p->listeners)
+        {
+            int ret = SOURCE2MOD_IFACE_FAILED;
+            if (l->OnSource2ModQuery(iface, &ret))
+                return true;
+        }
+    }
+    return false;
 }
 
 void* PluginApi::Source2ModFactory(const char* iface, int* ret, PluginId* id)
