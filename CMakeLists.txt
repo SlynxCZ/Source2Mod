@@ -36,6 +36,12 @@ add_subdirectory(${SOURCE2MOD_SDK_DIR} ${CMAKE_BINARY_DIR}/source2mod-sdk)
 add_subdirectory(vendor/dynlibutils)
 add_subdirectory(vendor/spdlog)
 
+# SQLite, the amalgamation (SourceMod's copy, 3.47.0): client preferences, and
+# the SQL layer's SQLite driver.
+add_library(sqlite3 STATIC vendor/sqlite/sqlite3.c)
+target_include_directories(sqlite3 PUBLIC ${CMAKE_SOURCE_DIR}/vendor/sqlite)
+target_compile_definitions(sqlite3 PRIVATE SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION SQLITE_DEFAULT_FOREIGN_KEYS=1)
+
 file(GLOB_RECURSE SOURCE_FILES
         src/*.cpp
         src/*.h
@@ -295,6 +301,7 @@ target_link_libraries(${PROJECT_NAME}
         source2mod-config
         source2mod-sdk
         sp-vm
+        sqlite3
         ${source2mod_link_libraries}
 )
 
@@ -307,7 +314,7 @@ if (UNIX AND NOT APPLE)
     # export table so another crash handler loaded next to Source2Mod
     # (Accelerator, AcceleratorLocal) cannot bind to this copy of it.
     target_link_options(${PROJECT_NAME} PRIVATE
-            -Wl,--exclude-libs=libbreakpad.a:libbreakpad-client.a:libdisasm.a:libsp-vm.a:libsp-zlib.a
+            -Wl,--exclude-libs=libbreakpad.a:libbreakpad-client.a:libdisasm.a:libsp-vm.a:libsp-zlib.a:libsqlite3.a
     )
 endif ()
 
