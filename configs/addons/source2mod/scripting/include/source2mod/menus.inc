@@ -103,7 +103,11 @@ methodmap CenterHtmlMenu < Handle
 	public native void SetOptionDisabled(int option, bool disabled);
 	public native bool IsOptionDisabled(int option);
 
-	/** Decides the option's disabled state from now on; INVALID_FUNCTION removes it. */
+	/**
+	 * Decides the option's disabled state for each player it is shown to, from
+	 * now on; INVALID_FUNCTION removes it. Its answer is not stored:
+	 * IsOptionDisabled reports the fixed flag (SetOptionDisabled).
+	 */
 	public native void SetOptionDisabledEvaluator(int option, CenterHtmlMenuCheck evaluator, any data = 0);
 
 	/** MenuOption_* flags. */
