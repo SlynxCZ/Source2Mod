@@ -57,6 +57,10 @@ namespace sourcepawn
     const sp_nativeinfo_t* GetWorldNatives();        // natives_world.cpp
     const sp_nativeinfo_t* GetNetNatives();          // natives_net.cpp
     const sp_nativeinfo_t* GetUiNatives();           // natives_ui.cpp
+    const sp_nativeinfo_t* GetMathNatives();         // natives_math.cpp
+
+    /// A float operator native the x64 JIT cannot inline: bound with SP_NTVFLAG_EPHEMERAL.
+    bool IsEphemeralMathNative(const char* name);
 
     /**
      * SourceMod's format: the string at params[fmtParam], its arguments right

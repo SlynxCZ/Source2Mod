@@ -1350,7 +1350,7 @@ namespace sourcepawn
         static const std::vector<sp_nativeinfo_t> s_all = []
         {
             std::vector<sp_nativeinfo_t> all;
-            for (const sp_nativeinfo_t* table : { g_natives, GetAdtNatives(), GetConVarNatives(), GetPluginSysNatives(), GetEntityNatives(), GetApiNatives(), GetNetSoundNatives(), GetGameHookNatives(), GetGameConfigNatives(), GetRawHookNatives(), GetWorldNatives(), GetNetNatives(), GetUiNatives() })
+            for (const sp_nativeinfo_t* table : { g_natives, GetAdtNatives(), GetConVarNatives(), GetPluginSysNatives(), GetEntityNatives(), GetApiNatives(), GetNetSoundNatives(), GetGameHookNatives(), GetGameConfigNatives(), GetRawHookNatives(), GetWorldNatives(), GetNetNatives(), GetUiNatives(), GetMathNatives() })
                 for (const sp_nativeinfo_t* n = table; n->name; ++n)
                     all.push_back(*n);
             all.push_back({ nullptr, nullptr });

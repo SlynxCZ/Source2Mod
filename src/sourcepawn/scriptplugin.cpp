@@ -267,13 +267,14 @@ namespace sourcepawn
 
     void ScriptPlugin::BindCoreNatives()
     {
-        m_runtime->InstallBuiltinNatives();
-
+        // Not InstallBuiltinNatives(): it binds the float operator natives for
+        // opcode replacement, which the x64 JIT cannot compile, and a bound
+        // native cannot be bound again. The core binds them all instead.
         for (const sp_nativeinfo_t* n = GetCoreNatives(); n->name; ++n)
         {
             uint32_t idx;
             if (m_runtime->FindNativeByName(n->name, &idx) == SP_ERROR_NONE)
-                m_runtime->UpdateNativeBinding(idx, n->func, 0, nullptr);
+                m_runtime->UpdateNativeBinding(idx, n->func, IsEphemeralMathNative(n->name) ? SP_NTVFLAG_EPHEMERAL : 0, nullptr);
         }
 
         // What other plugins registered so far.
