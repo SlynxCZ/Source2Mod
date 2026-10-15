@@ -98,15 +98,6 @@ namespace sourcepawn
             }
             return g_pEnv;
         }
-
-        // SteamID64 -> "STEAM_1:Y:Z", what SourceMod's OnClientAuthorized hands over.
-        std::string Steam2(uint64 steamId)
-        {
-            const uint32_t account = static_cast<uint32_t>(steamId & 0xFFFFFFFFu);
-            char buf[64];
-            snprintf(buf, sizeof(buf), "STEAM_1:%u:%u", account & 1u, account >> 1);
-            return buf;
-        }
     }
 
     bool Invoke(IPluginFunction* fn, const sp::CallArgs& args, cell_t* result)
@@ -192,7 +183,6 @@ namespace sourcepawn
         g_byContext[Context()] = this;
         g_scripts.push_back(this);
         ReadMyInfo();
-        m_onGameFrame = m_runtime->GetFunctionByName("OnGameFrame");
         m_s2mOnGameFrame = m_runtime->GetFunctionByName("Source2Mod_OnGameFrame");
     }
 
@@ -409,13 +399,12 @@ namespace sourcepawn
         pluginManager.AddListener(this, this);
         pluginsys::OnPluginLoaded(m_id);
 
-        // A plugin loaded into a running server gets what it missed, as in SourceMod.
+        // A plugin loaded into a running server gets what it missed.
         if (late)
         {
-            CallForward("OnAllPluginsLoaded");
+            CallForward("Source2Mod_OnAllSource2ModPluginsLoaded");
             if (shared::getGlobalVars())
             {
-                CallForward("OnMapStart");
                 ExecAutoConfig();
                 CallForward("OnAutoConfigsBuffered");
                 ConfigsExecutedSoon();
@@ -462,7 +451,6 @@ namespace sourcepawn
     void ScriptPlugin::OnAllSource2ModPluginsLoaded()
     {
         CallForward("Source2Mod_OnAllSource2ModPluginsLoaded");
-        CallForward("OnAllPluginsLoaded");
     }
 
     void ScriptPlugin::OnLevelInit(const char* mapName, const char* mapEntities, const char* oldLevel, const char* landmarkName, bool loadGame, bool background)
@@ -478,7 +466,6 @@ namespace sourcepawn
             args.PushCell(background ? 1 : 0);
             Invoke(fn, args);
         }
-        CallForward("OnMapStart");
         ExecAutoConfig();
         CallForward("OnAutoConfigsBuffered");
         ConfigsExecutedSoon();
@@ -487,7 +474,6 @@ namespace sourcepawn
     void ScriptPlugin::OnLevelShutdown()
     {
         CallForward("Source2Mod_OnLevelShutdown");
-        CallForward("OnMapEnd");
     }
 
     void ScriptPlugin::OnGameFrame(bool simulating, bool firstTick, bool lastTick)
@@ -500,8 +486,6 @@ namespace sourcepawn
             args.PushCell(lastTick ? 1 : 0);
             Invoke(m_s2mOnGameFrame, args);
         }
-        if (m_onGameFrame)
-            Invoke(m_onGameFrame, sp::CallArgs());
     }
 
     void ScriptPlugin::OnClientPutInServer(CPlayerSlot slot, const char* name, int type, uint64 xuid)
@@ -516,7 +500,6 @@ namespace sourcepawn
             args.PushString(id.c_str());
             Invoke(fn, args);
         }
-        CallForwardClient("OnClientPutInServer", slot.Get() + 1);
     }
 
     void ScriptPlugin::OnClientDisconnect(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId)
@@ -532,8 +515,6 @@ namespace sourcepawn
             args.PushString(networkId ? networkId : "");
             Invoke(fn, args);
         }
-        CallForwardClient("OnClientDisconnect", slot.Get() + 1);
-        CallForwardClient("OnClientDisconnect_Post", slot.Get() + 1);
     }
 
     void ScriptPlugin::OnClientAuthorized(CPlayerSlot slot, uint64 steamId)
@@ -544,14 +525,6 @@ namespace sourcepawn
             sp::CallArgs args;
             args.PushCell(slot.Get());
             args.PushString(id.c_str());
-            Invoke(fn, args);
-        }
-        if (IPluginFunction* fn = m_runtime->GetFunctionByName("OnClientAuthorized"))
-        {
-            const std::string auth = Steam2(steamId);
-            sp::CallArgs args;
-            args.PushCell(slot.Get() + 1);
-            args.PushString(auth.c_str());
             Invoke(fn, args);
         }
     }

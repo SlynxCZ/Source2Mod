@@ -71,26 +71,6 @@ namespace sourcepawn
             return result;
         }
 
-        // (const char[] map, char[] display, int maxlen)
-        cell_t N_GetMapDisplayName(IPluginContext* ctx, const cell_t* params)
-        {
-            std::string found;
-            if (Maps().FindMap(LocalString(ctx, params[1]), found) == SOURCE2MOD_FINDMAP_NOT_FOUND)
-            {
-                ToBuffer(ctx, params[2], params[3], "");
-                return 0;
-            }
-            // "workshop/123/name" -> "name"
-            if (found.rfind("workshop/", 0) == 0)
-            {
-                const size_t slash = found.rfind('/');
-                if (slash > 8)
-                    found = found.substr(slash + 1);
-            }
-            ToBuffer(ctx, params[2], params[3], found.c_str());
-            return 1;
-        }
-
         // (const char[] map)
         cell_t N_SetNextMap(IPluginContext* ctx, const cell_t* params)
         {
@@ -133,60 +113,12 @@ namespace sourcepawn
 
         // ---- SourceMod -----------------------------------------------------------
 
-        // native void GetMapHistory(int item, char[] map, int mapLen, char[] reason, int reasonLen, int &startTime);
-        cell_t N_SMGetMapHistory(IPluginContext* ctx, const cell_t* params)
-        {
-            if (!MapHistory(ctx, params))
-                return ctx->ThrowNativeError("Invalid Map History Item requested.");
-            return 0;
-        }
-
-        // native void ForceChangeLevel(const char[] map, const char[] reason);
-        cell_t N_ForceChangeLevel(IPluginContext* ctx, const cell_t* params)
-        {
-            N_ChangeLevel(ctx, params);
-            return 0;
-        }
-
         cell_t ListSerial(const std::vector<std::string>& list)
         {
             size_t h = 0;
             for (const std::string& map : list)
                 h = h * 31 + std::hash<std::string>()(map);
             return static_cast<cell_t>(h & 0x7fffffff);
-        }
-
-        // native Handle ReadMapList(Handle array=INVALID_HANDLE, int &serial=-1, const char[] str="default", int flags=MAPLIST_FLAG_CLEARARRAY);
-        cell_t N_ReadMapList(IPluginContext* ctx, const cell_t* params)
-        {
-            constexpr cell_t kClearArray = 1 << 1;
-            const cell_t flags = params[4];
-            cell_t* serial;
-            ctx->LocalToPhysAddr(params[2], &serial);
-
-            std::vector<std::string> list;
-            if (!Maps().ReadMapList(LocalString(ctx, params[3]), list, flags & ~kClearArray))
-            {
-                *serial = -1;
-                return 0;
-            }
-
-            const cell_t current = ListSerial(list);
-            // The caller's array already holds this very list.
-            if (params[1] != 0 && *serial == current)
-                return params[1];
-
-            const cell_t handle = FillStringList(ctx, params[1], list, (flags & kClearArray) != 0, kMapBlockSize, CallerId(ctx));
-            if (handle)
-                *serial = current;
-            return handle;
-        }
-
-        // native void SetMapListCompatBind(const char[] name, const char[] file);
-        cell_t N_SetMapListCompatBind(IPluginContext*, const cell_t*)
-        {
-            // maplists.json is the only source; there is no old-style file to bind.
-            return 0;
         }
 
         // ---- Source2ModMaps ------------------------------------------------------
@@ -207,17 +139,6 @@ namespace sourcepawn
 
         const sp_nativeinfo_t g_mapNatives[] = {
             // halflife.inc / nextmap.inc / source2mod.inc
-            { "GetCurrentMap", N_GetCurrentMap },
-            { "IsMapValid", N_IsMapValid },
-            { "FindMap", N_FindMap },
-            { "GetMapDisplayName", N_GetMapDisplayName },
-            { "SetNextMap", N_SetNextMap },
-            { "GetNextMap", N_GetNextMap },
-            { "ForceChangeLevel", N_ForceChangeLevel },
-            { "GetMapHistorySize", N_GetMapHistorySize },
-            { "GetMapHistory", N_SMGetMapHistory },
-            { "ReadMapList", N_ReadMapList },
-            { "SetMapListCompatBind", N_SetMapListCompatBind },
 
             // source2mod/maps.inc
             { "Source2ModMaps.GetCurrentMap", N_GetCurrentMap },

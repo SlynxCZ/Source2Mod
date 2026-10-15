@@ -4,10 +4,6 @@
  * Per-player settings kept in a database under the player's SteamID and
  * loaded when the player is authorized. A cookie is shared by name between
  * plugins; here it is the id Register() / Find() return (0 is none).
- *
- * SourceMod's clientprefs.inc is there as well (Cookie, RegClientCookie,
- * Get/SetClientCookie, AreClientCookiesCached, OnClientCookiesCached, ...),
- * except the cookie menus and the cookie iterator.
  */
 
 #if defined _source2mod_cookies_included
@@ -16,7 +12,17 @@
 #define _source2mod_cookies_included
 
 #include <source2mod/types>
-#include <clientprefs>
+
+/**
+ * Who may see and change a cookie. SourceMod's CookieAccess (clientprefs.inc,
+ * (C)2004-2014 AlliedModders LLC, GPLv3 with the AlliedModders exception).
+ */
+enum CookieAccess
+{
+	CookieAccess_Public,            /**< Visible and Changeable by users */
+	CookieAccess_Protected,         /**< Read only to users */
+	CookieAccess_Private            /**< Completely hidden cookie */
+};
 
 /** A player's cookies were loaded (after OnClientAuthorized). */
 forward void Source2Mod_OnClientCookiesCached(CPlayerSlot slot);

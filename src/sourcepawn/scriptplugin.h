@@ -155,7 +155,6 @@ namespace sourcepawn
 
         std::string m_name, m_description, m_author, m_version, m_url;
 
-        SourcePawn::IPluginFunction* m_onGameFrame = nullptr;
         SourcePawn::IPluginFunction* m_s2mOnGameFrame = nullptr;   // source2mod/listener.inc
 
         bool m_autoExec = false;

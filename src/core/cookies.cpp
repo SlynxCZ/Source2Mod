@@ -264,10 +264,7 @@ namespace cookies
             l.callback(CPlayerSlot(slot));
 
         for (sourcepawn::ScriptPlugin* script : sourcepawn::ScriptPlugin::Running())
-        {
-            script->CallForwardClient("OnClientCookiesCached", slot + 1);
             script->CallForwardClient("Source2Mod_OnClientCookiesCached", slot);
-        }
     }
 
     // ---- players -----------------------------------------------------------------

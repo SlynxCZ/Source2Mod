@@ -23,7 +23,7 @@
 
 #include <source2mod/types>
 #include <source2mod/events>
-#include <adt_trie>
+#include <source2mod/adt>
 
 /** No entity: an empty handle, a failed lookup. */
 #define NULL_ENTITY view_as<any>(-1)

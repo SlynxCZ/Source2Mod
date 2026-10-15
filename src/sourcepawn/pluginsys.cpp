@@ -4,10 +4,10 @@
  * Source2Mod
  * =============================================================================
  *
- * Plugin to plugin: natives made by plugins (CreateNative and the
- * GetNative* / SetNative* family, ISource2ModNatives for native plugins),
- * libraries (RegPluginLibrary, LibraryExists, OnLibraryAdded/Removed) and
- * forwards (GlobalForward, PrivateForward, the Call_* natives). SourceMod's
+ * Plugin to plugin: natives made by plugins (Source2ModNatives.CreateNative and
+ * its Get.../Set... methods, ISource2ModNatives for native plugins),
+ * libraries (Source2ModNatives.RegisterLibrary/LibraryExists, OnLibraryAdded/Removed) and
+ * forwards (GlobalForward, PrivateForward, Source2ModCall). SourceMod's
  * smn_fakenatives.cpp, ForwardSys.cpp, smn_functions.cpp and the library
  * handling in PluginSys.cpp (AlliedModders LLC) are the reference for the
  * behaviour.
@@ -53,7 +53,7 @@ namespace sourcepawn
 
         // ---- natives made by plugins ----------------------------------------------
 
-        // The native call being served by a script (GetNativeCell & co. read it).
+        // The native call being served by a script (Source2ModNatives.GetCell & co. read it).
         struct NativeFrame
         {
             IPluginContext* caller;
@@ -217,7 +217,7 @@ namespace sourcepawn
             return frame;
         }
 
-        // CreateNative(const char[] name, NativeCall func)
+        // Source2ModNatives.CreateNative(const char[] name, NativeCall func)
         cell_t N_CreateNative(IPluginContext* ctx, const cell_t* params)
         {
             ScriptPlugin* plugin = Caller(ctx);
@@ -239,7 +239,7 @@ namespace sourcepawn
             return 0;
         }
 
-        // ThrowNativeError(int error, const char[] fmt, any ...)
+        // Source2ModNatives.ThrowError(int error, const char[] fmt, any ...)
         cell_t N_ThrowNativeError(IPluginContext* ctx, const cell_t* params)
         {
             if (!CurrentNative(ctx))
@@ -250,7 +250,7 @@ namespace sourcepawn
             return 0;
         }
 
-        // GetNativeStringLength(int param, int &length)
+        // Source2ModNatives.GetStringLength(int param, int &length)
         cell_t N_GetNativeStringLength(IPluginContext* ctx, const cell_t* params)
         {
             NativeFrame* frame = NativeParam(ctx, params[1]);
@@ -266,7 +266,7 @@ namespace sourcepawn
             return SP_ERROR_NONE;
         }
 
-        // GetNativeString(int param, char[] buffer, int maxlength, int &bytes=0)
+        // Source2ModNatives.GetString(int param, char[] buffer, int maxlength, int &bytes=0)
         cell_t N_GetNativeString(IPluginContext* ctx, const cell_t* params)
         {
             NativeFrame* frame = NativeParam(ctx, params[1]);
@@ -284,7 +284,7 @@ namespace sourcepawn
             return SP_ERROR_NONE;
         }
 
-        // SetNativeString(int param, const char[] source, int maxlength, bool utf8=true, int &bytes=0)
+        // Source2ModNatives.SetString(int param, const char[] source, int maxlength, bool utf8=true, int &bytes=0)
         cell_t N_SetNativeString(IPluginContext* ctx, const cell_t* params)
         {
             NativeFrame* frame = NativeParam(ctx, params[1]);
@@ -344,7 +344,7 @@ namespace sourcepawn
             return 0;
         }
 
-        // GetNativeArray(int param, any[] local, int size)
+        // Source2ModNatives.GetArray(int param, any[] local, int size)
         cell_t N_GetNativeArray(IPluginContext* ctx, const cell_t* params)
         {
             NativeFrame* frame = NativeParam(ctx, params[1]);
@@ -359,7 +359,7 @@ namespace sourcepawn
             return SP_ERROR_NONE;
         }
 
-        // SetNativeArray(int param, const any[] local, int size)
+        // Source2ModNatives.SetArray(int param, const any[] local, int size)
         cell_t N_SetNativeArray(IPluginContext* ctx, const cell_t* params)
         {
             NativeFrame* frame = NativeParam(ctx, params[1]);
@@ -394,8 +394,8 @@ namespace sourcepawn
             return str == nullptr;
         }
 
-        // FormatNativeString(int out_param, int fmt_param, int vararg_param, int out_len,
-        //                    int &written=0, char[] out_string="", const char[] fmt_string="")
+        // Source2ModNatives.FormatString(int out_param, int fmt_param, int vararg_param, int out_len,
+        //                               int &written=0, char[] out_string="", const char[] fmt_string="")
         // The format and its arguments are the caller's (fmt_param, with the
         // arguments right after it); the result goes to the caller's out_param
         // or, with out_param 0, to out_string here.
@@ -410,9 +410,9 @@ namespace sourcepawn
             const cell_t varParam = params[3];
             const cell_t outLen = params[4];
             if (fmtParam < 1 || fmtParam > frame->params[0])
-                return ctx->ThrowNativeError("FormatNativeString: a format from fmt_string is not supported, pass fmt_param");
+                return ctx->ThrowNativeError("Source2ModNatives.FormatString: a format from fmt_string is not supported, pass fmt_param");
             if (varParam != 0 && varParam != fmtParam + 1)
-                return ctx->ThrowNativeError("FormatNativeString: the arguments must follow the format (vararg_param %d)", varParam);
+                return ctx->ThrowNativeError("Source2ModNatives.FormatString: the arguments must follow the format (vararg_param %d)", varParam);
             if (outLen < 1)
                 return ctx->ThrowNativeError("Invalid output length: %d", outLen);
 
@@ -601,7 +601,7 @@ namespace sourcepawn
             return fwd ? static_cast<cell_t>(fwd->Targets().size()) : 0;
         }
 
-        // AddToForward(Handle fwd, Handle plugin, Function func)
+        // PrivateForward.AddFunction(Handle plugin, Function func)
         cell_t N_AddToForward(IPluginContext* ctx, const cell_t* params)
         {
             Forward* fwd = PrivateForwardOf(ctx, params[1]);
@@ -619,7 +619,7 @@ namespace sourcepawn
             return 1;
         }
 
-        // RemoveFromForward(Handle fwd, Handle plugin, Function func)
+        // PrivateForward.RemoveFunction(Handle plugin, Function func)
         cell_t N_RemoveFromForward(IPluginContext* ctx, const cell_t* params)
         {
             Forward* fwd = PrivateForwardOf(ctx, params[1]);
@@ -630,7 +630,7 @@ namespace sourcepawn
             return std::erase_if(fwd->functions, [fn](const Forward::Fn& f) { return f.fn == fn; }) > 0;
         }
 
-        // RemoveAllFromForward(Handle fwd, Handle plugin)
+        // PrivateForward.RemoveAllFunctions(Handle plugin)
         cell_t N_RemoveAllFromForward(IPluginContext* ctx, const cell_t* params)
         {
             Forward* fwd = PrivateForwardOf(ctx, params[1]);
@@ -641,7 +641,7 @@ namespace sourcepawn
             return static_cast<cell_t>(std::erase_if(fwd->functions, [id](const Forward::Fn& f) { return f.owner == id; }));
         }
 
-        // GetFunctionByName(Handle plugin, const char[] name)
+        // Source2ModCall.GetFunctionByName(Handle plugin, const char[] name)
         cell_t N_GetFunctionByName(IPluginContext* ctx, const cell_t* params)
         {
             ScriptPlugin* plugin = ScriptPlugin::FromHandle(ctx, params[1]);
@@ -715,7 +715,7 @@ namespace sourcepawn
             return 0;
         }
 
-        // Call_StartFunction(Handle plugin, Function func)
+        // Source2ModCall.StartFunction(Handle plugin, Function func)
         cell_t N_Call_StartFunction(IPluginContext* ctx, const cell_t* params)
         {
             if (!CheckCanStart(ctx))
@@ -754,7 +754,7 @@ namespace sourcepawn
             return 0;
         }
 
-        // Call_PushArray(const any[] value, int size) / Call_PushArrayEx(any[] value, int size, int cpflags)
+        // Source2ModCall.PushArray(const any[] value, int size) / Source2ModCall.PushArrayEx(any[] value, int size, int cpflags)
         cell_t PushArray(IPluginContext* ctx, const cell_t* params, bool copyback)
         {
             CallParam* p = NewParam(ctx);
@@ -796,7 +796,7 @@ namespace sourcepawn
             return 0;
         }
 
-        // Call_PushStringEx(char[] value, int length, int szflags, int cpflags). The
+        // Source2ModCall.PushStringEx(char[] value, int length, int szflags, int cpflags). The
         // script's SM_PARAM_STRING_* are the C++ ones shifted down a bit.
         cell_t N_Call_PushStringEx(IPluginContext* ctx, const cell_t* params)
         {
@@ -836,7 +836,7 @@ namespace sourcepawn
             return 0;
         }
 
-        // Call_Finish(any &result=0): the error code, SP_ERROR_NONE when every call went through.
+        // Source2ModCall.Finish(any &result=0): the error code, SP_ERROR_NONE when every call went through.
         cell_t N_Call_Finish(IPluginContext* ctx, const cell_t* params)
         {
             if (!g_call.active)
@@ -931,51 +931,46 @@ namespace sourcepawn
         }
 
         const sp_nativeinfo_t g_pluginSysNatives[] = {
-            // functions.inc
-            { "CreateNative", N_CreateNative },
-            { "ThrowNativeError", N_ThrowNativeError },
-            { "GetNativeStringLength", N_GetNativeStringLength },
-            { "GetNativeString", N_GetNativeString },
-            { "SetNativeString", N_SetNativeString },
-            { "GetNativeCell", N_GetNativeCell },
-            { "GetNativeFunction", N_GetNativeFunction },
-            { "GetNativeCellRef", N_GetNativeCellRef },
-            { "SetNativeCellRef", N_SetNativeCellRef },
-            { "GetNativeArray", N_GetNativeArray },
-            { "SetNativeArray", N_SetNativeArray },
-            { "IsNativeParamNullVector", N_IsNativeParamNullVector },
-            { "IsNativeParamNullString", N_IsNativeParamNullString },
-            { "FormatNativeString", N_FormatNativeString },
+            // source2mod/functions.inc: Source2ModNatives (C++ ISource2ModNatives)
+            { "Source2ModNatives.CreateNative", N_CreateNative },
+            { "Source2ModNatives.ThrowError", N_ThrowNativeError },
+            { "Source2ModNatives.GetStringLength", N_GetNativeStringLength },
+            { "Source2ModNatives.GetString", N_GetNativeString },
+            { "Source2ModNatives.SetString", N_SetNativeString },
+            { "Source2ModNatives.GetCell", N_GetNativeCell },
+            { "Source2ModNatives.GetFunction", N_GetNativeFunction },
+            { "Source2ModNatives.GetCellRef", N_GetNativeCellRef },
+            { "Source2ModNatives.SetCellRef", N_SetNativeCellRef },
+            { "Source2ModNatives.GetArray", N_GetNativeArray },
+            { "Source2ModNatives.SetArray", N_SetNativeArray },
+            { "Source2ModNatives.IsParamNullVector", N_IsNativeParamNullVector },
+            { "Source2ModNatives.IsParamNullString", N_IsNativeParamNullString },
+            { "Source2ModNatives.FormatString", N_FormatNativeString },
+            { "Source2ModNatives.RegisterLibrary", N_RegPluginLibrary },
+            { "Source2ModNatives.LibraryExists", N_LibraryExists },
+            // GlobalForward / PrivateForward
             { "GlobalForward.GlobalForward", N_CreateGlobalForward },
             { "GlobalForward.FunctionCount.get", N_GetForwardFunctionCount },
             { "PrivateForward.PrivateForward", N_CreateForward },
             { "PrivateForward.AddFunction", N_AddToForward },
             { "PrivateForward.RemoveFunction", N_RemoveFromForward },
             { "PrivateForward.RemoveAllFunctions", N_RemoveAllFromForward },
-            { "CreateGlobalForward", N_CreateGlobalForward },
-            { "CreateForward", N_CreateForward },
-            { "GetForwardFunctionCount", N_GetForwardFunctionCount },
-            { "AddToForward", N_AddToForward },
-            { "RemoveFromForward", N_RemoveFromForward },
-            { "RemoveAllFromForward", N_RemoveAllFromForward },
-            { "GetFunctionByName", N_GetFunctionByName },
-            { "Call_StartForward", N_Call_StartForward },
-            { "Call_StartFunction", N_Call_StartFunction },
-            { "Call_PushCell", N_Call_PushCell },
-            { "Call_PushCellRef", N_Call_PushCellRef },
-            { "Call_PushFloat", N_Call_PushCell },
-            { "Call_PushFloatRef", N_Call_PushCellRef },
-            { "Call_PushArray", N_Call_PushArray },
-            { "Call_PushArrayEx", N_Call_PushArrayEx },
-            { "Call_PushNullVector", N_Call_PushNullVector },
-            { "Call_PushString", N_Call_PushString },
-            { "Call_PushStringEx", N_Call_PushStringEx },
-            { "Call_PushNullString", N_Call_PushNullString },
-            { "Call_Finish", N_Call_Finish },
-            { "Call_Cancel", N_Call_Cancel },
-            // source2mod.inc
-            { "RegPluginLibrary", N_RegPluginLibrary },
-            { "LibraryExists", N_LibraryExists },
+            // Source2ModCall
+            { "Source2ModCall.GetFunctionByName", N_GetFunctionByName },
+            { "Source2ModCall.StartForward", N_Call_StartForward },
+            { "Source2ModCall.StartFunction", N_Call_StartFunction },
+            { "Source2ModCall.PushCell", N_Call_PushCell },
+            { "Source2ModCall.PushCellRef", N_Call_PushCellRef },
+            { "Source2ModCall.PushFloat", N_Call_PushCell },
+            { "Source2ModCall.PushFloatRef", N_Call_PushCellRef },
+            { "Source2ModCall.PushArray", N_Call_PushArray },
+            { "Source2ModCall.PushArrayEx", N_Call_PushArrayEx },
+            { "Source2ModCall.PushNullVector", N_Call_PushNullVector },
+            { "Source2ModCall.PushString", N_Call_PushString },
+            { "Source2ModCall.PushStringEx", N_Call_PushStringEx },
+            { "Source2ModCall.PushNullString", N_Call_PushNullString },
+            { "Source2ModCall.Finish", N_Call_Finish },
+            { "Source2ModCall.Cancel", N_Call_Cancel },
             { nullptr, nullptr },
         };
 

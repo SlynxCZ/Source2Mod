@@ -9,7 +9,7 @@
  * This program is free software; you can redistribute it and/or modify it under
  * the terms of the GNU General Public License, version 3.0, as published by the
  * Free Software Foundation.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
  * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
@@ -30,12 +30,30 @@
  * Version: $Id$
  */
 
-#if defined _core_included
+/**
+ * Source2Mod SourcePawn API: the language core every script needs -- the
+ * plugin's version record and myinfo, Handle, NULL_VECTOR / NULL_STRING,
+ * optional natives. Taken from SourceMod's core.inc, version.inc and
+ * handles.inc.
+ */
+
+#if defined _source2mod_core_included
  #endinput
 #endif
-#define _core_included
+#define _source2mod_core_included
 
-#include <version>
+#tryinclude <version_auto>
+
+#if !defined _auto_version_included
+ #define SOURCE2MOD_V_TAG         "manual"
+ #define SOURCE2MOD_V_REV         0
+ #define SOURCE2MOD_V_CSET        "0"
+ #define SOURCE2MOD_V_MAJOR       1               /**< Source2Mod Major version */
+ #define SOURCE2MOD_V_MINOR       0               /**< Source2Mod Minor version */
+ #define SOURCE2MOD_V_RELEASE     0               /**< Source2Mod Release version */
+
+ #define SOURCE2MOD_VERSION       "1.0.0-manual"  /**< Source2Mod version string (major.minor.release-tag) */
+#endif
 
 /** If this gets changed, you need to update Core's check. */
 #define SOURCE2MOD_PLUGINAPI_VERSION     7
@@ -49,7 +67,8 @@ struct PlVers
 };
 
 /**
- * Specifies what to do after a hook completes.
+ * What a forward's function answers (GlobalForward / PrivateForward with
+ * ET_Hook / ET_Event / ET_Single). Game hooks answer Source2ModAction.
  */
 enum Action
 {
@@ -69,7 +88,7 @@ enum Identity
 	Identity_Plugin = 2
 };
 
-public PlVers __version = 
+public PlVers __version =
 {
 	version = SOURCE2MOD_PLUGINAPI_VERSION,
 	filevers = SOURCE2MOD_VERSION,
@@ -120,6 +139,18 @@ enum PluginInfo
 };
 
 /**
+ * Plugin public information.
+ */
+struct Plugin
+{
+	public const char[] name;           /**< Plugin Name */
+	public const char[] description;    /**< Plugin Description */
+	public const char[] author;         /**< Plugin Author */
+	public const char[] version;        /**< Plugin Version */
+	public const char[] url;            /**< Plugin URL */
+};
+
+/**
  * Defines how an extension must expose itself for autoloading.
  */
 struct Extension
@@ -162,7 +193,7 @@ native bool IsNullString(const char[] str);
 /**
  * Horrible compatibility shim.
  */
-public Extension __ext_core = 
+public Extension __ext_core =
 {
 	name = "Core",
 	file = "core",
@@ -175,7 +206,8 @@ native int VerifyCoreVersion();
 /**
  * Sets a native as optional, such that if it is unloaded, removed,
  * or otherwise non-existent, the plugin will still work.  Calling
- * removed natives results in a run-time error.
+ * removed natives results in a run-time error. What a library's include
+ * calls from its __pl_<library>_SetNTVOptional().
  *
  * @param name          Native name.
  */
@@ -183,138 +215,48 @@ native void MarkNativeAsOptional(const char[] name);
 
 public void __ext_core_SetNTVOptional()
 {
-	MarkNativeAsOptional("GetFeatureStatus");
-	MarkNativeAsOptional("RequireFeature");
-	MarkNativeAsOptional("AddCommandListener");
-	MarkNativeAsOptional("RemoveCommandListener");
-
-	MarkNativeAsOptional("BfWriteBool");
-	MarkNativeAsOptional("BfWriteByte");
-	MarkNativeAsOptional("BfWriteChar");
-	MarkNativeAsOptional("BfWriteShort");
-	MarkNativeAsOptional("BfWriteWord");
-	MarkNativeAsOptional("BfWriteNum");
-	MarkNativeAsOptional("BfWriteFloat");
-	MarkNativeAsOptional("BfWriteString");
-	MarkNativeAsOptional("BfWriteEntity");
-	MarkNativeAsOptional("BfWriteAngle");
-	MarkNativeAsOptional("BfWriteCoord");
-	MarkNativeAsOptional("BfWriteVecCoord");
-	MarkNativeAsOptional("BfWriteVecNormal");
-	MarkNativeAsOptional("BfWriteAngles");
-	MarkNativeAsOptional("BfReadBool");
-	MarkNativeAsOptional("BfReadByte");
-	MarkNativeAsOptional("BfReadChar");
-	MarkNativeAsOptional("BfReadShort");
-	MarkNativeAsOptional("BfReadWord");
-	MarkNativeAsOptional("BfReadNum");
-	MarkNativeAsOptional("BfReadFloat");
-	MarkNativeAsOptional("BfReadString");
-	MarkNativeAsOptional("BfReadEntity");
-	MarkNativeAsOptional("BfReadAngle");
-	MarkNativeAsOptional("BfReadCoord");
-	MarkNativeAsOptional("BfReadVecCoord");
-	MarkNativeAsOptional("BfReadVecNormal");
-	MarkNativeAsOptional("BfReadAngles");
-	MarkNativeAsOptional("BfGetNumBytesLeft");
-
-	MarkNativeAsOptional("BfWrite.WriteBool");
-	MarkNativeAsOptional("BfWrite.WriteByte");
-	MarkNativeAsOptional("BfWrite.WriteChar");
-	MarkNativeAsOptional("BfWrite.WriteShort");
-	MarkNativeAsOptional("BfWrite.WriteWord");
-	MarkNativeAsOptional("BfWrite.WriteNum");
-	MarkNativeAsOptional("BfWrite.WriteFloat");
-	MarkNativeAsOptional("BfWrite.WriteString");
-	MarkNativeAsOptional("BfWrite.WriteEntity");
-	MarkNativeAsOptional("BfWrite.WriteAngle");
-	MarkNativeAsOptional("BfWrite.WriteCoord");
-	MarkNativeAsOptional("BfWrite.WriteVecCoord");
-	MarkNativeAsOptional("BfWrite.WriteVecNormal");
-	MarkNativeAsOptional("BfWrite.WriteAngles");
-	MarkNativeAsOptional("BfRead.ReadBool");
-	MarkNativeAsOptional("BfRead.ReadByte");
-	MarkNativeAsOptional("BfRead.ReadChar");
-	MarkNativeAsOptional("BfRead.ReadShort");
-	MarkNativeAsOptional("BfRead.ReadWord");
-	MarkNativeAsOptional("BfRead.ReadNum");
-	MarkNativeAsOptional("BfRead.ReadFloat");
-	MarkNativeAsOptional("BfRead.ReadString");
-	MarkNativeAsOptional("BfRead.ReadEntity");
-	MarkNativeAsOptional("BfRead.ReadAngle");
-	MarkNativeAsOptional("BfRead.ReadCoord");
-	MarkNativeAsOptional("BfRead.ReadVecCoord");
-	MarkNativeAsOptional("BfRead.ReadVecNormal");
-	MarkNativeAsOptional("BfRead.ReadAngles");
-	MarkNativeAsOptional("BfRead.BytesLeft.get");
-
-	MarkNativeAsOptional("PbReadInt");
-	MarkNativeAsOptional("PbReadFloat");
-	MarkNativeAsOptional("PbReadBool");
-	MarkNativeAsOptional("PbReadString");
-	MarkNativeAsOptional("PbReadColor");
-	MarkNativeAsOptional("PbReadAngle");
-	MarkNativeAsOptional("PbReadVector");
-	MarkNativeAsOptional("PbReadVector2D");
-	MarkNativeAsOptional("PbGetRepeatedFieldCount");
-	MarkNativeAsOptional("PbSetInt");
-	MarkNativeAsOptional("PbSetFloat");
-	MarkNativeAsOptional("PbSetBool");
-	MarkNativeAsOptional("PbSetString");
-	MarkNativeAsOptional("PbSetColor");
-	MarkNativeAsOptional("PbSetAngle");
-	MarkNativeAsOptional("PbSetVector");
-	MarkNativeAsOptional("PbSetVector2D");
-	MarkNativeAsOptional("PbAddInt");
-	MarkNativeAsOptional("PbAddFloat");
-	MarkNativeAsOptional("PbAddBool");
-	MarkNativeAsOptional("PbAddString");
-	MarkNativeAsOptional("PbAddColor");
-	MarkNativeAsOptional("PbAddAngle");
-	MarkNativeAsOptional("PbAddVector");
-	MarkNativeAsOptional("PbAddVector2D");
-	MarkNativeAsOptional("PbRemoveRepeatedFieldValue");
-	MarkNativeAsOptional("PbReadMessage");
-	MarkNativeAsOptional("PbReadRepeatedMessage");
-	MarkNativeAsOptional("PbAddMessage");
-
-	MarkNativeAsOptional("Protobuf.ReadInt");
-	MarkNativeAsOptional("Protobuf.ReadInt64");
-	MarkNativeAsOptional("Protobuf.ReadFloat");
-	MarkNativeAsOptional("Protobuf.ReadBool");
-	MarkNativeAsOptional("Protobuf.ReadString");
-	MarkNativeAsOptional("Protobuf.ReadColor");
-	MarkNativeAsOptional("Protobuf.ReadAngle");
-	MarkNativeAsOptional("Protobuf.ReadVector");
-	MarkNativeAsOptional("Protobuf.ReadVector2D");
-	MarkNativeAsOptional("Protobuf.GetRepeatedFieldCount");
-	MarkNativeAsOptional("Protobuf.SetInt");
-	MarkNativeAsOptional("Protobuf.SetInt64");
-	MarkNativeAsOptional("Protobuf.SetFloat");
-	MarkNativeAsOptional("Protobuf.SetBool");
-	MarkNativeAsOptional("Protobuf.SetString");
-	MarkNativeAsOptional("Protobuf.SetColor");
-	MarkNativeAsOptional("Protobuf.SetAngle");
-	MarkNativeAsOptional("Protobuf.SetVector");
-	MarkNativeAsOptional("Protobuf.SetVector2D");
-	MarkNativeAsOptional("Protobuf.AddInt");
-	MarkNativeAsOptional("Protobuf.AddInt64");
-	MarkNativeAsOptional("Protobuf.AddFloat");
-	MarkNativeAsOptional("Protobuf.AddBool");
-	MarkNativeAsOptional("Protobuf.AddString");
-	MarkNativeAsOptional("Protobuf.AddColor");
-	MarkNativeAsOptional("Protobuf.AddAngle");
-	MarkNativeAsOptional("Protobuf.AddVector");
-	MarkNativeAsOptional("Protobuf.AddVector2D");
-	MarkNativeAsOptional("Protobuf.RemoveRepeatedFieldValue");
-	MarkNativeAsOptional("Protobuf.ReadMessage");
-	MarkNativeAsOptional("Protobuf.ReadRepeatedMessage");
-	MarkNativeAsOptional("Protobuf.AddMessage");
-
 	VerifyCoreVersion();
 }
-
 
 #define AUTOLOAD_EXTENSIONS
 #define REQUIRE_EXTENSIONS
 #define REQUIRE_PLUGIN
+
+/**
+ * Preset Handle values.
+ */
+enum Handle // Tag disables introducing "Handle" as a symbol.
+{
+	INVALID_HANDLE = 0
+};
+
+/**
+ * A reference to an object the core keeps for the plugin (an ArrayList, a
+ * timer, a SQL connection, ...). `delete handle` closes it.
+ */
+methodmap Handle __nullable__ {
+    public native ~Handle();
+
+    /**
+     * Closes a Handle.  If the handle has multiple copies open,
+     * it is not destroyed unless all copies are closed.
+     *
+     * @note Closing a Handle has a different meaning for each Handle type.  Make
+     *       sure you read the documentation on whatever provided the Handle.
+     *
+     * @error           Invalid handles will cause a run time error.
+     */
+    public native void Close();
+
+    /**
+     * Clones a Handle.  When passing handles in between plugins, caching handles
+     * can result in accidental invalidation when one plugin releases the Handle, or is its owner
+     * is unloaded from memory.  To prevent this, the Handle may be "cloned" with a new owner.
+     *
+     * @param plugin    Optional Handle to another plugin to mark as the new owner.
+     *                  If no owner is passed, the owner becomes the calling plugin.
+     * @return          Handle on success, INVALID_HANDLE if not cloneable.
+     * @error           Invalid handles will cause a run time error.
+     */
+    public native Handle Clone(Handle plugin=INVALID_HANDLE);
+};

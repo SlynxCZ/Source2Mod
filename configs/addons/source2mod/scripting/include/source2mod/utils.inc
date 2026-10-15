@@ -11,6 +11,9 @@
 #endif
 #define _source2mod_utils_included
 
+#include <source2mod/core>
+#include <source2mod/adt>
+
 /** How Sort* orders. */
 enum Source2ModSortOrder
 {
@@ -46,6 +49,29 @@ methodmap Source2ModUtils
 	public static native int Find(const char[] text, const char[] search, bool caseSensitive = true);
 
 	public static native bool Equal(const char[] a, const char[] b, bool caseSensitive = true);
+
+	/** The string's length in bytes (SourceMod's strlen). */
+	public static native int Length(const char[] text);
+
+	/** Copies source into dest, cut to maxlen. @return Bytes written (strcopy) */
+	public static native int Copy(char[] dest, int maxlen, const char[] source);
+
+	/** < 0, 0, > 0 like C's strcmp (SourceMod's strcmp). */
+	public static native int Compare(const char[] a, const char[] b, bool caseSensitive = true);
+
+	/** The same over the first num characters (strncmp). */
+	public static native int CompareN(const char[] a, const char[] b, int num, bool caseSensitive = true);
+
+	/** @return Bytes written */
+	public static native int IntToString(int num, char[] buffer, int maxlen);
+
+	/** The number at the start of the text, 0 for none. */
+	public static native int StringToInt(const char[] text, int base = 10);
+
+	/** @return Bytes written */
+	public static native int FloatToString(float num, char[] buffer, int maxlen);
+
+	public static native float StringToFloat(const char[] text);
 
 	/** Seconds since 1970. */
 	public static native int GetTime();

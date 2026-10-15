@@ -293,43 +293,6 @@ namespace sourcepawn
 
         // ---- SourceMod events.inc --------------------------------------------------
 
-        // CreateEvent(const char[] name, bool force = false)
-        cell_t N_SMCreateEvent(IPluginContext* ctx, const cell_t* params)
-        {
-            IGameEventManager2* manager = Manager(ctx);
-            IGameEvent* ev = manager ? manager->CreateEvent(LocalString(ctx, params[1]), params[2] != 0) : nullptr;
-            return ev ? NewScriptEvent(ev, CallerId(ctx)) : 0;
-        }
-
-        // FireEvent(Handle event, bool dontBroadcast = false) / Event.Fire(bool dontBroadcast = false)
-        cell_t N_SMFireEvent(IPluginContext* ctx, const cell_t* params)
-        {
-            IGameEventManager2* manager = Manager(ctx);
-            IGameEvent* ev = manager ? TakeScriptEvent(ctx, params[1]) : nullptr;
-            if (ev)
-                manager->FireEvent(ev, params[2] != 0);
-            return 0;
-        }
-
-        // CancelCreatedEvent(Handle event) / Event.Cancel()
-        cell_t N_SMCancelEvent(IPluginContext* ctx, const cell_t* params)
-        {
-            if (IGameEvent* ev = TakeScriptEvent(ctx, params[1]))
-                shared::g_pGameEventManager->FreeEvent(ev);
-            return 0;
-        }
-
-        // Event.FireToClient(int client): client = slot + 1 = the controller's index. Then freed, as in SourceMod.
-        cell_t N_SMFireToClient(IPluginContext* ctx, const cell_t* params)
-        {
-            auto* controller = CBaseEntity::FromIndex<CBasePlayerController>(params[2]);
-            if (!controller)
-                return ctx->ThrowNativeError("Client %d is invalid", params[2]);
-            if (IGameEvent* ev = ScriptEvent(ctx, params[1]))
-                controller->FireEventToClient(ev);
-            return 0;
-        }
-
         const sp_nativeinfo_t g_eventNatives[] = {
             // source2mod/events.inc
             { "IGameEvent.GetID", N_GetID },
@@ -359,12 +322,6 @@ namespace sourcepawn
             { "IGameEventManager2.SerializeEvent", N_SerializeEvent },
             { "IGameEventManager2.UnserializeEvent", N_UnserializeEvent },
             // events.inc
-            { "CreateEvent", N_SMCreateEvent },
-            { "FireEvent", N_SMFireEvent },
-            { "CancelCreatedEvent", N_SMCancelEvent },
-            { "Event.Fire", N_SMFireEvent },
-            { "Event.Cancel", N_SMCancelEvent },
-            { "Event.FireToClient", N_SMFireToClient },
             { nullptr, nullptr },
         };
     }

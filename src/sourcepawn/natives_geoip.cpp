@@ -133,101 +133,6 @@ namespace sourcepawn
 
         // ---- SourceMod geoip.inc -------------------------------------------------
 
-        // native bool GeoipCode2(const char[] ip, char ccode[3]);
-        cell_t N_GeoipCode2(IPluginContext* ctx, const cell_t* params)
-        {
-            return Field(ctx, LocalString(ctx, params[1]), SOURCE2MOD_GEOIP_COUNTRY_CODE, params[2], 3);
-        }
-
-        // native bool GeoipRegionCode(const char[] ip, char ccode[12]);
-        cell_t N_GeoipRegionCode(IPluginContext* ctx, const cell_t* params)
-        {
-            // SourceMod's is "<country>-<subdivision>", "US-CA".
-            const char* ip = LocalString(ctx, params[1]);
-            char country[8], region[16], code[32] = "";
-            const bool ok = Geo().Lookup(ip, SOURCE2MOD_GEOIP_COUNTRY_CODE, country, sizeof(country))
-                         && Geo().Lookup(ip, SOURCE2MOD_GEOIP_REGION_CODE, region, sizeof(region));
-            if (ok)
-                snprintf(code, sizeof(code), "%s-%s", country, region);
-            ctx->StringToLocalUTF8(params[2], 12, code, nullptr);
-            return ok;
-        }
-
-        // native Continent GeoipContinentCode(const char[] ip, char ccode[3]);
-        cell_t N_GeoipContinentCode(IPluginContext* ctx, const cell_t* params)
-        {
-            char code[8];
-            if (!Geo().Lookup(LocalString(ctx, params[1]), SOURCE2MOD_GEOIP_CONTINENT_CODE, code, sizeof(code)))
-            {
-                ctx->StringToLocalUTF8(params[2], 3, "", nullptr);
-                return 0;
-            }
-            ctx->StringToLocalUTF8(params[2], 3, code, nullptr);
-            static const char* const s_codes[] = { "AF", "AN", "AS", "EU", "NA", "OC", "SA" };
-            for (cell_t i = 0; i < 7; i++)
-                if (!strcmp(code, s_codes[i]))
-                    return i + 1;
-            return 0;
-        }
-
-        // native bool GeoipCountry(const char[] ip, char[] name, int maxlength);
-        cell_t N_GeoipCountry(IPluginContext* ctx, const cell_t* params)
-        {
-            return Field(ctx, LocalString(ctx, params[1]), SOURCE2MOD_GEOIP_COUNTRY, params[2], params[3]);
-        }
-
-        // The *Ex / client variants name things in English; the player's
-        // language is not known to the core.
-        cell_t N_GeoipCountryEx(IPluginContext* ctx, const cell_t* params)
-        {
-            return Field(ctx, LocalString(ctx, params[1]), SOURCE2MOD_GEOIP_COUNTRY, params[2], params[3]);
-        }
-
-        cell_t N_GeoipContinent(IPluginContext* ctx, const cell_t* params)
-        {
-            return Field(ctx, LocalString(ctx, params[1]), SOURCE2MOD_GEOIP_CONTINENT, params[2], params[3]);
-        }
-
-        cell_t N_GeoipRegion(IPluginContext* ctx, const cell_t* params)
-        {
-            return Field(ctx, LocalString(ctx, params[1]), SOURCE2MOD_GEOIP_REGION, params[2], params[3]);
-        }
-
-        cell_t N_GeoipCity(IPluginContext* ctx, const cell_t* params)
-        {
-            return Field(ctx, LocalString(ctx, params[1]), SOURCE2MOD_GEOIP_CITY, params[2], params[3]);
-        }
-
-        cell_t N_GeoipTimezone(IPluginContext* ctx, const cell_t* params)
-        {
-            return Field(ctx, LocalString(ctx, params[1]), SOURCE2MOD_GEOIP_TIMEZONE, params[2], params[3]);
-        }
-
-        cell_t N_GeoipLatitude(IPluginContext* ctx, const cell_t* params)
-        {
-            double lat = 0.0, lon = 0.0;
-            Geo().GetLocation(LocalString(ctx, params[1]), lat, lon);
-            return sp_ftoc(static_cast<float>(lat));
-        }
-
-        cell_t N_GeoipLongitude(IPluginContext* ctx, const cell_t* params)
-        {
-            double lat = 0.0, lon = 0.0;
-            Geo().GetLocation(LocalString(ctx, params[1]), lat, lon);
-            return sp_ftoc(static_cast<float>(lon));
-        }
-
-        // native float GeoipDistance(float lat1, float lon1, float lat2, float lon2, int system = SYSTEM_METRIC);
-        cell_t N_GeoipDistance(IPluginContext*, const cell_t* params)
-        {
-            constexpr double kPi = 3.14159265358979323846;
-            const double lat1 = sp_ctof(params[1]) * kPi / 180.0, lon1 = sp_ctof(params[2]) * kPi / 180.0;
-            const double lat2 = sp_ctof(params[3]) * kPi / 180.0, lon2 = sp_ctof(params[4]) * kPi / 180.0;
-            const double a = std::pow(std::sin((lat2 - lat1) / 2), 2) + std::cos(lat1) * std::cos(lat2) * std::pow(std::sin((lon2 - lon1) / 2), 2);
-            const double radius = params[5] == 1 ? 3958.8 : 6371.0;
-            return sp_ftoc(static_cast<float>(2.0 * radius * std::asin(std::sqrt(a))));
-        }
-
         const sp_nativeinfo_t g_geoipNatives[] = {
             { "Source2ModGeoIP.IsLoaded", N_GeoIsLoaded },
             { "Source2ModGeoIP.GetDatabaseType", N_GeoGetDatabaseType },
@@ -237,18 +142,6 @@ namespace sourcepawn
             { "Source2ModGeoIP.LookupPath", N_GeoLookupPath },
             { "Source2ModGeoIP.GetPlayerIP", N_GeoGetPlayerIP },
 
-            { "GeoipCode2", N_GeoipCode2 },
-            { "GeoipRegionCode", N_GeoipRegionCode },
-            { "GeoipContinentCode", N_GeoipContinentCode },
-            { "GeoipCountry", N_GeoipCountry },
-            { "GeoipCountryEx", N_GeoipCountryEx },
-            { "GeoipContinent", N_GeoipContinent },
-            { "GeoipRegion", N_GeoipRegion },
-            { "GeoipCity", N_GeoipCity },
-            { "GeoipTimezone", N_GeoipTimezone },
-            { "GeoipLatitude", N_GeoipLatitude },
-            { "GeoipLongitude", N_GeoipLongitude },
-            { "GeoipDistance", N_GeoipDistance },
             { nullptr, nullptr },
         };
     }

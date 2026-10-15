@@ -469,19 +469,10 @@ namespace sourcepawn
             return 0;
         }
 
-        cell_t N_PrintToConsole(IPluginContext* ctx, const cell_t* params)
+        // Source2ModApi.ConPrint(const char[] message): as it is, no formatting.
+        cell_t N_ConPrint(IPluginContext* ctx, const cell_t* params)
         {
-            std::string msg;
-            const int client = params[1];
-            if (client == 0)
-            {
-                if (FormatTo(ctx, params, 2, msg))
-                    ConMsg("%s\n", msg.c_str());
-                return 0;
-            }
-            CCSPlayerController* player = CheckClient(ctx, client, true);
-            if (player && FormatTo(ctx, params, 2, msg))
-                player->PrintToConsole(msg.c_str());
+            ConMsg("%s", Str(ctx, params[1]));
             return 0;
         }
 
@@ -548,88 +539,6 @@ namespace sourcepawn
             });
 
             commands::commandsManager.RegisterConCommand(plugin->Id(), name, std::move(handler), permission);
-            return 0;
-        }
-
-        cell_t N_RegConsoleCmd(IPluginContext* ctx, const cell_t* params)
-        {
-            return RegisterCommand(ctx, params, false, nullptr);
-        }
-
-        cell_t N_RegServerCmd(IPluginContext* ctx, const cell_t* params)
-        {
-            return RegisterCommand(ctx, params, true, nullptr);
-        }
-
-        // SourceMod's admin flags have no direct counterpart in Source2Mod's
-        // dotted permissions; each flag becomes "admin.<flag>" (the lowest set
-        // bit decides), which the "admin" group of permissions.json covers.
-        cell_t N_RegAdminCmd(IPluginContext* ctx, const cell_t* params)
-        {
-            static const char* const kFlags[] = {
-                "reservation", "generic", "kick", "ban", "unban", "slay", "changemap", "convars",
-                "config", "chat", "vote", "password", "rcon", "cheats", "root",
-                "custom1", "custom2", "custom3", "custom4", "custom5", "custom6",
-            };
-
-            const auto flags = static_cast<uint32_t>(params[3]);
-            std::string permission;
-            for (size_t i = 0; i < std::size(kFlags); i++)
-            {
-                if (flags & (1u << i))
-                {
-                    permission = std::string("admin.") + kFlags[i];
-                    break;
-                }
-            }
-
-            return RegisterCommand(ctx, params, false, permission.empty() ? nullptr : permission.c_str());
-        }
-
-        cell_t N_GetCmdArgs(IPluginContext* ctx, const cell_t*)
-        {
-            if (g_commandStack.empty())
-                return ctx->ThrowNativeError("No command is being processed");
-            const int argc = g_commandStack.back().args->ArgC();
-            return argc > 0 ? argc - 1 : 0;
-        }
-
-        cell_t N_GetCmdArg(IPluginContext* ctx, const cell_t* params)
-        {
-            if (g_commandStack.empty())
-                return ctx->ThrowNativeError("No command is being processed");
-            size_t written = 0;
-            ctx->StringToLocalUTF8(params[2], params[3], g_commandStack.back().args->Arg(params[1]), &written);
-            return static_cast<cell_t>(written);
-        }
-
-        cell_t N_GetCmdArgString(IPluginContext* ctx, const cell_t* params)
-        {
-            if (g_commandStack.empty())
-                return ctx->ThrowNativeError("No command is being processed");
-            size_t written = 0;
-            ctx->StringToLocalUTF8(params[1], params[2], g_commandStack.back().args->ArgS(), &written);
-            return static_cast<cell_t>(written);
-        }
-
-        // Into the console or chat the command came from, as SourceMod does.
-        cell_t N_ReplyToCommand(IPluginContext* ctx, const cell_t* params)
-        {
-            std::string msg;
-            if (!FormatTo(ctx, params, 2, msg))
-                return 0;
-
-            const int client = params[1];
-            if (!g_commandStack.empty() && g_commandStack.back().client == client)
-            {
-                commands::commandsManager.ReplyToCommand(*g_commandStack.back().ctx, msg.c_str());
-                return 0;
-            }
-
-            if (client == 0)
-                ConMsg("%s\n", msg.c_str());
-            else if (CCSPlayerController* player = CheckClient(ctx, client, true))
-                player->PrintToConsole(msg.c_str());
             return 0;
         }
 
@@ -744,11 +653,6 @@ namespace sourcepawn
             return state->handle;
         }
 
-        cell_t N_CreateTimer(IPluginContext* ctx, const cell_t* params)
-        {
-            return StartTimer(ctx, sp_ctof(params[1]), params[2], params[3], params[4], true);
-        }
-
         // Source2ModScheduler.AddTimer(float interval, Source2ModTask callback, any data = 0, int flags = 0)
         cell_t N_S2MAddTimer(IPluginContext* ctx, const cell_t* params)
         {
@@ -760,21 +664,6 @@ namespace sourcepawn
         {
             if (!Handles().Read(params[1], Types().timer))
                 return 0;
-            PluginId owner = 0;
-            Handles().OwnerOf(params[1], &owner);
-            Handles().Free(params[1], owner, true);
-            return 0;
-        }
-
-        // KillTimer(Handle timer, bool autoClose=false)
-        cell_t N_KillTimer(IPluginContext* ctx, const cell_t* params)
-        {
-            auto* object = static_cast<TimerObject*>(ReadHandle(ctx, params[1], Types().timer));
-            if (!object)
-                return 0;
-            if (params[0] >= 2 && params[2])
-                object->state->flags |= kTimerDataHndlClose;
-
             PluginId owner = 0;
             Handles().OwnerOf(params[1], &owner);
             Handles().Free(params[1], owner, true);
@@ -842,72 +731,6 @@ namespace sourcepawn
 
         // ---- events -------------------------------------------------------------
 
-        // EventHookMode_Pre = 0, EventHookMode_Post, EventHookMode_PostNoCopy
-        cell_t N_HookEvent(IPluginContext* ctx, const cell_t* params)
-        {
-            ScriptPlugin* plugin = Plugin(ctx);
-            IPluginFunction* fn = ctx->GetFunctionById(params[2]);
-            if (!plugin || !fn)
-                return ctx->ThrowNativeError("Invalid function id (%X)", params[2]);
-
-            const std::string name = Str(ctx, params[1]);
-            const int mode = params[3];
-            const bool post = mode != 0;
-            const bool noCopy = mode == 2;
-
-            const PluginId owner = plugin->Id();
-            GameEventHandler handler([fn, name, noCopy, owner](IGameEvent* event, bool post, bool& dontBroadcast) -> Action
-            {
-                EventFrame frame{ event, &dontBroadcast };
-                const cell_t handle = noCopy ? kInvalidHandle : Handles().Create(Types().event, &frame, owner);
-
-                sp::CallArgs args;
-                args.PushCell(handle);
-                args.PushString(name.c_str());
-                args.PushCell(dontBroadcast ? 1 : 0);
-
-                cell_t res = kPluginContinue;
-                Invoke(fn, args, &res);
-
-                if (handle)
-                    Handles().Free(handle, owner, true);
-
-                // Handled in a pre hook keeps the event from being fired.
-                if (!post && res >= kPluginHandled)
-                    return Action::Supersede;
-                return Action::Ignore;
-            });
-
-            const Source2ModHookId id = events::eventManager.HookGameEvent(plugin->Id(), name.c_str(), std::move(handler), post);
-            if (!id)
-                return ctx->ThrowNativeError("Game event \"%s\" does not exist", name.c_str());
-
-            g_eventHooks[{ plugin->Id(), name, params[2], post }] = id;
-            return 0;
-        }
-
-        // HookEventEx: HookEvent, false instead of an error for an event that does not exist.
-        cell_t N_HookEventEx(IPluginContext* ctx, const cell_t* params)
-        {
-            if (!shared::g_pGameEventManager || !shared::g_pGameEventManager->HasEventDescriptor(Str(ctx, params[1])))
-                return 0;
-            N_HookEvent(ctx, params);
-            return 1;
-        }
-
-        cell_t N_UnhookEvent(IPluginContext* ctx, const cell_t* params)
-        {
-            ScriptPlugin* plugin = Plugin(ctx);
-            const auto key = std::make_tuple(plugin ? plugin->Id() : 0, std::string(Str(ctx, params[1])), static_cast<funcid_t>(params[2]), params[3] != 0);
-            auto it = g_eventHooks.find(key);
-            if (it == g_eventHooks.end())
-                return ctx->ThrowNativeError("Game event \"%s\" has no active hook", Str(ctx, params[1]));
-
-            events::eventManager.Unhook(it->second);
-            g_eventHooks.erase(it);
-            return 0;
-        }
-
         cell_t N_EventGetBool(IPluginContext* ctx, const cell_t* params)
         {
             IGameEvent* ev = EventOf(ctx, params[1]);
@@ -967,20 +790,6 @@ namespace sourcepawn
             if (IGameEvent* ev = EventOf(ctx, params[1]))
                 ctx->StringToLocalUTF8(params[2], params[3], ev->GetName(), nullptr);
             return 0;
-        }
-
-        cell_t N_EventSetBroadcast(IPluginContext* ctx, const cell_t* params)
-        {
-            bool* dontBroadcast = nullptr;
-            if (EventOf(ctx, params[1], &dontBroadcast) && dontBroadcast)
-                *dontBroadcast = params[2] != 0;
-            return 0;
-        }
-
-        cell_t N_EventGetBroadcastDisabled(IPluginContext* ctx, const cell_t* params)
-        {
-            bool* dontBroadcast = nullptr;
-            return EventOf(ctx, params[1], &dontBroadcast) && dontBroadcast && *dontBroadcast;
         }
 
         // ---- Source2ModEvents / IGameEvent / IGameEventManager2 ---------------------
@@ -1114,117 +923,6 @@ namespace sourcepawn
 
         // ---- clients ------------------------------------------------------------
 
-        cell_t N_IsClientConnected(IPluginContext*, const cell_t* params)
-        {
-            return IsConnected(Controller(params[1]));
-        }
-
-        cell_t N_IsClientInGame(IPluginContext*, const cell_t* params)
-        {
-            return IsInGame(Controller(params[1]));
-        }
-
-        cell_t N_IsFakeClient(IPluginContext* ctx, const cell_t* params)
-        {
-            CCSPlayerController* player = CheckClient(ctx, params[1], false);
-            return player && player->IsBot();
-        }
-
-        cell_t N_IsClientAuthorized(IPluginContext* ctx, const cell_t* params)
-        {
-            CCSPlayerController* player = CheckClient(ctx, params[1], false);
-            return player && g_pEngineServer && g_pEngineServer->IsClientFullyAuthenticated(CPlayerSlot(params[1] - 1));
-        }
-
-        cell_t N_GetClientName(IPluginContext* ctx, const cell_t* params)
-        {
-            if (params[1] == 0)
-            {
-                ctx->StringToLocalUTF8(params[2], params[3], "Console", nullptr);
-                return 1;
-            }
-            CCSPlayerController* player = CheckClient(ctx, params[1], false);
-            if (!player)
-                return 0;
-            ctx->StringToLocalUTF8(params[2], params[3], player->m_iszPlayerName(), nullptr);
-            return 1;
-        }
-
-        cell_t N_GetClientUserId(IPluginContext* ctx, const cell_t* params)
-        {
-            return CheckClient(ctx, params[1], false) ? UserIdOf(params[1]) : 0;
-        }
-
-        cell_t N_GetClientOfUserId(IPluginContext*, const cell_t* params)
-        {
-            for (int client = 1; client <= kMaxClients; client++)
-                if (IsConnected(Controller(client)) && UserIdOf(client) == params[1])
-                    return client;
-            return 0;
-        }
-
-        cell_t N_GetSteamAccountID(IPluginContext* ctx, const cell_t* params)
-        {
-            CCSPlayerController* player = CheckClient(ctx, params[1], false);
-            return player ? static_cast<cell_t>(player->m_steamID() & 0xFFFFFFFFu) : 0;
-        }
-
-        cell_t N_GetClientCount(IPluginContext*, const cell_t* params)
-        {
-            const bool inGameOnly = params[1] != 0;
-            cell_t count = 0;
-            for (int client = 1; client <= kMaxClients; client++)
-            {
-                CCSPlayerController* player = Controller(client);
-                if (inGameOnly ? IsInGame(player) : IsConnected(player))
-                    count++;
-            }
-            return count;
-        }
-
-        cell_t N_GetMaxHumanPlayers(IPluginContext*, const cell_t*)
-        {
-            return kMaxClients;
-        }
-
-        cell_t N_PrintToChat(IPluginContext* ctx, const cell_t* params)
-        {
-            CCSPlayerController* player = CheckClient(ctx, params[1], true);
-            std::string msg;
-            if (player && FormatTo(ctx, params, 2, msg))
-                player->PrintToChat(msg.c_str());
-            return 0;
-        }
-
-        cell_t N_PrintToChatAll(IPluginContext* ctx, const cell_t* params)
-        {
-            std::string msg;
-            if (!FormatTo(ctx, params, 1, msg))
-                return 0;
-            for (int client = 1; client <= kMaxClients; client++)
-            {
-                CCSPlayerController* player = Controller(client);
-                if (IsInGame(player) && !player->IsBot())
-                    player->PrintToChat(msg.c_str());
-            }
-            return 0;
-        }
-
-        cell_t N_PrintCenterText(IPluginContext* ctx, const cell_t* params)
-        {
-            CCSPlayerController* player = CheckClient(ctx, params[1], true);
-            std::string msg;
-            if (player && FormatTo(ctx, params, 2, msg))
-                player->PrintToCenter(msg.c_str());
-            return 0;
-        }
-
-        cell_t N_GetGameTime(IPluginContext*, const cell_t*)
-        {
-            CGlobalVars* globals = shared::getGlobalVars();
-            return sp_ftoc(globals ? globals->curtime : 0.0f);
-        }
-
         cell_t N_GetEngineTime(IPluginContext*, const cell_t*)
         {
             const std::chrono::duration<float> elapsed = std::chrono::steady_clock::now() - g_engineStart;
@@ -1309,20 +1007,6 @@ namespace sourcepawn
             return Compare(Str(ctx, params[1]), Str(ctx, params[2]), static_cast<size_t>(std::max(params[3], 0)), params[4] != 0);
         }
 
-        cell_t N_StrContains(IPluginContext* ctx, const cell_t* params)
-        {
-            std::string str = Str(ctx, params[1]);
-            std::string sub = Str(ctx, params[2]);
-            if (params[3] == 0)
-            {
-                auto lower = [](std::string& s) { std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::tolower(c); }); };
-                lower(str);
-                lower(sub);
-            }
-            const size_t pos = str.find(sub);
-            return pos == std::string::npos ? -1 : static_cast<cell_t>(pos);
-        }
-
         cell_t N_IntToString(IPluginContext* ctx, const cell_t* params)
         {
             size_t written = 0;
@@ -1356,34 +1040,21 @@ namespace sourcepawn
             { "IsNullString", N_IsNullString },
             { "IsNullVector", N_IsNullVector },
             // functions.inc / halflife.inc
-            { "ThrowError", N_ThrowError },
-            { "SetFailState", N_SetFailState },
-            { "GetGameTime", N_GetGameTime },
-            { "GetEngineTime", N_GetEngineTime },
+            { "Source2ModPlugins.ThrowError", N_ThrowError },
+            { "Source2ModPlugins.SetFailState", N_SetFailState },
+            { "Source2ModEngine.GetEngineTime", N_GetEngineTime },
             // console.inc / logging.inc
-            { "PrintToServer", N_PrintToServer },
-            { "PrintToConsole", N_PrintToConsole },
-            { "ServerCommand", N_ServerCommand },
-            { "LogMessage", N_LogMessage },
-            { "LogError", N_LogError },
-            { "RegConsoleCmd", N_RegConsoleCmd },
-            { "RegServerCmd", N_RegServerCmd },
-            { "RegAdminCmd", N_RegAdminCmd },
-            { "GetCmdArgs", N_GetCmdArgs },
-            { "GetCmdArg", N_GetCmdArg },
-            { "GetCmdArgString", N_GetCmdArgString },
-            { "ReplyToCommand", N_ReplyToCommand },
+            { "Source2ModApi.ConPrintf", N_PrintToServer },
+            { "Source2ModEngine.ServerCommand", N_ServerCommand },
+            { "Source2ModApi.ConPrint", N_ConPrint },
+            { "Source2ModApi.Log", N_LogMessage },
+            { "Source2ModApi.LogError", N_LogError },
             // timers.inc / handles.inc
-            { "CreateTimer", N_CreateTimer },
-            { "KillTimer", N_KillTimer },
-            { "CloseHandle", N_CloseHandle },
-            { "CloneHandle", N_CloneHandle },
             { "Handle.~Handle", N_CloseHandle },
             { "Handle.Close", N_CloseHandle },
             { "Handle.Clone", N_CloneHandle },
-            { "GetMyHandle", N_GetMyHandle },
-            { "GetPluginFilename", N_GetPluginFilename },
-            { "RequestFrame", N_RequestFrame },
+            { "Source2ModPlugins.GetMyHandle", N_GetMyHandle },
+            { "Source2ModPlugins.GetFilename", N_GetPluginFilename },
             // source2mod/scheduler.inc
             { "Source2ModScheduler.NextFrame", N_S2MNextFrame },
             { "Source2ModScheduler.AddTimer", N_S2MAddTimer },
@@ -1400,56 +1071,27 @@ namespace sourcepawn
             { "IGameEventManager2.FreeEvent", N_ManagerFreeEvent },
             { "CBasePlayerController.FireEventToClient", N_ControllerFireEventToClient },
             // events.inc
-            { "HookEvent", N_HookEvent },
-            { "HookEventEx", N_HookEventEx },
-            { "UnhookEvent", N_UnhookEvent },
-            { "GetEventBool", N_EventGetBool },
-            { "GetEventInt", N_EventGetInt },
-            { "GetEventFloat", N_EventGetFloat },
-            { "GetEventString", N_EventGetString },
-            { "SetEventBool", N_EventSetBool },
-            { "SetEventInt", N_EventSetInt },
-            { "SetEventFloat", N_EventSetFloat },
-            { "SetEventString", N_EventSetString },
-            { "GetEventName", N_EventGetName },
-            { "SetEventBroadcast", N_EventSetBroadcast },
-            { "Event.GetBool", N_EventGetBool },
-            { "Event.GetInt", N_EventGetInt },
-            { "Event.GetFloat", N_EventGetFloat },
-            { "Event.GetString", N_EventGetString },
-            { "Event.SetBool", N_EventSetBool },
-            { "Event.SetInt", N_EventSetInt },
-            { "Event.SetFloat", N_EventSetFloat },
-            { "Event.SetString", N_EventSetString },
-            { "Event.GetName", N_EventGetName },
-            { "Event.BroadcastDisabled.set", N_EventSetBroadcast },
-            { "Event.BroadcastDisabled.get", N_EventGetBroadcastDisabled },
+            { "IGameEvent.GetBool", N_EventGetBool },
+            { "IGameEvent.GetInt", N_EventGetInt },
+            { "IGameEvent.GetFloat", N_EventGetFloat },
+            { "IGameEvent.GetString", N_EventGetString },
+            { "IGameEvent.SetBool", N_EventSetBool },
+            { "IGameEvent.SetInt", N_EventSetInt },
+            { "IGameEvent.SetFloat", N_EventSetFloat },
+            { "IGameEvent.SetString", N_EventSetString },
+            { "IGameEvent.GetName", N_EventGetName },
             // clients.inc / halflife.inc
-            { "IsClientConnected", N_IsClientConnected },
-            { "IsClientInGame", N_IsClientInGame },
-            { "IsFakeClient", N_IsFakeClient },
-            { "IsClientAuthorized", N_IsClientAuthorized },
-            { "GetClientName", N_GetClientName },
-            { "GetClientUserId", N_GetClientUserId },
-            { "GetClientOfUserId", N_GetClientOfUserId },
-            { "GetSteamAccountID", N_GetSteamAccountID },
-            { "GetClientCount", N_GetClientCount },
-            { "GetMaxHumanPlayers", N_GetMaxHumanPlayers },
-            { "PrintToChat", N_PrintToChat },
-            { "PrintToChatAll", N_PrintToChatAll },
-            { "PrintCenterText", N_PrintCenterText },
             // string.inc
-            { "Format", N_Format },
-            { "VFormat", N_VFormat },
-            { "strlen", N_strlen },
-            { "strcopy", N_strcopy },
-            { "strcmp", N_strcmp },
-            { "strncmp", N_strncmp },
-            { "StrContains", N_StrContains },
-            { "IntToString", N_IntToString },
-            { "StringToInt", N_StringToInt },
-            { "FloatToString", N_FloatToString },
-            { "StringToFloat", N_StringToFloat },
+            { "Source2ModApi.Format", N_Format },
+            { "Source2ModApi.FormatArgs", N_VFormat },
+            { "Source2ModUtils.Length", N_strlen },
+            { "Source2ModUtils.Copy", N_strcopy },
+            { "Source2ModUtils.Compare", N_strcmp },
+            { "Source2ModUtils.CompareN", N_strncmp },
+            { "Source2ModUtils.IntToString", N_IntToString },
+            { "Source2ModUtils.StringToInt", N_StringToInt },
+            { "Source2ModUtils.FloatToString", N_FloatToString },
+            { "Source2ModUtils.StringToFloat", N_StringToFloat },
             { nullptr, nullptr },
         };
     }

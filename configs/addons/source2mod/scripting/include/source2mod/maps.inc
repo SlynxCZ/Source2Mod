@@ -27,7 +27,21 @@
 #endif
 #define _source2mod_maps_included
 
-#include <source2mod>
+#include <source2mod/core>
+#include <source2mod/adt>
+
+/**
+ * What FindMap found. SourceMod's FindMapResult (halflife.inc, (C)2004-2014
+ * AlliedModders LLC, GPLv3 with the AlliedModders exception).
+ */
+enum FindMapResult
+{
+	FindMap_Found,              /**< A direct match for this name was found */
+	FindMap_NotFound,           /**< No match for this map name could be found */
+	FindMap_FuzzyMatch,         /**< A fuzzy match was found (de_dus -> de_dust2) */
+	FindMap_NonCanonical,       /**< A non-canonical match was found (workshop/1234 -> the Workshop map's full name) */
+	FindMap_PossiblyAvailable   /**< No match available now, but it may be possible to load it */
+};
 
 methodmap Source2ModMaps
 {

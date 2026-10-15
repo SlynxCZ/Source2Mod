@@ -139,102 +139,6 @@ namespace sourcepawn
 
         // ---- SourceMod clientprefs.inc --------------------------------------------
 
-        // native Cookie RegClientCookie(const char[] name, const char[] description, CookieAccess access);
-        cell_t N_RegClientCookie(IPluginContext* ctx, const cell_t* params)
-        {
-            const char* name = LocalString(ctx, params[1]);
-            if (!*name)
-                return ctx->ThrowNativeError("Cannot create preference cookie with no name");
-            const Source2ModCookieId id = Cookies().RegisterCookie(name, LocalString(ctx, params[2]), AccessOf(params[3]));
-            if (!id)
-                return ctx->ThrowNativeError("Cookie name \"%s\" is longer than %d bytes", name, SOURCE2MOD_COOKIE_MAX_NAME_LENGTH);
-            return NewCookieHandle(ctx, id);
-        }
-
-        // native Cookie FindClientCookie(const char[] name);
-        cell_t N_FindClientCookie(IPluginContext* ctx, const cell_t* params)
-        {
-            return NewCookieHandle(ctx, Cookies().FindCookie(LocalString(ctx, params[1])));
-        }
-
-        // native void SetClientCookie(int client, Handle cookie, const char[] value);
-        cell_t N_SetClientCookie(IPluginContext* ctx, const cell_t* params)
-        {
-            CPlayerSlot slot(0);
-            if (SlotOf(ctx, params[1], slot))
-                SetValue(ctx, slot, CookieOf(ctx, params[2]), LocalString(ctx, params[3]));
-            return 0;
-        }
-
-        // native void GetClientCookie(int client, Handle cookie, char[] buffer, int maxlen);
-        cell_t N_GetClientCookie(IPluginContext* ctx, const cell_t* params)
-        {
-            CPlayerSlot slot(0);
-            if (SlotOf(ctx, params[1], slot))
-                GetValue(ctx, slot, CookieOf(ctx, params[2]), params[3], params[4]);
-            return 0;
-        }
-
-        // native void SetAuthIdCookie(const char[] authID, Handle cookie, const char[] value);
-        cell_t N_SetAuthIdCookie(IPluginContext* ctx, const cell_t* params)
-        {
-            SetByAuthId(ctx, LocalString(ctx, params[1]), CookieOf(ctx, params[2]), LocalString(ctx, params[3]));
-            return 0;
-        }
-
-        // native bool AreClientCookiesCached(int client);
-        cell_t N_AreClientCookiesCached(IPluginContext* ctx, const cell_t* params)
-        {
-            CPlayerSlot slot(0);
-            return SlotOf(ctx, params[1], slot) && Cookies().AreCookiesCached(slot);
-        }
-
-        // native CookieAccess GetCookieAccess(Handle cookie);
-        cell_t N_GetCookieAccess(IPluginContext* ctx, const cell_t* params)
-        {
-            const Source2ModCookieId id = CookieOf(ctx, params[1]);
-            return id ? Cookies().GetCookieAccess(id) : 0;
-        }
-
-        // native int GetClientCookieTime(int client, Handle cookie);
-        cell_t N_GetClientCookieTime(IPluginContext* ctx, const cell_t* params)
-        {
-            CPlayerSlot slot(0);
-            return SlotOf(ctx, params[1], slot) ? ClientTime(slot, CookieOf(ctx, params[2])) : 0;
-        }
-
-        // Cookie.Set(int client, const char[] value)
-        cell_t N_CookieSet(IPluginContext* ctx, const cell_t* params)
-        {
-            CPlayerSlot slot(0);
-            if (SlotOf(ctx, params[2], slot))
-                SetValue(ctx, slot, CookieOf(ctx, params[1]), LocalString(ctx, params[3]));
-            return 0;
-        }
-
-        // Cookie.Get(int client, char[] buffer, int maxlen)
-        cell_t N_CookieGet(IPluginContext* ctx, const cell_t* params)
-        {
-            CPlayerSlot slot(0);
-            if (SlotOf(ctx, params[2], slot))
-                GetValue(ctx, slot, CookieOf(ctx, params[1]), params[3], params[4]);
-            return 0;
-        }
-
-        // Cookie.SetByAuthId(const char[] authID, const char[] value)
-        cell_t N_CookieSetByAuthId(IPluginContext* ctx, const cell_t* params)
-        {
-            SetByAuthId(ctx, LocalString(ctx, params[2]), CookieOf(ctx, params[1]), LocalString(ctx, params[3]));
-            return 0;
-        }
-
-        // Cookie.GetClientTime(int client)
-        cell_t N_CookieGetClientTime(IPluginContext* ctx, const cell_t* params)
-        {
-            CPlayerSlot slot(0);
-            return SlotOf(ctx, params[2], slot) ? ClientTime(slot, CookieOf(ctx, params[1])) : 0;
-        }
-
         // ---- Source2ModCookies ----------------------------------------------------
 
         cell_t N_S2MIsConnected(IPluginContext*, const cell_t*)
@@ -313,21 +217,6 @@ namespace sourcepawn
         }
 
         const sp_nativeinfo_t g_cookieNatives[] = {
-            { "RegClientCookie", N_RegClientCookie },
-            { "FindClientCookie", N_FindClientCookie },
-            { "SetClientCookie", N_SetClientCookie },
-            { "GetClientCookie", N_GetClientCookie },
-            { "SetAuthIdCookie", N_SetAuthIdCookie },
-            { "AreClientCookiesCached", N_AreClientCookiesCached },
-            { "GetCookieAccess", N_GetCookieAccess },
-            { "GetClientCookieTime", N_GetClientCookieTime },
-            { "Cookie.Cookie", N_RegClientCookie },
-            { "Cookie.Find", N_FindClientCookie },
-            { "Cookie.Set", N_CookieSet },
-            { "Cookie.Get", N_CookieGet },
-            { "Cookie.SetByAuthId", N_CookieSetByAuthId },
-            { "Cookie.GetClientTime", N_CookieGetClientTime },
-            { "Cookie.AccessLevel.get", N_GetCookieAccess },
 
             { "Source2ModCookies.IsConnected", N_S2MIsConnected },
             { "Source2ModCookies.Register", N_S2MRegister },

@@ -4,15 +4,14 @@
  * Source2Mod
  * =============================================================================
  *
- * SourceMod's float.inc and vector.inc natives, and GetRandomFloat/Int from
- * halflife.inc, and the float operator natives.
+ * Source2ModMath (source2mod/math.inc: math, random numbers, vectors) and the
+ * float operator natives of source2mod/float.inc (names spcomp emits).
  *
- * The VM maps the operator natives (float(), FloatAdd/Sub/Mul/Div,
- * FloatCompare, __FLOAT_GT__ and friends, __float_*) to opcodes when the
- * native is bound normally, and its x64 JIT does not implement those opcodes
- * (visitFLOAT* return false): a function calling one failed to compile with
- * "Unknown error code 0". Bound ephemeral, they stay native calls. FloatAbs
- * and RoundTo* do have x64 opcodes and are still inlined.
+ * The VM maps the operator natives (float(), __FLOAT_GT__ and friends,
+ * __float_*) to opcodes when the native is bound normally, and its x64 JIT
+ * does not implement those opcodes (visitFLOAT* return false): a function
+ * calling one failed to compile with "Unknown error code 0". Bound ephemeral,
+ * they stay native calls.
  *
  * Angles are Source's: pitch, yaw, roll in degrees, x forward, y left, z up.
  *
@@ -60,11 +59,6 @@ namespace sourcepawn
         cell_t N_RoundToFloor(IPluginContext*, const cell_t* params) { return static_cast<cell_t>(std::floor(F(params, 1))); }
         cell_t N_RoundToNearest(IPluginContext*, const cell_t* params) { return static_cast<cell_t>(std::round(F(params, 1))); }
 
-        cell_t N_FloatCompare(IPluginContext*, const cell_t* params)
-        {
-            const float a = F(params, 1), b = F(params, 2);
-            return a > b ? 1 : (a < b ? -1 : 0);
-        }
 
         cell_t N_SquareRoot(IPluginContext*, const cell_t* params) { return sp_ftoc(std::sqrt(F(params, 1))); }
         cell_t N_Pow(IPluginContext*, const cell_t* params) { return sp_ftoc(std::pow(F(params, 1), F(params, 2))); }
@@ -109,16 +103,7 @@ namespace sourcepawn
             return rng;
         }
 
-        cell_t N_GetURandomInt(IPluginContext*, const cell_t*)
-        {
-            return static_cast<cell_t>(Rng()() & 0x7FFFFFFF);
-        }
 
-        // [0, 1)
-        cell_t N_GetURandomFloat(IPluginContext*, const cell_t*)
-        {
-            return sp_ftoc(std::generate_canonical<float, 24>(Rng()) * 0.99999994f);
-        }
 
         cell_t N_SetURandomSeed(IPluginContext* ctx, const cell_t* params)
         {
@@ -294,15 +279,10 @@ namespace sourcepawn
         }
 
         const sp_nativeinfo_t g_mathNatives[] = {
-            // Operators: the VM turns these into opcodes the x64 JIT does not
-            // implement, so they are bound ephemeral (IsEphemeralMathNative)
-            // and stay native calls.
+            // Operators (source2mod/float.inc, names spcomp emits): the VM
+            // turns these into opcodes the x64 JIT does not implement, so they
+            // are bound ephemeral (IsEphemeralMathNative) and stay native calls.
             { "float", N_Float },
-            { "FloatMul", N_FloatMul },
-            { "FloatDiv", N_FloatDiv },
-            { "FloatAdd", N_FloatAdd },
-            { "FloatSub", N_FloatSub },
-            { "FloatCompare", N_FloatCompare },
             { "__FLOAT_GT__", N_FloatGt },
             { "__FLOAT_GE__", N_FloatGe },
             { "__FLOAT_LT__", N_FloatLt },
@@ -323,45 +303,43 @@ namespace sourcepawn
             { "__float_eq", N_FloatEq },
             { "__float_ne", N_FloatNe },
             { "__float_not", N_FloatNot },
-            // The JIT does inline these (FABS, RND_TO_*): bound normally.
-            { "FloatAbs", N_FloatAbs },
-            { "RoundToZero", N_RoundToZero },
-            { "RoundToCeil", N_RoundToCeil },
-            { "RoundToFloor", N_RoundToFloor },
-            { "RoundToNearest", N_RoundToNearest },
-
-            { "FloatMod", N_FloatMod },
-            { "FloatFraction", N_FloatFraction },
-            { "SquareRoot", N_SquareRoot },
-            { "Pow", N_Pow },
-            { "Exponential", N_Exponential },
-            { "Logarithm", N_Logarithm },
-            { "Sine", N_Sine },
-            { "Cosine", N_Cosine },
-            { "Tangent", N_Tangent },
-            { "ArcTangent", N_ArcTangent },
-            { "ArcCosine", N_ArcCosine },
-            { "ArcSine", N_ArcSine },
-            { "ArcTangent2", N_ArcTangent2 },
             { "__FLOAT_MUL__", N_FloatMul },
             { "__FLOAT_DIV__", N_FloatDiv },
             { "__FLOAT_ADD__", N_FloatAdd },
             { "__FLOAT_SUB__", N_FloatSub },
             { "__FLOAT_MOD__", N_FloatMod },
-            { "GetURandomInt", N_GetURandomInt },
-            { "GetURandomFloat", N_GetURandomFloat },
-            { "SetURandomSeed", N_SetURandomSeed },
-            { "GetRandomFloat", N_GetRandomFloat },
-            { "GetRandomInt", N_GetRandomInt },
 
-            { "GetVectorLength", N_GetVectorLength },
-            { "GetVectorDistance", N_GetVectorDistance },
-            { "GetVectorDotProduct", N_GetVectorDotProduct },
-            { "GetVectorCrossProduct", N_GetVectorCrossProduct },
-            { "NormalizeVector", N_NormalizeVector },
-            { "GetAngleVectors", N_GetAngleVectors },
-            { "GetVectorAngles", N_GetVectorAngles },
-            { "GetVectorVectors", N_GetVectorVectors },
+            // Source2ModMath (source2mod/math.inc).
+            { "Source2ModMath.Sqrt", N_SquareRoot },
+            { "Source2ModMath.Pow", N_Pow },
+            { "Source2ModMath.Exp", N_Exponential },
+            { "Source2ModMath.Log", N_Logarithm },
+            { "Source2ModMath.Sin", N_Sine },
+            { "Source2ModMath.Cos", N_Cosine },
+            { "Source2ModMath.Tan", N_Tangent },
+            { "Source2ModMath.Asin", N_ArcSine },
+            { "Source2ModMath.Acos", N_ArcCosine },
+            { "Source2ModMath.Atan", N_ArcTangent },
+            { "Source2ModMath.Atan2", N_ArcTangent2 },
+            { "Source2ModMath.Fabs", N_FloatAbs },
+            { "Source2ModMath.Fraction", N_FloatFraction },
+            { "Source2ModMath.Float2Int", N_RoundToZero },
+            { "Source2ModMath.Floor2Int", N_RoundToFloor },
+            { "Source2ModMath.Ceil2Int", N_RoundToCeil },
+            { "Source2ModMath.RoundFloatToInt", N_RoundToNearest },
+
+            { "Source2ModMath.RandomInt", N_GetRandomInt },
+            { "Source2ModMath.RandomFloat", N_GetRandomFloat },
+            { "Source2ModMath.RandomSeed", N_SetURandomSeed },
+
+            { "Source2ModMath.VectorLength", N_GetVectorLength },
+            { "Source2ModMath.VectorDistance", N_GetVectorDistance },
+            { "Source2ModMath.DotProduct", N_GetVectorDotProduct },
+            { "Source2ModMath.CrossProduct", N_GetVectorCrossProduct },
+            { "Source2ModMath.VectorNormalize", N_NormalizeVector },
+            { "Source2ModMath.AngleVectors", N_GetAngleVectors },
+            { "Source2ModMath.VectorAngles", N_GetVectorAngles },
+            { "Source2ModMath.VectorVectors", N_GetVectorVectors },
             { nullptr, nullptr },
         };
     }
@@ -374,7 +352,7 @@ namespace sourcepawn
     bool IsEphemeralMathNative(const char* name)
     {
         static const char* const kNames[] = {
-            "float", "FloatMul", "FloatDiv", "FloatAdd", "FloatSub", "FloatCompare",
+            "float",
             "__FLOAT_GT__", "__FLOAT_GE__", "__FLOAT_LT__", "__FLOAT_LE__", "__FLOAT_EQ__", "__FLOAT_NE__", "__FLOAT_NOT__",
             "__float_ctor", "__float_mul", "__float_div", "__float_add", "__float_sub", "__float_mod",
             "__float_gt", "__float_ge", "__float_lt", "__float_le", "__float_eq", "__float_ne", "__float_not",

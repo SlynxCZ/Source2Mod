@@ -13,7 +13,7 @@
 
 #include <source2mod/types>
 #include <source2mod/schema>
-#include <adt_array>
+#include <source2mod/adt>
 
 // Bit numbers of the contents layers (const.h LAYER_INDEX_CONTENTS_*).
 #define CONTENTS_SOLID_BIT                      0

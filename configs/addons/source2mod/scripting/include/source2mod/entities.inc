@@ -10,7 +10,7 @@
 
 #include <source2mod/types>
 #include <source2mod/schema>
-#include <adt_array>
+#include <source2mod/adt>
 
 /** IEntityListener's callbacks, one function each. */
 typedef Source2ModEntityCallback = function void (CEntityInstance entity);

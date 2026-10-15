@@ -2,8 +2,9 @@
  * Source2Mod SourcePawn API: game events (ISource2ModEvents, IGameEvent,
  * IGameEventManager2).
  *
- * IGameEvent is the core Event handle with the CS2 player accessors on
- * top; the Event getters and setters work on it.
+ * The basic getters and setters (GetBool ... GetName) are SourceMod's Event
+ * methods (events.inc, (C)2004-2014 AlliedModders LLC, GPLv3 with the
+ * AlliedModders exception), now on IGameEvent itself.
  */
 
 #if defined _source2mod_events_included
@@ -11,11 +12,33 @@
 #endif
 #define _source2mod_events_included
 
-#include <events>
+#include <source2mod/core>
 #include <source2mod/types>
 
-methodmap IGameEvent < Event
+/**
+ * A game event: one being dispatched (Source2ModEvents hooks; valid inside
+ * the hook) or one the plugin made (IGameEventManager2.CreateEvent, the
+ * plugin's until it is fired or freed).
+ */
+methodmap IGameEvent < Handle
 {
+	/** A bool key; defValue when it is unset. */
+	public native bool GetBool(const char[] key, bool defValue = false);
+	public native void SetBool(const char[] key, bool value);
+
+	/** An integer key (byte, short and long are all integers); defValue when unset. */
+	public native int GetInt(const char[] key, int defValue = 0);
+	public native void SetInt(const char[] key, int value);
+
+	public native float GetFloat(const char[] key, float defValue = 0.0);
+	public native void SetFloat(const char[] key, float value);
+
+	public native void GetString(const char[] key, char[] value, int maxlength, const char[] defvalue = "");
+	public native void SetString(const char[] key, const char[] value);
+
+	/** The event's name ("player_death"). */
+	public native void GetName(char[] name, int maxlength);
+
 	/** A player field (e.g. "userid") as the player's slot. */
 	public native CPlayerSlot GetPlayerSlot(const char[] key);
 

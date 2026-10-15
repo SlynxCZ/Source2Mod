@@ -88,63 +88,6 @@ namespace sourcepawn
             return std::floor(v) == v;
         }
 
-        // CreateConVar(name, defaultValue, description="", flags=0, hasMin=false,
-        //              min=0.0, hasMax=false, max=0.0)
-        cell_t N_CreateConVar(IPluginContext* ctx, const cell_t* params)
-        {
-            const std::string name = LocalString(ctx, params[1]);
-            const std::string def = LocalString(ctx, params[2]);
-            const std::string desc = params[0] >= 3 ? LocalString(ctx, params[3]) : "";
-            // FCVAR_RELEASE as well, as the core's own ConVars have: a ConVar
-            // with none of the "released" flags is registered development-only
-            // (SanitiseConVarFlags) and hidden from the console.
-            const uint64 flags = (params[0] >= 4 ? static_cast<uint32_t>(params[4]) : 0) | FCVAR_RELEASE;
-            const bool hasMin = params[0] >= 5 && params[5];
-            const float min = params[0] >= 6 ? sp_ctof(params[6]) : 0.0f;
-            const bool hasMax = params[0] >= 7 && params[7];
-            const float max = params[0] >= 8 ? sp_ctof(params[8]) : 0.0f;
-
-            if (name.empty())
-                return ctx->ThrowNativeError("Convar with blank name is not permitted");
-
-            if (ScriptPlugin* plugin = ScriptPlugin::FromContext(ctx))
-                plugin->NoteConVar({ name, def, desc, hasMin, hasMax, min, max });
-
-            // Already there -- the plugin's own from an earlier load, or the
-            // game's: SourceMod hands that one back.
-            uint16 index = CV().GetConvarAccessIndexByName(name.c_str());
-            if (index != SOURCE2MOD_INVALID_CONVAR_INDEX)
-                return ConVarHandle(index);
-
-            const bool whole = IsWholeNumber(def.c_str()) && (!hasMin || IsWhole(min)) && (!hasMax || IsWhole(max));
-            if (whole)
-            {
-                int32 d = static_cast<int32>(strtol(def.c_str(), nullptr, 10));
-                const int32 lo = static_cast<int32>(min), hi = static_cast<int32>(max);
-                index = CV().CreateConVar(name.c_str(), EConVarType_Int32, desc.c_str(), flags, hasMin, hasMax, &d, &lo, &hi);
-            }
-            else if (IsNumber(def.c_str()))
-            {
-                float d = strtof(def.c_str(), nullptr);
-                index = CV().CreateConVar(name.c_str(), EConVarType_Float32, desc.c_str(), flags, hasMin, hasMax, &d, &min, &max);
-            }
-            else
-            {
-                index = CV().CreateConVar(name.c_str(), EConVarType_String, desc.c_str(), flags, false, false,
-                                                             const_cast<char*>(def.c_str()), nullptr, nullptr);
-            }
-
-            if (index == SOURCE2MOD_INVALID_CONVAR_INDEX)
-                return ctx->ThrowNativeError("Could not create ConVar \"%s\"", name.c_str());
-            return ConVarHandle(index);
-        }
-
-        cell_t N_FindConVar(IPluginContext* ctx, const cell_t* params)
-        {
-            const uint16 index = CV().GetConvarAccessIndexByName(LocalString(ctx, params[1]));
-            return index == SOURCE2MOD_INVALID_CONVAR_INDEX ? kInvalidHandle : ConVarHandle(index);
-        }
-
         cell_t N_GetBool(IPluginContext* ctx, const cell_t* params)
         {
             CONVAR_OR_RETURN(idx, params[1], 0);
@@ -311,17 +254,6 @@ namespace sourcepawn
             return 1;
         }
 
-        // CS2 fixes a ConVar's bounds when it is registered; there is nothing
-        // to change them through.
-        cell_t N_SetBounds(IPluginContext* ctx, const cell_t* params)
-        {
-            CONVAR_OR_RETURN(idx, params[1], 0);
-            FP_WARN("[{}] SetBounds on {} ignored: CS2 ConVar bounds are fixed at creation",
-                    ScriptPlugin::FromContext(ctx) ? ScriptPlugin::FromContext(ctx)->FileName() : "?",
-                    CV().GetName(idx));
-            return 0;
-        }
-
         cell_t N_GetName(IPluginContext* ctx, const cell_t* params)
         {
             CONVAR_OR_RETURN(idx, params[1], 0);
@@ -334,17 +266,6 @@ namespace sourcepawn
             CONVAR_OR_RETURN(idx, params[1], 0);
             const char* help = CV().GetHelpText(idx);
             ctx->StringToLocalUTF8(params[2], params[3], help ? help : "", nullptr);
-            return 0;
-        }
-
-        cell_t N_GetPlugin(IPluginContext*, const cell_t*)
-        {
-            return kInvalidHandle;
-        }
-
-        // ReplicateToClient / SendConVarValue: no per-client replication yet.
-        cell_t N_ReplicateToClient(IPluginContext*, const cell_t*)
-        {
             return 0;
         }
 
@@ -395,12 +316,6 @@ namespace sourcepawn
         cell_t N_AddChangeHook(IPluginContext* ctx, const cell_t* params) { return HookChange(ctx, params[1], params[2]); }
         cell_t N_RemoveChangeHook(IPluginContext* ctx, const cell_t* params) { return UnhookChange(ctx, params[1], params[2]); }
 
-        // SendConVarValue(int client, Handle convar, const char[] value)
-        cell_t N_SendConVarValue(IPluginContext*, const cell_t*)
-        {
-            return 0;
-        }
-
         // AutoExecConfig(bool autoCreate=true, const char[] name="", const char[] folder="source2mod")
         cell_t N_AutoExecConfig(IPluginContext* ctx, const cell_t* params)
         {
@@ -416,9 +331,7 @@ namespace sourcepawn
         }
 
         const sp_nativeinfo_t g_conVarNatives[] = {
-            { "CreateConVar", N_CreateConVar },
-            { "FindConVar", N_FindConVar },
-            { "AutoExecConfig", N_AutoExecConfig },
+            { "Source2ModConVars.AutoExecConfig", N_AutoExecConfig },
             { "ConVar.BoolValue.get", N_GetBool },
             { "ConVar.BoolValue.set", N_SetBool },
             { "ConVar.IntValue.get", N_GetInt },
@@ -427,7 +340,6 @@ namespace sourcepawn
             { "ConVar.FloatValue.set", N_SetFloat },
             { "ConVar.Flags.get", N_GetFlags },
             { "ConVar.Flags.set", N_SetFlags },
-            { "ConVar.Plugin.get", N_GetPlugin },
             { "ConVar.SetBool", N_SetBool },
             { "ConVar.SetInt", N_SetInt },
             { "ConVar.SetFloat", N_SetFloat },
@@ -436,30 +348,10 @@ namespace sourcepawn
             { "ConVar.RestoreDefault", N_RestoreDefault },
             { "ConVar.GetDefault", N_GetDefault },
             { "ConVar.GetBounds", N_GetBounds },
-            { "ConVar.SetBounds", N_SetBounds },
             { "ConVar.GetName", N_GetName },
             { "ConVar.GetDescription", N_GetDescription },
-            { "ConVar.ReplicateToClient", N_ReplicateToClient },
             { "ConVar.AddChangeHook", N_AddChangeHook },
             { "ConVar.RemoveChangeHook", N_RemoveChangeHook },
-            { "HookConVarChange", N_AddChangeHook },
-            { "UnhookConVarChange", N_RemoveChangeHook },
-            { "GetConVarBool", N_GetBool },
-            { "SetConVarBool", N_SetBool },
-            { "GetConVarInt", N_GetInt },
-            { "SetConVarInt", N_SetInt },
-            { "GetConVarFloat", N_GetFloat },
-            { "SetConVarFloat", N_SetFloat },
-            { "GetConVarString", N_GetString },
-            { "SetConVarString", N_SetString },
-            { "ResetConVar", N_RestoreDefault },
-            { "GetConVarDefault", N_GetDefault },
-            { "GetConVarFlags", N_GetFlags },
-            { "SetConVarFlags", N_SetFlags },
-            { "GetConVarBounds", N_GetBounds },
-            { "SetConVarBounds", N_SetBounds },
-            { "GetConVarName", N_GetName },
-            { "SendConVarValue", N_SendConVarValue },
             { nullptr, nullptr },
         };
     }

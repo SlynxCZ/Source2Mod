@@ -626,38 +626,6 @@ namespace sourcepawn
             return stack ? static_cast<cell_t>(stack->blocksize) : 0;
         }
 
-        // PopStackCell(stack, &value, block=0, asChar=false): false when empty.
-        cell_t N_PopStackCell(IPluginContext* ctx, const cell_t* params)
-        {
-            CellArray* stack = StackOf(ctx, params[1]);
-            if (!stack || stack->size() == 0)
-                return 0;
-            cell_t out = 0;
-            if (!ReadBlock(ctx, stack, stack->at(stack->size() - 1), params[0] >= 3 ? params[3] : 0, params[0] >= 4 && params[4], out))
-                return 0;
-            cell_t* addr;
-            ctx->LocalToPhysAddr(params[2], &addr);
-            *addr = out;
-            stack->resize(stack->size() - 1);
-            return 1;
-        }
-
-        cell_t N_PopStackString(IPluginContext* ctx, const cell_t* params)
-        {
-            CellArray* stack = StackOf(ctx, params[1]);
-            if (!stack || stack->size() == 0)
-                return 0;
-            return StackString(ctx, params, true);
-        }
-
-        cell_t N_PopStackArray(IPluginContext* ctx, const cell_t* params)
-        {
-            CellArray* stack = StackOf(ctx, params[1]);
-            if (!stack || stack->size() == 0)
-                return 0;
-            return StackArray(ctx, params, true);
-        }
-
         // ---- StringMap ----------------------------------------------------------
 
         struct MapEntry
@@ -1159,29 +1127,7 @@ namespace sourcepawn
             { "ArrayList.SortCustom", N_ArraySortCustom },
             { "ArrayList.Length.get", N_ArrayLength },
             { "ArrayList.BlockSize.get", N_ArrayBlockSize },
-            { "CreateArray", N_ArrayList },
-            { "ClearArray", N_ArrayClear },
-            { "CloneArray", N_ArrayClone },
-            { "ResizeArray", N_ArrayResize },
-            { "GetArraySize", N_ArrayLength },
-            { "PushArrayCell", N_ArrayPush },
-            { "PushArrayString", N_ArrayPushString },
-            { "PushArrayArray", N_ArrayPushArray },
-            { "GetArrayCell", N_ArrayGet },
-            { "GetArrayString", N_ArrayGetString },
-            { "GetArrayArray", N_ArrayGetArray },
-            { "SetArrayCell", N_ArraySet },
-            { "SetArrayString", N_ArraySetString },
-            { "SetArrayArray", N_ArraySetArray },
-            { "ShiftArrayUp", N_ArrayShiftUp },
-            { "RemoveFromArray", N_ArrayErase },
-            { "SwapArrayItems", N_ArraySwapAt },
-            { "FindStringInArray", N_ArrayFindString },
-            { "FindValueInArray", N_ArrayFindValue },
-            { "GetArrayBlockSize", N_ArrayBlockSize },
             // sorting.inc
-            { "SortADTArray", N_ArraySort },
-            { "SortADTArrayCustom", N_ArraySortCustom },
             // adt_stack.inc
             { "ArrayStack.ArrayStack", N_ArrayStack },
             { "ArrayStack.Clear", N_StackClear },
@@ -1198,15 +1144,6 @@ namespace sourcepawn
             { "ArrayStack.Empty.get", N_StackEmpty },
             { "ArrayStack.Length.get", N_StackLength },
             { "ArrayStack.BlockSize.get", N_StackBlockSize },
-            { "CreateStack", N_ArrayStack },
-            { "PushStackCell", N_StackPush },
-            { "PushStackString", N_StackPushString },
-            { "PushStackArray", N_StackPushArray },
-            { "PopStackCell", N_PopStackCell },
-            { "PopStackString", N_PopStackString },
-            { "PopStackArray", N_PopStackArray },
-            { "IsStackEmpty", N_StackEmpty },
-            { "GetStackBlockSize", N_StackBlockSize },
             // adt_trie.inc
             { "StringMap.StringMap", N_StringMap },
             { "StringMap.Clone", N_MapClone },
@@ -1224,20 +1161,6 @@ namespace sourcepawn
             { "StringMapSnapshot.Length.get", N_SnapshotLength },
             { "StringMapSnapshot.KeyBufferSize", N_SnapshotKeyBufferSize },
             { "StringMapSnapshot.GetKey", N_SnapshotGetKey },
-            { "CreateTrie", N_StringMap },
-            { "SetTrieValue", N_MapSetValue },
-            { "SetTrieArray", N_MapSetArray },
-            { "SetTrieString", N_MapSetString },
-            { "GetTrieValue", N_MapGetValue },
-            { "GetTrieArray", N_MapGetArray },
-            { "GetTrieString", N_MapGetString },
-            { "RemoveFromTrie", N_MapRemove },
-            { "ClearTrie", N_MapClear },
-            { "GetTrieSize", N_MapSize },
-            { "CreateTrieSnapshot", N_MapSnapshot },
-            { "TrieSnapshotLength", N_SnapshotLength },
-            { "TrieSnapshotKeyBufferSize", N_SnapshotKeyBufferSize },
-            { "GetTrieSnapshotKey", N_SnapshotGetKey },
             // datapack.inc
             { "DataPack.DataPack", N_DataPack },
             { "DataPack.WriteCell", N_PackWriteCell },
@@ -1256,19 +1179,6 @@ namespace sourcepawn
             { "DataPack.IsReadable", N_PackIsReadable },
             { "DataPack.Position.get", N_PackGetPosition },
             { "DataPack.Position.set", N_PackSetPosition },
-            { "CreateDataPack", N_DataPack },
-            { "WritePackCell", N_PackWriteCell },
-            { "WritePackFloat", N_PackWriteFloat },
-            { "WritePackString", N_PackWriteString },
-            { "WritePackFunction", N_PackWriteFunction },
-            { "ReadPackCell", N_PackReadCell },
-            { "ReadPackFloat", N_PackReadFloat },
-            { "ReadPackString", N_PackReadString },
-            { "ReadPackFunction", N_PackReadFunction },
-            { "ResetPack", N_PackReset },
-            { "GetPackPosition", N_PackGetPosition },
-            { "SetPackPosition", N_PackSetPosition },
-            { "IsPackReadable", N_PackIsReadable },
             { nullptr, nullptr },
         };
     }
