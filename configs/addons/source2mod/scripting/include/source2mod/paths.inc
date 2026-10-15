@@ -8,6 +8,9 @@
 #endif
 #define _source2mod_paths_included
 
+/** A buffer big enough for any path the core hands out (SourceMod's PLATFORM_MAX_PATH). */
+#define PLATFORM_MAX_PATH   256
+
 methodmap Source2ModPaths
 {
 	/** The game folder (.../game/csgo). */

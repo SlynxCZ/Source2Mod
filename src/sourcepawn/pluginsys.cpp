@@ -655,7 +655,9 @@ namespace sourcepawn
 
         struct CallParam
         {
-            enum Kind { Cell, Ref, Array, String } kind = Cell;
+            // NullVector / NullString: the callee's own NULL_VECTOR / NULL_STRING,
+            // so its IsNullVector / IsNullString see them.
+            enum Kind { Cell, Ref, Array, String, NullVector, NullString } kind = Cell;
             cell_t value = 0;
             cell_t callerAddr = 0;          // where a copyback goes
             bool copyback = false;
@@ -777,10 +779,7 @@ namespace sourcepawn
         cell_t N_Call_PushNullVector(IPluginContext* ctx, const cell_t*)
         {
             if (CallParam* p = NewParam(ctx))
-            {
-                p->kind = CallParam::Array;
-                p->cells.assign(3, 0);
-            }
+                p->kind = CallParam::NullVector;
             return 0;
         }
 
@@ -820,11 +819,7 @@ namespace sourcepawn
         cell_t N_Call_PushNullString(IPluginContext* ctx, const cell_t*)
         {
             if (CallParam* p = NewParam(ctx))
-            {
-                p->kind = CallParam::String;
-                p->chars.assign(1, '\0');
-                p->stringFlags = SM_PARAM_STRING_COPY;
-            }
+                p->kind = CallParam::NullString;
             return 0;
         }
 
@@ -880,6 +875,12 @@ namespace sourcepawn
                         break;
                     case CallParam::String:
                         args.PushString(p.chars.data(), p.chars.size(), p.stringFlags | (p.copyback ? SM_PARAM_COPYBACK : 0));
+                        break;
+                    case CallParam::NullVector:
+                        args.PushNullVector();
+                        break;
+                    case CallParam::NullString:
+                        args.PushNullString();
                         break;
                     }
                 }

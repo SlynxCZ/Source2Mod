@@ -816,6 +816,11 @@ namespace sourcepawn
             if (!plugin || !fn)
                 return ctx->ThrowNativeError("Invalid function id (%X)", params[2]);
 
+            // 0 for an event the game does not have, as the include says (the
+            // manager would keep a listener for a name that never fires).
+            if (shared::g_pGameEventManager && !shared::g_pGameEventManager->HasEventDescriptor(Str(ctx, params[1])))
+                return 0;
+
             const PluginId owner = plugin->Id();
             GameEventHandler handler([fn, owner](IGameEvent* event, bool post, bool& dontBroadcast) -> Action
             {

@@ -30,6 +30,11 @@
 #include <source2mod/core>
 #include <source2mod/adt>
 
+// ReadMapList flags (SourceMod's values).
+#define MAPLIST_FLAG_MAPSFOLDER    (1<<0)    /**< On failure, use all maps in the maps folder. */
+#define MAPLIST_FLAG_CLEARARRAY    (1<<1)    /**< If an input array is specified, clear it before adding. */
+#define MAPLIST_FLAG_NO_DEFAULT    (1<<2)    /**< Do not read "default" or "mapcyclefile" on failure. */
+
 /**
  * What FindMap found. SourceMod's FindMapResult (halflife.inc, (C)2004-2014
  * AlliedModders LLC, GPLv3 with the AlliedModders exception).
@@ -75,8 +80,8 @@ methodmap Source2ModMaps
 	public static native bool GetMapHistory(int index, char[] map, int mapLen, char[] reason, int reasonLen, int &startTime);
 
 	/**
-	 * Reads a map list into `list` (made when null: items of
-	 * ByteCountToCells(PLATFORM_MAX_PATH), the caller closes it).
+	 * Reads a map list into `list` (made when null: items of PLATFORM_MAX_PATH
+	 * bytes, see source2mod/paths.inc; the caller closes it).
 	 *
 	 * @param flags  MAPLIST_FLAG_MAPSFOLDER / MAPLIST_FLAG_NO_DEFAULT.
 	 * @return       The list, null when nothing could be read.
