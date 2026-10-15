@@ -6,7 +6,7 @@
  *
  * What cpp_sample registers for scripts in section 12 (SetupScriptNatives()),
  * the way a SourceMod extension ships its .inc. Optional: a script that
- * includes this still loads without cpp_sample and asks LibraryExists().
+ * includes this still loads without cpp_sample and asks Source2ModNatives.LibraryExists().
  *
  * This sample plugin is public domain.
  */

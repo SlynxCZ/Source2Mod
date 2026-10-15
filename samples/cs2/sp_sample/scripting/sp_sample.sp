@@ -86,13 +86,13 @@ CCSPlayerController CallerOf(Source2ModCommandContext context)
 void Reply(Source2ModCommandContext context, const char[] format, any ...)
 {
 	char buffer[512];
-	VFormat(buffer, sizeof(buffer), format, 3);
+	Source2ModApi.FormatArgs(buffer, sizeof(buffer), format, 3);
 
 	CCSPlayerController caller = CallerOf(context);
 	if (caller != NULL_ENTITY)
 		caller.PrintToChat(buffer);
 	else
-		PrintToServer("%s", buffer);
+		Source2ModApi.ConPrintf("%s", buffer);
 }
 
 // Most of the entity commands need a living caller. Says why when there is none.
@@ -142,7 +142,7 @@ void Arg1(Source2ModCommandArgs args, char[] buffer, int maxlen)
 
 public void OnPluginStart()
 {
-	LogMessage("Starting plugin.");
+	Source2ModApi.Log("Starting plugin.");
 
 	SetupConVars();
 	SetupCommands();
@@ -163,7 +163,7 @@ public void OnPluginStart()
 	SetupMenus();
 	SetupScripts();
 
-	LogMessage("All hooks started!");
+	Source2ModApi.Log("All hooks started!");
 }
 
 public void OnPluginEnd()
@@ -175,7 +175,7 @@ public void OnPluginEnd()
 	// needs no ConVar_Unregister() either: the core owns it for the script.
 }
 
-public void OnAllPluginsLoaded()
+public void Source2Mod_OnAllSource2ModPluginsLoaded()
 {
 	/* This is where we'd do stuff that relies on the mod or other plugins
 	 * being initialized (for example, cvars added and events registered).
@@ -184,12 +184,12 @@ public void OnAllPluginsLoaded()
 
 public void Source2Mod_OnLevelInit(const char[] mapName, const char[] mapEntities, const char[] oldLevel, const char[] landmarkName, bool loadGame, bool background)
 {
-	LogMessage("OnLevelInit(%s)", mapName);
+	Source2ModApi.Log("OnLevelInit(%s)", mapName);
 }
 
 public void Source2Mod_OnLevelShutdown()
 {
-	LogMessage("OnLevelShutdown()");
+	Source2ModApi.Log("OnLevelShutdown()");
 
 	// The countdown timer is TIMER_FLAG_NO_MAPCHANGE: the scheduler kills it
 	// here, and the handle with it. See SetupTimers().
@@ -233,7 +233,7 @@ void SetupConVars()
 	{
 		char value[32];
 		limitteams.GetString(value, sizeof(value));
-		LogMessage("CConVarRef \"mp_limitteams\" got value pre = %d [float = %f, bool = %d, string = \"%s\"]",
+		Source2ModApi.Log("CConVarRef \"mp_limitteams\" got value pre = %d [float = %f, bool = %d, string = \"%s\"]",
 		           limitteams.IntValue, limitteams.FloatValue, limitteams.BoolValue, value);
 
 		// Typed access: IntValue on an int convar, FloatValue on a float one ...
@@ -244,7 +244,7 @@ void SetupConVars()
 		limitteams.FloatValue = 8.5;
 
 		limitteams.GetString(value, sizeof(value));
-		LogMessage("CConVarRef \"mp_limitteams\" got value after = %d [float = %f, bool = %d, string = \"%s\"]",
+		Source2ModApi.Log("CConVarRef \"mp_limitteams\" got value after = %d [float = %f, bool = %d, string = \"%s\"]",
 		           limitteams.IntValue, limitteams.FloatValue, limitteams.BoolValue, value);
 	}
 
@@ -258,10 +258,10 @@ public void OnConVarChanged(ConVar convar, int slot, const char[] newValue, cons
 	char name[64];
 	convar.GetName(name, sizeof(name));
 
-	if (!StrEqual(name, "sp_sample_cvarf"))
+	if (!Source2ModUtils.Equal(name, "sp_sample_cvarf"))
 		return;
 
-	LogMessage("Sample convar \"%s\" was changed from %s to %s", name, oldValue, newValue);
+	Source2ModApi.Log("Sample convar \"%s\" was changed from %s to %s", name, oldValue, newValue);
 }
 
 /* ============================================================================
@@ -308,7 +308,7 @@ public void Cmd_Command(Source2ModCommandContext context, Source2ModCommandArgs 
 {
 	char command[256];
 	args.GetCommandString(command, sizeof(command));
-	LogMessage("Sample command called by %d. Command: %s", context.GetPlayerSlot().Get(), command);
+	Source2ModApi.Log("Sample command called by %d. Command: %s", context.GetPlayerSlot().Get(), command);
 }
 
 public void Cmd_Echo(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
@@ -351,7 +351,7 @@ public Source2ModAction Listen_JoinTeamPre(Source2ModCommandContext context, Sou
 	char team[8];
 	Arg1(args, team, sizeof(team));
 
-	if (args.ArgC() >= 2 && StringToInt(team) == 1 && sp_sample_cvari.IntValue == 1337)
+	if (args.ArgC() >= 2 && Source2ModUtils.StringToInt(team) == 1 && sp_sample_cvari.IntValue == 1337)
 	{
 		Reply(context, "Spectating is off while sp_sample_cvari is 1337.");
 		return Action_Supersede;
@@ -364,7 +364,7 @@ public Source2ModAction Listen_JoinTeamPost(Source2ModCommandContext context, So
 {
 	char command[256];
 	args.GetCommandString(command, sizeof(command));
-	LogMessage("Slot %d ran \"%s\"", context.GetPlayerSlot().Get(), command);
+	Source2ModApi.Log("Slot %d ran \"%s\"", context.GetPlayerSlot().Get(), command);
 	return Action_Ignore;
 }
 
@@ -415,7 +415,7 @@ public Source2ModAction Event_PlayerDeathPre(IGameEvent event, bool post, bool &
 		attacker.GetPlayerName(attackerName, sizeof(attackerName));
 	event.GetString("weapon", weapon, sizeof(weapon));
 
-	LogMessage("player_death: %s killed %s with %s%s", attackerName, victimName, weapon, event.GetBool("headshot") ? " (headshot)" : "");
+	Source2ModApi.Log("player_death: %s killed %s with %s%s", attackerName, victimName, weapon, event.GetBool("headshot") ? " (headshot)" : "");
 
 	// The server still processes the event -- stats, other plugins' post
 	// hooks -- but no client is told, so the killfeed never shows it.
@@ -442,7 +442,7 @@ public Source2ModAction Event_RoundStartPost(IGameEvent event, bool post, bool &
 
 public Source2ModAction Event_PlayerJumpPost(IGameEvent event, bool post, bool &dontBroadcast)
 {
-	LogMessage("player_jump: slot %d", event.GetPlayerSlot("userid").Get());
+	Source2ModApi.Log("player_jump: slot %d", event.GetPlayerSlot("userid").Get());
 	return Action_Ignore;
 }
 
@@ -509,7 +509,7 @@ public void OnEntitySpawned(CEntityInstance entity)
 	// Every smoke grenade thrown from here on is purple.
 	char classname[64];
 	entity.GetClassname(classname, sizeof(classname));
-	if (!StrEqual(classname, "smokegrenade_projectile"))
+	if (!Source2ModUtils.Equal(classname, "smokegrenade_projectile"))
 		return;
 
 	// The game fills the projectile in right after spawning it, so a change
@@ -545,7 +545,7 @@ public Source2ModAction OnEntityOutput(const char[] output, CEntityInstance acti
 		if (activator != NULL_ENTITY)
 			activator.GetClassname(activatorClass, sizeof(activatorClass));
 
-		LogMessage("%s fired %s (activator: %s)", callerClass, output, activatorClass);
+		Source2ModApi.Log("%s fired %s (activator: %s)", callerClass, output, activatorClass);
 	}
 
 	return Action_Ignore;
@@ -556,17 +556,17 @@ public Source2ModAction OnEntityOutput(const char[] output, CEntityInstance acti
 
 public void Source2Mod_OnClientPutInServer(CPlayerSlot slot, const char[] name, int type, const char[] xuid)
 {
-	LogMessage("OnClientPutInServer(%d, \"%s\", %d, %s)", slot.Get(), name, type, xuid);
+	Source2ModApi.Log("OnClientPutInServer(%d, \"%s\", %d, %s)", slot.Get(), name, type, xuid);
 }
 
 public void Source2Mod_OnClientSettingsChanged(CPlayerSlot slot)
 {
-	LogMessage("OnClientSettingsChanged(%d)", slot.Get());
+	Source2ModApi.Log("OnClientSettingsChanged(%d)", slot.Get());
 }
 
 public void Source2Mod_OnClientDisconnect(CPlayerSlot slot, int reason, const char[] name, const char[] xuid, const char[] networkId)
 {
-	LogMessage("OnClientDisconnect(%d, %d, \"%s\", %s, \"%s\")", slot.Get(), reason, name, xuid, networkId);
+	Source2ModApi.Log("OnClientDisconnect(%d, %d, \"%s\", %s, \"%s\")", slot.Get(), reason, name, xuid, networkId);
 
 	// Per-slot state has to go with the player, or the next one to take the
 	// slot inherits it.
@@ -619,9 +619,9 @@ public Source2ModAction Hook_ClientCommand(Source2ModHookParams params, Source2M
 
 	char command[64];
 	args.Arg(0, command, sizeof(command));
-	if (StrEqual(command, "sp_blocked"))
+	if (Source2ModUtils.Equal(command, "sp_blocked"))
 	{
-		LogMessage("Swallowing \"sp_blocked\" -- the engine will never see it.");
+		Source2ModApi.Log("Swallowing \"sp_blocked\" -- the engine will never see it.");
 		return Action_Supersede;
 	}
 
@@ -671,7 +671,7 @@ public void Cmd_Shake(Source2ModCommandContext context, Source2ModCommandArgs ar
 
 	// CUserMessageShake, usermessages.proto
 	Source2ModNetworkMessages.SetUInt32(msg, "command", 0); // SHAKE_START
-	Source2ModNetworkMessages.SetFloat(msg, "amplitude", amplitude[0] ? StringToFloat(amplitude) : 10.0);
+	Source2ModNetworkMessages.SetFloat(msg, "amplitude", amplitude[0] ? Source2ModUtils.StringToFloat(amplitude) : 10.0);
 	Source2ModNetworkMessages.SetFloat(msg, "frequency", 150.0);
 	Source2ModNetworkMessages.SetFloat(msg, "duration", 2.0);
 
@@ -725,7 +725,7 @@ public void Cmd_Mute(Source2ModCommandContext context, Source2ModCommandArgs arg
 
 	char arg[8];
 	Arg1(args, arg, sizeof(arg));
-	int slot = StringToInt(arg);
+	int slot = Source2ModUtils.StringToInt(arg);
 
 	CCSPlayerController target = (slot >= 0 && slot < 64) ? PlayerInSlot(slot) : NULL_ENTITY;
 	if (target == NULL_ENTITY)
@@ -773,7 +773,7 @@ public void Cmd_Sound(Source2ModCommandContext context, Source2ModCommandArgs ar
 	char sound[128];
 	Arg1(args, sound, sizeof(sound));
 	if (!sound[0])
-		strcopy(sound, sizeof(sound), "Weapon_AK47.Single");
+		Source2ModUtils.Copy(sound, sizeof(sound), "Weapon_AK47.Single");
 
 	CPlayerSlot slot = context.GetPlayerSlot();
 	if (slot.IsValid())
@@ -916,7 +916,7 @@ public Source2ModAction OnTakeDamage(TakeDamageContext ctx, bool post, int &resu
 		ctx.entity.GetClassname(classname, sizeof(classname));
 
 	CTakeDamageInfo info = ctx.info;
-	LogMessage("TakeDamage: %s, %.1f damage", classname, info.m_flDamage);
+	Source2ModApi.Log("TakeDamage: %s, %.1f damage", classname, info.m_flDamage);
 
 	// Changing an argument: this is a Pre handler, so the game runs after it,
 	// with whatever is in the damage info by then.
@@ -1006,7 +1006,7 @@ public Source2ModAction Hook_GiveNamedItem(Source2ModHookParams params, Source2M
 {
 	char item[64];
 	params.GetString(2, item, sizeof(item));
-	LogMessage("GiveNamedItem: %s", item[0] ? item : "?");
+	Source2ModApi.Log("GiveNamedItem: %s", item[0] ? item : "?");
 
 	// Action_Supersede with ret.SetEntity(NULL_ENTITY) would give nothing --
 	// the caller gets no weapon back.
@@ -1022,8 +1022,8 @@ public Source2ModAction Hook_UtilRemove(Source2ModHookParams params, Source2ModH
 
 	char classname[64];
 	entity.GetClassname(classname, sizeof(classname));
-	if (!strncmp(classname, "weapon_", 7))
-		LogMessage("UTIL_Remove: %s", classname);
+	if (!Source2ModUtils.CompareN(classname, "weapon_", 7))
+		Source2ModApi.Log("UTIL_Remove: %s", classname);
 
 	return Action_Ignore;
 }
@@ -1042,7 +1042,7 @@ public Source2ModAction Hook_SnapViewAngles(Source2ModHookParams params, Source2
 
 	float angles[3];
 	params.GetVector(2, angles);
-	LogMessage("SnapViewAngles: %.1f %.1f %.1f", angles[0], angles[1], angles[2]);
+	Source2ModApi.Log("SnapViewAngles: %.1f %.1f %.1f", angles[0], angles[1], angles[2]);
 	return Action_Ignore;
 }
 
@@ -1060,7 +1060,7 @@ public Source2ModAction Hook_SwitchTeam(Source2ModHookParams params, Source2ModH
 		oldTeam = controller.m_iTeamNum;
 	}
 
-	LogMessage("SwitchTeam: %s %d -> %d", name, oldTeam, params.GetInt(2));
+	Source2ModApi.Log("SwitchTeam: %s %d -> %d", name, oldTeam, params.GetInt(2));
 
 	// Action_Supersede would keep the player where they are; changing the
 	// team is params.SetInt(2, team) and Action_Override.
@@ -1109,7 +1109,7 @@ public void Cmd_Hp(Source2ModCommandContext context, Source2ModCommandArgs args,
 	// Reading is a property get, writing a property set. += -= |= and the
 	// rest work too, and all of them mark the field as changed.
 	int old = pawn.m_iHealth;
-	pawn.m_iHealth = arg[0] ? StringToInt(arg) : 100;
+	pawn.m_iHealth = arg[0] ? Source2ModUtils.StringToInt(arg) : 100;
 
 	Reply(context, "Health: %d -> %d", old, pawn.m_iHealth);
 }
@@ -1142,7 +1142,7 @@ public void Cmd_Give(Source2ModCommandContext context, Source2ModCommandArgs arg
 	char item[64];
 	Arg1(args, item, sizeof(item));
 	if (!item[0])
-		strcopy(item, sizeof(item), "weapon_ak47");
+		Source2ModUtils.Copy(item, sizeof(item), "weapon_ak47");
 
 	if (items.GiveNamedItem(item) == NULL_ENTITY)
 		Reply(context, "Could not give \"%s\".", item);
@@ -1247,7 +1247,7 @@ public void Cmd_Countdown(Source2ModCommandContext context, Source2ModCommandArg
 
 	char arg[8];
 	Arg1(args, arg, sizeof(arg));
-	g_Countdown = arg[0] ? StringToInt(arg) : 5;
+	g_Countdown = arg[0] ? Source2ModUtils.StringToInt(arg) : 5;
 
 	g_CountdownTimer = Source2ModScheduler.AddTimer(1.0, Timer_Countdown, 0, TIMER_FLAG_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
@@ -1256,9 +1256,9 @@ public void Timer_Countdown(any data)
 {
 	char message[64];
 	if (g_Countdown > 0)
-		Format(message, sizeof(message), "%d...", g_Countdown);
+		Source2ModApi.Format(message, sizeof(message), "%d...", g_Countdown);
 	else
-		strcopy(message, sizeof(message), "Go!");
+		Source2ModUtils.Copy(message, sizeof(message), "Go!");
 
 	for (int slot = 0; slot < 64; slot++)
 	{
@@ -1316,7 +1316,7 @@ public void Cmd_Hide(Source2ModCommandContext context, Source2ModCommandArgs arg
 
 	char arg[8];
 	Arg1(args, arg, sizeof(arg));
-	int slot = StringToInt(arg);
+	int slot = Source2ModUtils.StringToInt(arg);
 
 	CCSPlayerController target = (slot >= 0 && slot < 64) ? PlayerInSlot(slot) : NULL_ENTITY;
 	if (target == NULL_ENTITY)
@@ -1359,7 +1359,7 @@ public void OnCheckTransmit(ISource2ModTransmitInfoList infos, int infoCount, co
 			continue;
 
 		entity.GetClassname(classname, sizeof(classname));
-		if (strncmp(classname, "weapon_", 7) != 0)
+		if (Source2ModUtils.CompareN(classname, "weapon_", 7) != 0)
 			continue;
 
 		CBasePlayerPawn owner = view_as<CBasePlayerPawn>(entity.m_hOwnerEntity);
@@ -1398,7 +1398,7 @@ public void OnCheckTransmit(ISource2ModTransmitInfoList infos, int infoCount, co
  *   cpp_sample's section 12 from the other side: natives a C++ plugin
  *   registered, a library to test for, and a handle type of its own. Its
  *   cpp_sample.inc declares them optional, so this plugin loads without it;
- *   LibraryExists() says whether they are there.
+ *   Source2ModNatives.LibraryExists() says whether they are there.
  *
  * ========================================================================== */
 
@@ -1409,7 +1409,7 @@ void SetupScriptNatives()
 
 public void Cmd_Natives(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
 {
-	if (!LibraryExists("cpp_sample"))
+	if (!Source2ModNatives.LibraryExists("cpp_sample"))
 	{
 		Reply(context, "cpp_sample is not loaded.");
 		return;
@@ -1428,14 +1428,14 @@ public void Cmd_Natives(Source2ModCommandContext context, Source2ModCommandArgs 
 
 public void OnLibraryAdded(const char[] name)
 {
-	if (StrEqual(name, "cpp_sample"))
-		LogMessage("cpp_sample is here: its natives work from now on.");
+	if (Source2ModUtils.Equal(name, "cpp_sample"))
+		Source2ModApi.Log("cpp_sample is here: its natives work from now on.");
 }
 
 public void OnLibraryRemoved(const char[] name)
 {
-	if (StrEqual(name, "cpp_sample"))
-		LogMessage("cpp_sample is gone: its natives are errors until it is back.");
+	if (Source2ModUtils.Equal(name, "cpp_sample"))
+		Source2ModApi.Log("cpp_sample is gone: its natives are errors until it is back.");
 }
 
 /* ============================================================================
@@ -1450,11 +1450,11 @@ public void OnLibraryRemoved(const char[] name)
 void ReplyToSlot(int slot, const char[] format, any ...)
 {
 	char buffer[512];
-	VFormat(buffer, sizeof(buffer), format, 3);
+	Source2ModApi.FormatArgs(buffer, sizeof(buffer), format, 3);
 
 	if (slot < 0)
 	{
-		PrintToServer("%s", buffer);
+		Source2ModApi.ConPrintf("%s", buffer);
 		return;
 	}
 
@@ -1484,13 +1484,13 @@ void SetupPathsAndPermissions()
 {
 	// Absolute paths, no trailing separator. PluginConfigDirectory() is this
 	// plugin's own folder under configs/, made on first use.
-	char path[PLATFORM_MAX_PATH];
+	char path[256];
 	Source2ModPaths.RootDirectory(path, sizeof(path));
-	LogMessage("Root: %s", path);
+	Source2ModApi.Log("Root: %s", path);
 	Source2ModPaths.ConfigsDirectory(path, sizeof(path));
-	LogMessage("Configs: %s", path);
+	Source2ModApi.Log("Configs: %s", path);
 	Source2ModPaths.PluginConfigDirectory(path, sizeof(path));
-	LogMessage("My configs: %s", path);
+	Source2ModApi.Log("My configs: %s", path);
 
 	// A group of our own that holds a permission of our own. permissions.json
 	// can grant the same group to admins; sp_vip below adds you at runtime.
@@ -1538,7 +1538,7 @@ public void Cmd_Perm(Source2ModCommandContext context, Source2ModCommandArgs arg
 	Source2ModPermissions.GetPlayerSteamID(slot, steamId, sizeof(steamId));
 	Arg1(args, permission, sizeof(permission));
 	if (!permission[0])
-		strcopy(permission, sizeof(permission), "sp_sample.admin");
+		Source2ModUtils.Copy(permission, sizeof(permission), "sp_sample.admin");
 
 	Reply(context, "%s: authorized %d, %s %d, sp_sample_vip %d, immunity %d",
 	      steamId, Source2ModPermissions.IsPlayerAuthorized(slot), permission,
@@ -1554,7 +1554,7 @@ public void Cmd_Vip(Source2ModCommandContext context, Source2ModCommandArgs args
 	if (slot.IsValid())
 		Source2ModPermissions.GetPlayerSteamID(slot, steamId, sizeof(steamId));
 
-	if (StrEqual(steamId, "0"))
+	if (Source2ModUtils.Equal(steamId, "0"))
 	{
 		Reply(context, "For authorized players only.");
 		return;
@@ -1621,7 +1621,7 @@ public void Cmd_Trace(Source2ModCommandContext context, Source2ModCommandArgs ar
 	bool inWater = contents[0] != 0 || contents[1] != 0;
 
 	Reply(context, "Hit %s at %.0f units (%.0f %.0f %.0f)%s",
-	      hit, GetVectorDistance(start, end), end[0], end[1], end[2], inWater ? ", in water" : "");
+	      hit, Source2ModMath.VectorDistance(start, end), end[0], end[1], end[2], inWater ? ", in water" : "");
 }
 
 /* ============================================================================
@@ -1643,7 +1643,7 @@ void SetupGameSystems()
 		// Only systems whose factory keeps a static instance can be found;
 		// SoundOpGameSystem does, GameRulesGameSystem for one does not.
 		SchemaObject soundOps = Source2ModGameSystems.FindByName("SoundOpGameSystem");
-		LogMessage("SoundOpGameSystem: %s", soundOps.IsNull ? "missing" : "found");
+		Source2ModApi.Log("SoundOpGameSystem: %s", soundOps.IsNull ? "missing" : "found");
 	}
 
 	// UTIL_Remove by the address the core resolved -- section 8 calls by
@@ -1671,7 +1671,7 @@ public void Cmd_Remove(Source2ModCommandContext context, Source2ModCommandArgs a
 	if (target != NULL_ENTITY)
 		target.GetClassname(classname, sizeof(classname));
 
-	if (target == NULL_ENTITY || StrEqual(classname, "player"))
+	if (target == NULL_ENTITY || Source2ModUtils.Equal(classname, "player"))
 	{
 		Reply(context, "Aim at something that is not a player.");
 		return;
@@ -1710,13 +1710,13 @@ void SetupJsonAndHttp()
 
 		char name[64];
 		root.GetString("name", name, sizeof(name));
-		LogMessage("JSON: %s, %d sections summing to %d, nested.ok %d", name, count, sum, nested != null ? nested.GetBool("ok") : false);
+		Source2ModApi.Log("JSON: %s, %d sections summing to %d, nested.ok %d", name, count, sum, nested != null ? nested.GetBool("ok") : false);
 	}
 	else
 	{
 		char error[256];
 		doc.GetError(error, sizeof(error));
-		LogMessage("JSON error: %s", error);
+		Source2ModApi.Log("JSON error: %s", error);
 	}
 	delete doc;
 
@@ -1736,7 +1736,7 @@ public void Cmd_Http(Source2ModCommandContext context, Source2ModCommandArgs arg
 	char url[256];
 	Arg1(args, url, sizeof(url));
 	if (!url[0])
-		strcopy(url, sizeof(url), "https://api.github.com/repos/alliedmodders/sourcepawn");
+		Source2ModUtils.Copy(url, sizeof(url), "https://api.github.com/repos/alliedmodders/sourcepawn");
 
 	// The request copies the headers: they can go right after.
 	Source2ModHTTPHeaders headers = new Source2ModHTTPHeaders();
@@ -1828,7 +1828,7 @@ public void Cmd_MySQL(Source2ModCommandContext context, Source2ModCommandArgs ar
 	char params[1][64];
 	Arg1(args, params[0], sizeof(params[]));
 	if (!params[0][0])
-		strcopy(params[0], sizeof(params[]), "hello");
+		Source2ModUtils.Copy(params[0], sizeof(params[]), "hello");
 
 	g_Serverless.QueryWithParams("SELECT ? AS greeting, NOW() AS now", params, 1, OnMySQLGreeting, SlotOf(context));
 }
@@ -1980,7 +1980,7 @@ public void OnHudClick(CCSPlayerController player, CCSCustomHudLayout layout, co
 	if (player != NULL_ENTITY)
 		player.GetPlayerName(name, sizeof(name));
 
-	LogMessage("%s clicked \"%s\" on a custom HUD layout", name, buttonId);
+	Source2ModApi.Log("%s clicked \"%s\" on a custom HUD layout", name, buttonId);
 }
 
 /* ============================================================================
@@ -2024,7 +2024,7 @@ public void OnScriptMessage(const char[] channel, const char[] payload)
 			hex[0] = payload[i + 1];
 			hex[1] = payload[i + 2];
 			hex[2] = '\0';
-			text[length++] = view_as<char>(StringToInt(hex, 16));
+			text[length++] = view_as<char>(Source2ModUtils.StringToInt(hex, 16));
 			i += 2;
 		}
 		else
@@ -2034,7 +2034,7 @@ public void OnScriptMessage(const char[] channel, const char[] payload)
 	}
 	text[length] = '\0';
 
-	LogMessage("Script message on %s: %s", channel, text);
+	Source2ModApi.Log("Script message on %s: %s", channel, text);
 }
 
 public void Cmd_Script(Source2ModCommandContext context, Source2ModCommandArgs args, bool post)
@@ -2046,7 +2046,7 @@ public void Cmd_Script(Source2ModCommandContext context, Source2ModCommandArgs a
 	}
 
 	char source[512];
-	Format(source, sizeof(source), "%s\n%s\n%s\n",
+	Source2ModApi.Format(source, sizeof(source), "%s\n%s\n%s\n",
 	       "import { Instance } from \"cs_script/point_script\";",
 	       "Instance.ServerCommand(\"source2mod_script sp_sample \" + encodeURIComponent(\"hello from cs_script\"));",
 	       "Instance.OnScriptInput(\"ping\", () => Instance.ServerCommand(\"source2mod_script sp_sample pong\"));");
