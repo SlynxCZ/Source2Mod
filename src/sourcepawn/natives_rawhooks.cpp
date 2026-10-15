@@ -251,6 +251,11 @@ namespace sourcepawn
             // them -- whichever hook's call-original callback KHook uses.
             if (!post && frame.changed && action != Action::Ignore && hook->invoke)
             {
+                // New arguments alone change nothing about the result: unless
+                // the handler set a return value, what the recalled call
+                // returns stands (Override with no value would make it 0).
+                if (!frame.retSet && action == Action::Override)
+                    action = Action::Ignore;
                 void* again = hasValue
                     ? KHook::DoRecall(action, &value, sizeof(value), reinterpret_cast<void*>(KHook::init_operator<uint64_t>),
                                       reinterpret_cast<void*>(KHook::deinit_operator<uint64_t>))
@@ -1100,7 +1105,11 @@ namespace sourcepawn
             Frame* f = RetFrame(ctx, params[1]);
             if (!f)
                 return 0;
-            const int64_t value = f->hook->ret == T_Int64 ? static_cast<int64_t>(f->ret) : IntOf(f->ret, f->hook->ret);
+            // The narrow integer types read as they are; anything else (an int64,
+            // a pointer, an object) as all 64 bits -- IntOf would cut it to 32.
+            const Type t = f->hook->ret;
+            const bool narrow = t == T_Bool || t == T_Int8 || t == T_Int16 || t == T_Int32 || t == T_IntRef || t == T_BoolRef || t == T_FloatRef;
+            const int64_t value = narrow ? IntOf(f->ret, t) : static_cast<int64_t>(f->ret);
             size_t written = 0;
             ctx->StringToLocalUTF8(params[2], params[3], std::to_string(value).c_str(), &written);
             return static_cast<cell_t>(written);

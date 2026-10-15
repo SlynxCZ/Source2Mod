@@ -493,6 +493,7 @@ namespace convars
         case EConVarType_Vector3: CREATE_CVAR(Vector);
         case EConVarType_Vector4: CREATE_CVAR(Vector4D);
         case EConVarType_Qangle: CREATE_CVAR(QAngle);
+        case EConVarType_Color: CREATE_CVAR(Color);
 
         default:
             FP_ERROR("Unsupported convar type: {}", (int)type);
