@@ -1,10 +1,10 @@
 # Gamedata validation
 
-CS2 build **25966348** · Linux manifest `5513399157532729905` · Windows manifest `8766757721818354077` · 2026-10-15T20:14:08+00:00
+CS2 build **25966348** · Linux manifest `5513399157532729905` · Windows manifest `8766757721818354077` · 2026-10-16T16:54:11+00:00
 
 | | Windows | Linux |
 |---|---|---|
-| Signatures | 🟢 66 | 🟢 66 |
+| Signatures | 🟢 67 | 🟢 67 |
 | Offsets | 🟢 39 ⚪ 4 | 🟢 39 ⚪ 4 |
 
 ## Everything resolves
@@ -17,6 +17,7 @@ CS2 build **25966348** · Linux manifest `5513399157532729905` · Windows manife
 - 🟢🟢 `CBaseEntity::CollisionRulesChanged` — W 188/238 · L 187/239
 - 🟢🟢 `CBaseEntity::DispatchSpawn`
 - 🟢🟢 `CBaseEntity::EndTouch` — W 152/238 · L 151/239
+- 🟢🟢 `CBaseEntity::SetSubclass`
 - 🟢🟢 `CBaseEntity::StartTouch` — W 150/238 · L 149/239
 - 🟢🟢 `CBaseEntity::TakeDamageOld`
 - 🟢🟢 `CBaseEntity::Teleport` — W 165/238 · L 164/239
