@@ -1,7 +1,7 @@
 # Source2Mod
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/SlynxCZ/source2mod/build.yml?branch=main)](https://github.com/SlynxCZ/source2mod/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/Source2Mod/source2mod/build.yml?branch=main)](https://github.com/Source2Mod/source2mod/actions)
 [![Website](https://img.shields.io/badge/Website-source2mod.net-blue)](https://source2mod.net)
 [![Discord](https://img.shields.io/badge/Discord-join-7289da?logo=discord&logoColor=white)](https://discord.gg/4Ck56eDNXj)
 
@@ -20,7 +20,7 @@ its C++ core and SDK carried over, and SourcePawn was added on top of them.
 | | C++ | SourcePawn |
 | --- | --- | --- |
 | Plugin file | `.smx` -- a native library | `.smx` -- a compiled SourcePawn script |
-| Built with | The [SDK](https://github.com/SlynxCZ/source2mod-sdk) (CMake or AMBuild) | `spcomp`, shipped in `addons/source2mod/scripting` |
+| Built with | The [SDK](https://github.com/Source2Mod/source2mod-sdk) (CMake or AMBuild) | `spcomp`, shipped in `addons/source2mod/scripting` |
 | API | `ISource2Mod*` interfaces, `g_pSource2Mod*` globals | `Source2Mod*` methodmaps, `#include <source2mod/api>` |
 | Schema | Generated classes (`CCSPlayerController`, ...) | Methodmaps of the same names, fields as properties |
 | Hot reload | Yes | Yes |
@@ -96,7 +96,7 @@ Everything below is there for C++ and SourcePawn alike.
 Prerequisites: CMake 3.18+, a C++20 compiler, Metamod:Source on the server.
 
 ```bash
-git clone --recurse-submodules https://github.com/SlynxCZ/source2mod.git
+git clone --recurse-submodules https://github.com/Source2Mod/source2mod.git
 cd source2mod
 
 docker compose -f docker/docker-compose.yml up
@@ -110,7 +110,7 @@ The build puts the core, the gamedata and `addons/source2mod/scripting`
 The documentation is on [source2mod.net](https://source2mod.net): every
 example in C++ and SourcePawn, guides and the full API reference.
 
-- **C++** -- add the [Source2Mod SDK](https://github.com/SlynxCZ/source2mod-sdk)
+- **C++** -- add the [Source2Mod SDK](https://github.com/Source2Mod/source2mod-sdk)
   to your project and `add_source2mod_plugin(...)`; `samples/cs2/cpp_sample`
   shows every area of the API.
 - **SourcePawn** -- `#include <source2mod/api>` and compile with

@@ -61,7 +61,7 @@
 #define BUILD_ID SEMVER ":" GITHUB_SHA
 
 #define SOURCE2MOD_WEBSITE "https://www.source2toolkit.net"
-#define SOURCE2MOD_REPO    "https://github.com/SlynxCZ/source2mod"
+#define SOURCE2MOD_REPO    "https://github.com/Source2Mod/source2mod"
 
 // The console colours of the "s2m" command, FUNPLAY's log style: the
 // thing in question picked out, the rest plain or dim.

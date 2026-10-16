@@ -4,7 +4,7 @@
     "display_name": "C++ Sample",
     "description": "Source2Mod's C++ API, a section at a time (sp_sample is the SourcePawn twin)",
     "author": "Slynx (˙·٠● S l y n x ●٠·˙)",
-    "url": "https://github.com/SlynxCZ/source2mod",
+    "url": "https://github.com/Source2Mod/source2mod",
     "log_tag": "CPP_SAMPLE",
     "license": "Public Domain",
     "version": "1.0.0.{{git-shorthash}}"

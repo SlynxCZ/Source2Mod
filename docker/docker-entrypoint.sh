@@ -37,7 +37,7 @@ rm -rf "$SDK_DIR"
 mkdir -p "$SDK_DIR"
 
 echo "=== Downloading Source2Mod-SDK ==="
-git clone --recursive https://github.com/SlynxCZ/source2mod-sdk.git "$SOURCE2MODSDK_DIR"
+git clone --recursive https://github.com/Source2Mod/source2mod-sdk.git "$SOURCE2MODSDK_DIR"
 # s2sdk is the SDK's vendor/s2sdk submodule, at the commit the SDK pins.
 S2SDK_DIR="$SOURCE2MODSDK_DIR/vendor/s2sdk"
 
