@@ -81,7 +81,8 @@
 // belongs in that console; typed by a client it has to go back to that
 // client's console instead, which is what ClientPrintf is for. Colour is
 // dropped on that path -- the escapes are a terminal thing and the game
-// console would print them literally -- the colours inside the line too.
+// console would print them literally -- the colours inside the line too;
+// and on the Windows server console as well (see below).
 static void Source2ModReply(const Source2ModCommandContext& ctx, const char* pszColor, const char* fmt, ...)
 {
     char buf[1024];
@@ -91,29 +92,38 @@ static void Source2ModReply(const Source2ModCommandContext& ctx, const char* psz
     V_vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
 
+    // The line without its colour escapes.
+    char line[1088];
+    size_t n = 0;
+    for (const char* p = buf; *p && n < sizeof(line) - 2; ++p)
+    {
+        if (*p == '\033')
+        {
+            while (*p && *p != 'm')
+                ++p;
+            if (!*p)
+                break;
+            continue;
+        }
+        line[n++] = *p;
+    }
+    line[n++] = '\n';
+    line[n] = '\0';
+
     if (const CPlayerSlot slot = ctx.GetPlayerSlot(); slot.IsValid() && g_pEngineServer)
     {
-        char line[1088];
-        size_t n = 0;
-        for (const char* p = buf; *p && n < sizeof(line) - 2; ++p)
-        {
-            if (*p == '\033')
-            {
-                while (*p && *p != 'm')
-                    ++p;
-                if (!*p)
-                    break;
-                continue;
-            }
-            line[n++] = *p;
-        }
-        line[n++] = '\n';
-        line[n] = '\0';
         g_pEngineServer->ClientPrintf(slot, line);
         return;
     }
 
+#ifdef _WIN32
+    // The Windows dedicated console maps the escapes onto a palette of its
+    // own (cyan comes out purple, white green), so it gets the plain line in
+    // the console's own colour.
+    ConMsg("%s", line);
+#else
     ConMsg("%s%s" C_RESET "\n", pszColor, buf);
+#endif
 }
 
 // A table goes out line by line, the frame dim and the cells as coloured as
