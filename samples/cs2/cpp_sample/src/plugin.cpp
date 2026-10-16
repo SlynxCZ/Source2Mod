@@ -1,9 +1,40 @@
 /**
- * vim: set ts=4 sw=4 tw=99 noet :
- * ======================================================
- * Source2Mod C++ Sample Plugin
- * ======================================================
+* vim: set ts=4 sw=4 tw=99 noet:
+ * =============================================================================
+ * Source2Mod
+ * Copyright (C) 2025-2026 Michal "Slynx (˙·٠● S l y n x ●٠·˙)" Přikryl.
+ * All rights reserved.
+ * =============================================================================
  *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License, version 3.0, as published by the
+ * Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program. If not, see <http://www.gnu.org/licenses/>.
+ *
+ * As a special exception, Michal "Slynx (˙·٠● S l y n x ●٠·˙)" Přikryl
+ * gives you permission to link the code of this program
+ * (as well as its derivative works) to "Counter-Strike 2," "Source 2,"
+ * "Steam," and any Game MODs or server software running on software by
+ * Valve Corporation. You must obey the GNU General Public License in all
+ * respects for all other code used.
+ *
+ * Additionally, this exception applies to all derivative works unless
+ * otherwise stated in LICENSE.txt.
+ *
+ * Authors:
+ *   - Michal "Slynx (˙·٠● S l y n x ●٠·˙)" Přikryl
+ *
+ * Project: Source2Mod
+ */
+
+/*
  * This software is provided 'as-is', without any express or implied warranty.
  * In no event will the authors be held liable for any damages arising from
  * the use of this software.
@@ -1746,8 +1777,90 @@ private:
 // it open when the plugin unloads, and that happens after Unload().
 static SampleMenu s_SampleMenu;
 
+// A menu of the plugin's own instead of a CenterHtmlMenu: it draws itself,
+// takes the keys itself and says which ones it uses (KeyMask). Page 1 uses
+// all of 1-9 (9 also turns the page), page 2 only 1-6 and 9 -- 7 and 8 are
+// not in it, so they stay the game's keys: no menu reaction, and the weapon
+// slots behind them work as usual. Every press of a key in use is counted.
+static CenterHtmlMenu s_KeyTestMenu("Key test");
+
+class KeyTestInstance : public IMenuInstance
+{
+public:
+    explicit KeyTestInstance(CCSPlayerController *pPlayer) : IMenuInstance(pPlayer, &s_KeyTestMenu) {}
+
+    uint32_t KeyMask() const override
+    {
+        // bit = key: page 1 -> 1..9, page 2 -> 1..6 and 9
+        return m_nPage == 0 ? 0x3FEu : (0x7Eu | (1u << 9));
+    }
+
+    void Display() override
+    {
+        if (!player_)
+            return;
+
+        std::string html = "<b><font color='yellow'>Key test</font></b> <font color='grey'>page " + std::to_string(m_nPage + 1) + "/2, " + std::to_string(m_nTotal) + " presses</font><br>\n";
+        for (int key = 1; key <= 9; key++)
+        {
+            if (!(KeyMask() & (1u << key)))
+                continue;
+
+            std::string label = key == 9 ? (m_nPage == 0 ? "-&gt; page 2" : "&lt;- page 1") : "count";
+            html += "<font color='green'>!" + std::to_string(key) + "</font> " + label + " <font color='grey'>(" + std::to_string(m_nCounts[key]) + ")</font><br>\n";
+        }
+        if (m_nPage == 1)
+            html += "<font color='grey'>7 and 8 are not in this page</font><br>\n";
+
+        player_->PrintToCenterHtml(html.c_str(), 3, true);
+    }
+
+    void OnKeyPress(CCSPlayerController *pPlayer, int key) override
+    {
+        if (pPlayer != player_ || key < 1 || key > 9 || !(KeyMask() & (1u << key)))
+            return;
+
+        m_nCounts[key]++;
+        m_nTotal++;
+        SOURCE2MOD_LOG(&g_Plugin, "Key test: %s pressed %d on page %d (%d presses)\n", pPlayer->GetPlayerName(), key, m_nPage + 1, m_nTotal);
+
+        if (key == 9)
+            m_nPage = 1 - m_nPage;
+
+        Display();
+    }
+
+    void Close() override
+    {
+        if (player_)
+            player_->PrintToCenterHtml("", 0, true);
+    }
+
+private:
+    int m_nPage = 0;
+    int m_nCounts[10] = {};
+    int m_nTotal = 0;
+};
+
 void SamplePlugin::SetupMenus()
 {
+
+    // sample_keytest opens the key test, or closes it when it is open.
+    g_pSource2ModCommands->RegisterConCommand("sample_keytest", [](const Source2ModCommandContext& context, const Source2ModCommandArgs& args, bool post)
+    {
+        CCSPlayerController *pCaller = CallerOf(context);
+        if (!pCaller)
+        {
+            Reply(context, "Menus are for players.");
+            return;
+        }
+
+        if (dynamic_cast<KeyTestInstance *>(GET_ACTIVE_MENU(pCaller)))
+            CLOSE_ACTIVE_MENU(pCaller);
+        else
+            g_pSource2ModMenus->OpenMenu(g_PluginID, pCaller, new KeyTestInstance(pCaller));
+    });
+
     // sample_menu opens it, or closes it when it is already open.
     g_pSource2ModCommands->RegisterConCommand("sample_menu", [](const Source2ModCommandContext& context, const Source2ModCommandArgs& args, bool post)
     {
