@@ -49,8 +49,8 @@ Still open:
   is then alone in its gear slot). Keys 3 and 6-9 do not flick. No fix found
   without a client addon.
 - **SourcePawn gaps** -- custom menu instances (a C++ `IMenuInstance`
-  subclass), per-plugin menu cooldown handlers, `TraceShapeEx` and
-  `CheckAreaOverlappingEntity` are C++ only.
-- **Guides** -- the API reference covers every interface; hand-written guides
-  for translations, targeting, clients, client preferences and files /
-  KeyValues are still to be written.
+  subclass) and per-plugin menu cooldown handlers (`SetCooldownHandlers`) are
+  C++ only; scripts get the default cooldown handlers.
+- **Game constants in the include set** -- scripts have no `DMG_*`,
+  `HITGROUP_*`, `MOVETYPE_*`, `COLLISION_GROUP_*`, `PATTACH_*` or team
+  constants yet and write the numbers by hand.
