@@ -74,25 +74,27 @@ namespace slotinput {
         //           lowest position wins, the LAST one on a tie
         //   6..9 -> econ item definition (44 HE, 43 flash, 45 smoke, 47
         //           decoy), the first match in m_hMyWeapons
-        // The class-named grenade subclasses ("weapon_hegrenade") carry
-        // position -1; the econ ones, named by the definition index ("44"),
-        // carry 0..3. So the 6..9 fakes use the class-named vdata (found by
-        // definition, never by "4"), and "4" gets its own HE with the econ
-        // vdata "44", injected after the "6" one. Inject() puts 6..9 in front
-        // of the real weapons and 1..5 behind them, so every key finds its
-        // fake before any real weapon of the same slot.
+        // 6..9 are found by definition only, so their fakes carry the knife's
+        // vdata: gear slot knife, where the player always has a real knife.
+        // A fake alone in its gear slot makes the client's view flick on the
+        // key (1, 2, 4, 5 without a real weapon there; not fixable without an
+        // addon -- a second fake in the slot does not help). "4" needs the
+        // econ HE vdata "44" (grenade position 0..3; the class-named
+        // "weapon_hegrenade" has -1 and is never found by the slot).
+        // Inject() puts 6..9 in front of the real weapons and 1..5 behind
+        // them, so every key finds its fake before any real weapon.
         constexpr KeyDef kKeys[] = {
             { 1, "weapon_ak47",          7, "weapon_ak47" },
             // Any pistol does (gear slot 1); the client plays the fake's draw
             // sound when it predicts the switch, and the Glock's is loud.
             { 2, "weapon_p250",         36, "weapon_p250" },
             { 3, "weapon_knife",        42, "weapon_knife" },
-            { 6, "weapon_hegrenade",    44, "weapon_hegrenade" },
+            { 6, "weapon_hegrenade",    44, "weapon_knife" },
             { 4, "weapon_hegrenade",    44, "44" },
             { 5, "weapon_c4",           49, "weapon_c4" },
-            { 7, "weapon_flashbang",    43, "weapon_flashbang" },
-            { 8, "weapon_smokegrenade", 45, "weapon_smokegrenade" },
-            { 9, "weapon_decoy",        47, "weapon_decoy" },
+            { 7, "weapon_flashbang",    43, "weapon_knife" },
+            { 8, "weapon_smokegrenade", 45, "weapon_knife" },
+            { 9, "weapon_decoy",        47, "weapon_knife" },
         };
 
         constexpr int kMaxKey = 9;
@@ -302,14 +304,30 @@ namespace slotinput {
                 myWeapons.FindAndRemove(fake.Weapon);
         }
 
-        // The keys go back to the game: the fakes get the pawn as owner and
-        // stay one more snapshot, so the client drops them from its slot
-        // selection when they go (an ownerless one would stay stuck there).
+        // Closing, in two steps: the fakes are sent again (out of dormancy)
+        // still ownerless, and only once the client has them active do they
+        // get the pawn as owner, then they go. The client drops a fake from
+        // its slot selection only on an owner change of an ACTIVE entity --
+        // leaving dormancy with the owner already set in the same snapshot
+        // left the fake behind.
+        constexpr int kHandoverFrames = 8;
+        constexpr int kHandoverOwnerAt = 4;
+
         bool BeginHandover(Session& s)
         {
             CCSPlayerPawn* pawn = s.Pawn.Get();
             if (!pawn || !pawn->m_pWeaponServices())
                 return false;
+
+            s.Handover = kHandoverFrames;
+            return true;
+        }
+
+        void HandOver(Session& s)
+        {
+            CCSPlayerPawn* pawn = s.Pawn.Get();
+            if (!pawn)
+                return;
 
             for (const Fake& fake : s.Fakes)
             {
@@ -319,8 +337,6 @@ namespace slotinput {
                     weapon->m_hOwnerEntity.NetworkStateChanged();
                 }
             }
-            s.Handover = 2;
-            return true;
         }
 
         void Stop(int slot)
@@ -682,11 +698,15 @@ namespace slotinput {
             const uint32_t menuKeys = MenuKeys(player);
             if (!menuKeys)
             {
-                // Closing: the owner goes out first, the fakes a snapshot later.
+                // Closing: out of dormancy, then the owner, then the fakes go.
                 if (s.Active && s.Handover == 0 && BeginHandover(s))
                     continue;
                 if (s.Handover > 0 && --s.Handover > 0)
+                {
+                    if (s.Handover == kHandoverOwnerAt)
+                        HandOver(s);
                     continue;
+                }
                 Stop(slot);
                 continue;
             }
