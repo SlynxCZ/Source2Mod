@@ -66,6 +66,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
 #include <unordered_map>
 
 // Only the file watch is Linux-only; networkmessages.h above is not, every
@@ -163,10 +164,66 @@ static LibHandle OpenLib(const char* path, std::string& outError)
 static void CloseLib(LibHandle lib)
 {
 #ifdef _WIN32
+    // Loaded from a private copy (ShadowCopy): it goes with the library.
+    char path[MAX_PATH]{};
+    const DWORD length = GetModuleFileNameA(lib, path, sizeof(path));
     FreeLibrary(lib);
+
+    if (length > 0 && length < sizeof(path))
+    {
+        std::error_code ec;
+        const std::filesystem::path file(path);
+        if (std::filesystem::equivalent(file.parent_path(), paths::GetPluginCacheDirectory(), ec))
+            std::filesystem::remove(file, ec);
+    }
 #else
     dlclose(lib);
 #endif
+}
+
+// A native plugin is loaded from a private copy of its file, never from the
+// file in plugins/ itself. Copying a new build over a loaded library (cp keeps
+// the inode) changed the code of the plugin still running until its hot reload
+// came round: a hook called in between ran the new build's bytes at the old
+// addresses and crashed. On Windows the copy is also what lets plugins/ be
+// written to while the plugin is loaded. Linux unlinks the copy right after
+// dlopen (the mapping stays); Windows deletes it when the library is freed.
+static std::string ShadowCopy(const char* fullPath, std::string& outError)
+{
+    namespace fs = std::filesystem;
+    std::error_code ec;
+
+    const fs::path dir = paths::GetPluginCacheDirectory();
+
+    // Whatever an earlier run left behind (a crash before FreeLibrary); a copy
+    // another server still has loaded cannot be deleted and stays.
+    static const bool s_cleaned = [&dir] {
+        std::error_code e;
+        for (const auto& entry : fs::directory_iterator(dir, e))
+            fs::remove(entry.path(), e);
+        return true;
+    }();
+    (void)s_cleaned;
+
+    fs::create_directories(dir, ec);
+
+#ifdef _WIN32
+    const unsigned long pid = GetCurrentProcessId();
+#else
+    const unsigned long pid = static_cast<unsigned long>(getpid());
+#endif
+    static unsigned s_counter = 0;
+
+    const fs::path source(fullPath);
+    const fs::path copy = dir / (source.stem().string() + "." + std::to_string(pid) + "." + std::to_string(++s_counter) + source.extension().string());
+
+    if (!fs::copy_file(source, copy, fs::copy_options::overwrite_existing, ec))
+    {
+        outError = ec.message();
+        return {};
+    }
+
+    return copy.string();
 }
 
 static void* GetSymbol(LibHandle lib, const char* name)
@@ -243,7 +300,23 @@ bool PluginManager::LoadPluginFromPath(const char* fullPath, char* error, size_t
         return LoadScriptFromPath(fullPath, error, maxlen, hotReload);
 
     std::string dlErr;
-    auto lib = OpenLib(fullPath, dlErr);
+    std::string copyErr;
+    const std::string loadPath = ShadowCopy(fullPath, copyErr);
+    if (loadPath.empty())
+        FP_WARN("No private copy of {} ({}); loading it in place, so it must not be overwritten while loaded", fullPath, copyErr);
+
+    auto lib = OpenLib(loadPath.empty() ? fullPath : loadPath.c_str(), dlErr);
+
+    if (!loadPath.empty())
+    {
+#ifdef _WIN32
+        if (!lib)
+#endif
+        {
+            std::error_code ec;
+            std::filesystem::remove(loadPath, ec);
+        }
+    }
 
     if (!lib)
     {

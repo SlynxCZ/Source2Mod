@@ -59,6 +59,8 @@ namespace paths {
     inline std::string GetGamedataDirectory() { return GameDirectory() + "/addons/source2mod/gamedata"; }
     inline std::string GetPluginsDirectory() { return GameDirectory() + "/addons/source2mod/plugins"; }
     inline std::string GetSharedDirectory() { return GameDirectory() + "/addons/source2mod/shared"; }
+    // Private copies native plugins are loaded from (PluginManager).
+    inline std::string GetPluginCacheDirectory() { return GameDirectory() + "/addons/source2mod/data/plugincache"; }
     /// Where the crash handler writes its minidumps and crash .txt files.
     inline std::string GetDumpsDirectory() { return GameDirectory() + "/addons/source2mod/dumps"; }
 
