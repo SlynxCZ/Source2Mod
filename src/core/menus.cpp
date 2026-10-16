@@ -52,6 +52,12 @@ namespace menus
     namespace
     {
         constexpr int kMaxPerPage = 6;   // 7, 8, 9 are Back, Next, Exit
+        // Lines of options a page shows, numbered and text ones together: with
+        // the title and the one navigation line that is 8, what the center
+        // panel shows in full.
+        constexpr int kMaxLinesPerPage = 6;
+        // The panel is shown for 3 seconds a time; sent again before that.
+        constexpr auto kResendAfter = std::chrono::seconds(1);
 
         std::string Escape(const std::string& text)
         {
@@ -172,14 +178,15 @@ namespace menus
             visible.push_back(i);
         }
 
-        // Pages of up to ItemsPerPage numbered options; text lines ride along.
+        // Pages of up to ItemsPerPage numbered options, and of no more lines
+        // than the panel shows (text lines count too).
         const int perPage = std::clamp(menu->GetItemsPerPage(), 1, kMaxPerPage);
         std::vector<std::vector<int>> split(1);
         int numbered = 0;
         for (int i : visible)
         {
             const bool isText = menu->Options()[i].IsText;
-            if (!isText && numbered == perPage)
+            if ((!isText && numbered == perPage) || static_cast<int>(split.back().size()) == kMaxLinesPerPage)
             {
                 split.emplace_back();
                 numbered = 0;
@@ -269,14 +276,32 @@ namespace menus
             keys |= 1u << 9;
         keyMask_ = keys;
 
+        // Back, Next and Close on one line, so a full page still fits.
+        std::string nav;
+        auto addNav = [&nav](const std::string& item)
+        {
+            if (!nav.empty())
+                nav += "&nbsp;&nbsp;&nbsp;";
+            nav += item;
+        };
         if (level.page > 0 || path_.size() > 1)
-            html += "<font color='" + chMenu_->PrevPageColor + "'>!7</font> &lt;- Back<br>\n";
+            addNav("<font color='" + chMenu_->PrevPageColor + "'>!7</font> &lt;- Back");
         if (level.page < pages - 1)
-            html += "<font color='" + chMenu_->NextPageColor + "'>!8</font> -&gt; Next<br>\n";
+            addNav("<font color='" + chMenu_->NextPageColor + "'>!8</font> Next -&gt;");
         if (chMenu_->GetExitButton())
-            html += "<font color='" + chMenu_->CloseColor + "'>!9</font> -&gt; Close<br>\n";
+            addNav("<font color='" + chMenu_->CloseColor + "'>!9</font> Close");
+        if (!nav.empty())
+            html += nav + "<br>\n";
 
-        player->PrintToCenterHtml(html.c_str(), 3, true);
+        // Built every frame (the evaluators may change it), sent only when it
+        // changed or the panel is about to run out -- not 64 times a second.
+        const auto now = std::chrono::steady_clock::now();
+        if (html == sentHtml_ && now - sentAt_ < kResendAfter)
+            return;
+        sentHtml_ = std::move(html);
+        sentAt_ = now;
+
+        player->PrintToCenterHtml(sentHtml_.c_str(), 3, true);
     }
 
     void CenterHtmlMenuInstance::OnKeyPress(CCSPlayerController* p, int key)

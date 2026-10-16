@@ -94,6 +94,11 @@ namespace menus {
         std::vector<Level> path_;
         std::chrono::steady_clock::time_point opened_;
         uint32_t keyMask_ = 0;
+
+        /// What the panel was last sent, and when: Display() runs every frame,
+        /// the panel only gets it again when it changed or before it runs out.
+        std::string sentHtml_;
+        std::chrono::steady_clock::time_point sentAt_{};
     };
 
     class MenuManager : public ISource2ModMenus
