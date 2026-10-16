@@ -40,7 +40,7 @@ inc += ["",
  "\tpublic static native bool IsResolved(Source2ModAddress address);",
  "}",
  ""]
-open(os.path.join(root, "configs/addons/source2mod/scripting/include/source2mod/addresses.inc"), "w", newline="\n").write("\n".join(inc))
+open(os.path.join(sdk, "public/scripting/source2mod/addresses.inc"), "w", newline="\n").write("\n".join(inc))
 h = ["// The ISource2ModAddresses getters, in the order of source2mod/addresses.inc's",
      "// Source2ModAddress enum. Regenerate both together when the interface changes.",
      "#define SOURCE2MOD_SP_ADDRESSES(X) \\"]

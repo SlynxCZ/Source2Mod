@@ -35,7 +35,8 @@ A copy of the GNU General Public License 3.0 is available in LICENSE.
 Source2Mod is Copyright (C) 2025-2026 Michal "Slynx" Prikryl.
 All rights reserved.
 Metamod:Source and HL2SDK are Copyright (C) AlliedModders LLC. SourceMod (whose
-include set ships, renamed, in addons/source2mod/scripting/include) and
+include set the SDK's public/scripting builds on, renamed; it ships in
+addons/source2mod/scripting/include) and
 SourcePawn (vendor/sourcepawn) are Copyright (C) AlliedModders LLC and stay
 under their own license terms, which the exceptions above do not change. KHook is
 Copyright (C) Benoist "Kenzzer" André. Both are credited in ACKNOWLEDGEMENTS.md.

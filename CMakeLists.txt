@@ -333,3 +333,11 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/configs ${CMAKE_BINARY_DIR}
 )
+
+# The SourcePawn include set lives in the SDK (public/scripting) and ships
+# next to spcomp in addons/source2mod/scripting.
+add_custom_command(
+        TARGET ${PROJECT_NAME} PRE_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${SOURCE2MOD_SDK_DIR}/public/scripting ${CMAKE_BINARY_DIR}/addons/source2mod/scripting/include
+)

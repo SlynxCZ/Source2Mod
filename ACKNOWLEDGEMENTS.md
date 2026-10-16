@@ -46,9 +46,11 @@ interfaces.
 ## SourceMod
 
 Source2Mod's SourcePawn plugin API follows SourceMod's, AlliedModders LLC's
-server modification for Source 1 games. The include set shipped in
-`addons/source2mod/scripting/include` is SourceMod's, renamed to Source2Mod;
-every file keeps its AlliedModders LLC license header unchanged. The natives
+server modification for Source 1 games. The include set (kept in the
+Source2Mod SDK under `public/scripting`, shipped in
+`addons/source2mod/scripting/include`) builds on SourceMod's, renamed to
+Source2Mod; every file taken from it keeps its AlliedModders LLC license
+header unchanged. The natives
 behind it are implemented on Source2Mod's own systems.
 
 ``` cpp
