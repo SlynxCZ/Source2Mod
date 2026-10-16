@@ -115,6 +115,9 @@ namespace slotinput {
             uint32_t MenuKeys = 0;
             // The injected m_hMyWeapons the client was last told about.
             uint64_t SentSignature = 0;
+            // Frames left before the fakes go; while > 0 they are owned and
+            // still injected, so the client sees them owned once.
+            int Handover = 0;
         };
 
         enum class KeySource : uint8_t
@@ -230,13 +233,14 @@ namespace slotinput {
             if (!setSubclass)
                 return nullptr;
 
-            // The class of the weapon the key stands for. The client predicts
-            // the switch to the fake (a short flick on the press): the only
-            // thing that stops its prediction is a weapon without an owner,
-            // and an ownerless weapon in the inventory makes the client's
-            // loadout HUD flicker for as long as it is there and stay stuck in
-            // the slot selection after it is gone -- the worse trade.
-            auto* weapon = CBaseEntity::New<CBasePlayerWeapon>(def.Classname);
+            // Always a knife, carrying the vdata of the weapon the key stands
+            // for, and no owner while the menu is open: the client's HUD lets
+            // a knife be selected without an owner, so the key still leaves as
+            // weaponselect, and its prediction cannot deploy a weapon without
+            // one (CanDeploy) -- no switch on the press. Before the fakes go,
+            // they get the pawn as owner for one snapshot (BeginHandover), or
+            // the client keeps them in its slot selection after they are gone.
+            auto* weapon = CBaseEntity::New<CBasePlayerWeapon>("weapon_knife");
             if (!weapon)
                 return nullptr;
 
@@ -263,13 +267,17 @@ namespace slotinput {
             Vector origin = pawn->GetAbsOrigin();
             weapon->Teleport(&origin, nullptr, nullptr);
 
-            // Owned: nobody picks it up, the unowned-weapon cleanup leaves it
-            // alone, and the client keeps it as a held weapon (see above).
-            weapon->m_hOwnerEntity() = CHandle<CBaseEntity>(pawn);
-            weapon->m_hOwnerEntity.NetworkStateChanged();
-
+            // No owner while the menu is open (see above). Non-solid, so
+            // nobody touches it to pick it up.
             weapon->m_fEffects() |= EF_NODRAW;
             weapon->m_fEffects.NetworkStateChanged();
+
+            // An ownerless weapon is a dropped one to the client, which draws
+            // its world model whatever EF_NODRAW says; nothing to draw, then.
+            weapon->m_nRenderMode() = kRenderNone;
+            weapon->m_nRenderMode.NetworkStateChanged();
+            weapon->m_clrRender() = Color(255, 255, 255, 0);
+            weapon->m_clrRender.NetworkStateChanged();
 
             weapon->m_Collision().m_nSolidType() = SOLID_NONE;
             weapon->m_Collision().m_usSolidFlags() |= FSOLID_NOT_SOLID;
@@ -287,11 +295,33 @@ namespace slotinput {
                 myWeapons.FindAndRemove(fake.Weapon);
         }
 
+        // The keys go back to the game: the fakes get the pawn as owner and
+        // stay one more snapshot, so the client drops them from its slot
+        // selection when they go (an ownerless one would stay stuck there).
+        bool BeginHandover(Session& s)
+        {
+            CCSPlayerPawn* pawn = s.Pawn.Get();
+            if (!pawn || !pawn->m_pWeaponServices())
+                return false;
+
+            for (const Fake& fake : s.Fakes)
+            {
+                if (CBasePlayerWeapon* weapon = fake.Weapon.Get())
+                {
+                    weapon->m_hOwnerEntity() = CHandle<CBaseEntity>(pawn);
+                    weapon->m_hOwnerEntity.NetworkStateChanged();
+                }
+            }
+            s.Handover = 2;
+            return true;
+        }
+
         void Stop(int slot)
         {
             Session& s = g_Sessions[slot];
             if (!s.Active)
                 return;
+
 
             if (CPlayer_WeaponServices* ws = WeaponServicesOf(s))
             {
@@ -645,12 +675,17 @@ namespace slotinput {
             const uint32_t menuKeys = MenuKeys(player);
             if (!menuKeys)
             {
+                // Closing: the owner goes out first, the fakes a snapshot later.
+                if (s.Active && s.Handover == 0 && BeginHandover(s))
+                    continue;
+                if (s.Handover > 0 && --s.Handover > 0)
+                    continue;
                 Stop(slot);
                 continue;
             }
 
             CCSPlayerPawn* pawn = player->GetPlayerPawn();
-            if (s.Active && s.Pawn.Get() != pawn)
+            if (s.Active && (s.Pawn.Get() != pawn || s.Handover > 0))
                 Stop(slot);
 
             if (!s.Active)
