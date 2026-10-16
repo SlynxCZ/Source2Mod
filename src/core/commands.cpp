@@ -593,8 +593,15 @@ namespace commands {
         Action result = Action::Ignore;
 
         // Copied: a handler may register or unregister commands while it runs.
-        const std::vector<CommandEntry> entries = it->second;
+        std::vector<CommandEntry> entries = it->second;
         bool denied = false;
+
+        // A command or chat listener of Source2Mod's (entry.command set) is
+        // the command itself, kept in the same list as the listeners on its
+        // name. The listeners go first, whatever order things were registered
+        // in: a pre listener's Supersede is what keeps the command from
+        // running at all, as it does for an engine command.
+        std::stable_partition(entries.begin(), entries.end(), [](const CommandEntry& e) { return e.command.empty(); });
 
         for (const auto &entry: entries) {
             if (entry.post != post)

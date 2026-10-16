@@ -60,6 +60,11 @@ namespace events {
 
     Source2ModHookId EventManager::HookGameEvent(PluginId owner, const char* name, GameEventHandler handler, bool post)
     {
+        // 0 for an event the game does not have: a listener on a name that
+        // never fires would only sit there.
+        if (!name || !*name || (shared::g_pGameEventManager && !shared::g_pGameEventManager->HasEventDescriptor(name)))
+            return 0;
+
         const Source2ModHookId id = hookid::Next();
         gameEvents[name].push_back({ owner, std::move(handler), post, id });
         RegisterListenerIfNeeded(name);
