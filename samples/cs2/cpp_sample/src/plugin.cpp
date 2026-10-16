@@ -1800,14 +1800,30 @@ public:
         if (!player_)
             return;
 
+        // Three keys a line: the center HTML panel shows only a handful of
+        // lines, one key a line got cut off.
         std::string html = "<b><font color='yellow'>Key test</font></b> <font color='grey'>page " + std::to_string(m_nPage + 1) + "/2, " + std::to_string(m_nTotal) + " presses</font><br>\n";
+        int onLine = 0;
         for (int key = 1; key <= 9; key++)
         {
             if (!(KeyMask() & (1u << key)))
                 continue;
 
-            std::string label = key == 9 ? (m_nPage == 0 ? "-&gt; page 2" : "&lt;- page 1") : "count";
-            html += "<font color='green'>!" + std::to_string(key) + "</font> " + label + " <font color='grey'>(" + std::to_string(m_nCounts[key]) + ")</font><br>\n";
+            if (key == 9)
+            {
+                if (onLine)
+                    html += "<br>\n";
+                html += "<font color='green'>!9</font> " + std::string(m_nPage == 0 ? "-&gt; page 2" : "&lt;- page 1") + " <font color='grey'>(" + std::to_string(m_nCounts[9]) + ")</font><br>\n";
+                onLine = 0;
+                continue;
+            }
+
+            html += "<font color='green'>!" + std::to_string(key) + "</font> <font color='grey'>" + std::to_string(m_nCounts[key]) + "</font>&nbsp;&nbsp;&nbsp;";
+            if (++onLine == 3)
+            {
+                html += "<br>\n";
+                onLine = 0;
+            }
         }
         if (m_nPage == 1)
             html += "<font color='grey'>7 and 8 are not in this page</font><br>\n";
