@@ -101,7 +101,14 @@ namespace slotinput {
         {
             int Key;
             CHandle<CBasePlayerWeapon> Weapon;
+            // Snapshots its owner has been sent it in; after a couple it is
+            // kept dormant on the owner's client (see BlockForViewer).
+            int Sent = 0;
         };
+
+        // Sent this many times to its owner, a fake is not transmitted to
+        // them any more: the client keeps it dormant.
+        constexpr int kSendsBeforeDormant = 3;
 
         struct Session
         {
@@ -784,6 +791,14 @@ namespace slotinput {
         g_bAnyInjected = false;
     }
 
+    // Nobody else ever gets a player's fakes. The owner gets each one a few
+    // times and then no more: the client keeps it dormant (non-transmit, not
+    // deleted). The loadout HUD skips dormant weapons -- it would otherwise add
+    // an ownerless fake's row every update and delete it the next, because it
+    // keeps a row only for a weapon owned by the player -- while the slot
+    // selection still finds the dormant fake and sends the key. The owner gets
+    // them again on a full update, and during the handover, so the owner the
+    // fakes get before they go reaches the client.
     void BlockForViewer(CCheckTransmitInfo* info)
     {
         if (!info || !info->m_pTransmitEntity || !info->m_pNonTransmitEntity)
@@ -792,18 +807,28 @@ namespace slotinput {
         const int viewerSlot = info->m_nPlayerSlot.Get();
         for (int slot = 0; slot < ABSOLUTE_PLAYER_LIMIT; slot++)
         {
-            const Session& s = g_Sessions[slot];
-            if (!s.Active || slot == viewerSlot)
+            Session& s = g_Sessions[slot];
+            if (!s.Active)
                 continue;
 
-            for (const Fake& fake : s.Fakes)
+            const bool own = slot == viewerSlot;
+            for (Fake& fake : s.Fakes)
             {
-                if (CBasePlayerWeapon* weapon = fake.Weapon.Get())
+                CBasePlayerWeapon* weapon = fake.Weapon.Get();
+                if (!weapon)
+                    continue;
+
+                if (own)
                 {
-                    const int index = weapon->GetEntityIndex().Get();
-                    info->m_pTransmitEntity->Clear(index);
-                    info->m_pNonTransmitEntity->Set(index);
+                    if (info->m_bFullUpdate || s.Handover > 0)
+                        fake.Sent = 0;
+                    if (s.Handover > 0 || fake.Sent++ < kSendsBeforeDormant)
+                        continue;
                 }
+
+                const int index = weapon->GetEntityIndex().Get();
+                info->m_pTransmitEntity->Clear(index);
+                info->m_pNonTransmitEntity->Set(index);
             }
         }
     }
