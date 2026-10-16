@@ -89,8 +89,8 @@ namespace permissions
         void AddGroupParent(PluginId owner, const char* group, const char* parent) override;
         void RemoveGroupParent(PluginId owner, const char* group, const char* parent) override;
 
-        Source2ModHookId SetAccessDeniedHandler(AccessDeniedHandler handler) override;
-        bool ClearAccessDeniedHandler(Source2ModHookId id) override;
+        Source2ModAccessDeniedHandlerId SetAccessDeniedHandler(AccessDeniedHandler handler) override;
+        bool ClearAccessDeniedHandler(Source2ModAccessDeniedHandlerId id) override;
 
         // Core side
         void Init();

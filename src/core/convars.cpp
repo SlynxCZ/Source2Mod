@@ -563,7 +563,7 @@ namespace convars
         m_bGlobalCallbackInstalled = false;
     }
 
-    Source2ModHookId ConVarsManager::HookConVarChange(PluginId owner, ConVarChangeHandler handler)
+    Source2ModConVarHookId ConVarsManager::HookConVarChange(PluginId owner, ConVarChangeHandler handler)
     {
         if (!handler)
             return 0;

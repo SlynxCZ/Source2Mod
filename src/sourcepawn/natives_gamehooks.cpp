@@ -248,16 +248,16 @@ namespace sourcepawn
         struct ScriptGameHook
         {
             PluginId owner;
-            bool (*unhook)(GameHookId);
+            bool (*unhook)(Source2ModGameHookId);
         };
-        std::map<GameHookId, ScriptGameHook> g_gameHooks;
+        std::map<Source2ModGameHookId, ScriptGameHook> g_gameHooks;
 
         ISource2ModGameHooks& GH()
         {
             return gamehooks::gameHooksManager;
         }
 
-        template <typename C, GameHookId (ISource2ModGameHooks::*HOOK)(GameHookHandler<C>, bool), bool (ISource2ModGameHooks::*UNHOOK)(GameHookId)>
+        template <typename C, Source2ModGameHookId (ISource2ModGameHooks::*HOOK)(GameHookHandler<C>, bool), bool (ISource2ModGameHooks::*UNHOOK)(Source2ModGameHookId)>
         cell_t N_Hook(IPluginContext* ctx, const cell_t* params)
         {
             IPluginFunction* fn = Function(ctx, params[1]);
@@ -268,13 +268,13 @@ namespace sourcepawn
             {
                 return RunHandler(fn, owner, c, post);
             });
-            const GameHookId id = (GH().*HOOK)(std::move(handler), params[2] != 0);
+            const Source2ModGameHookId id = (GH().*HOOK)(std::move(handler), params[2] != 0);
             if (id)
-                g_gameHooks[id] = { owner, [](GameHookId i) { return (GH().*UNHOOK)(i); } };
+                g_gameHooks[id] = { owner, [](Source2ModGameHookId i) { return (GH().*UNHOOK)(i); } };
             return id;
         }
 
-        bool Unhook(GameHookId id)
+        bool Unhook(Source2ModGameHookId id)
         {
             auto it = g_gameHooks.find(id);
             if (it == g_gameHooks.end())
@@ -964,7 +964,7 @@ namespace sourcepawn
 
         cell_t N_TUnhookCheckTransmit(IPluginContext*, const cell_t* params)
         {
-            return static_cast<ISource2ModTransmit&>(TM()).UnhookCheckTransmit(static_cast<Source2ModHookId>(params[1]));
+            return static_cast<ISource2ModTransmit&>(TM()).UnhookCheckTransmit(static_cast<Source2ModTransmitHookId>(params[1]));
         }
 
         cell_t N_ListGet(IPluginContext* ctx, const cell_t* params)
@@ -1384,11 +1384,11 @@ namespace sourcepawn
 
     void ForgetGameHooks(PluginId id)
     {
-        std::vector<GameHookId> ids;
+        std::vector<Source2ModGameHookId> ids;
         for (const auto& [hookId, hook] : g_gameHooks)
             if (hook.owner == id)
                 ids.push_back(hookId);
-        for (GameHookId hookId : ids)
+        for (Source2ModGameHookId hookId : ids)
             Unhook(hookId);
     }
 

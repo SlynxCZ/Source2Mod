@@ -56,13 +56,13 @@ namespace customhud {
     class CustomHudManager : public ISource2ModCustomHud {
     public:
 
-        Source2ModHookId HookCustomHudClick(CCSCustomHudLayout* pLayout, CustomHudClickHandler handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookCustomHudClick(owner, pLayout, std::move(handler)); }
+        Source2ModCustomHudHookId HookCustomHudClick(CCSCustomHudLayout* pLayout, CustomHudClickHandler handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookCustomHudClick(owner, pLayout, std::move(handler)); }
         bool UnhookCustomHudClick(CCSCustomHudLayout* pLayout, const CustomHudClickHandler& handler) override { return UnhookCustomHudClick(hookid::OwnerOfHandler(handler), pLayout, handler); }
-        bool UnhookCustomHudClick(Source2ModHookId id) override { return UnhookCustomHudClickId(id); }
+        bool UnhookCustomHudClick(Source2ModCustomHudHookId id) override { return UnhookCustomHudClickId(id); }
 
         // The same with the owner spelled out: what the calls above resolve
         // to, and what the core itself calls.
-        Source2ModHookId HookCustomHudClick(PluginId owner, CCSCustomHudLayout* pLayout, CustomHudClickHandler handler);
+        Source2ModCustomHudHookId HookCustomHudClick(PluginId owner, CCSCustomHudLayout* pLayout, CustomHudClickHandler handler);
         bool UnhookCustomHudClick(PluginId owner, CCSCustomHudLayout* pLayout, const CustomHudClickHandler& handler);
         bool UnhookCustomHudClickId(Source2ModHookId id);
         void UnhookCustomHudClick(CCSCustomHudLayout* pLayout) override;

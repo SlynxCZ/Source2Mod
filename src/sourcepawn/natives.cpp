@@ -844,7 +844,7 @@ namespace sourcepawn
 
         cell_t N_S2MUnhookGameEvent(IPluginContext*, const cell_t* params)
         {
-            return static_cast<ISource2ModEvents&>(events::eventManager).UnhookGameEvent(static_cast<Source2ModHookId>(params[1]));
+            return static_cast<ISource2ModEvents&>(events::eventManager).UnhookGameEvent(static_cast<Source2ModEventHookId>(params[1]));
         }
 
         cell_t N_GameEventGetPlayerSlot(IPluginContext* ctx, const cell_t* params)

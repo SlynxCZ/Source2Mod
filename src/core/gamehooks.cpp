@@ -127,14 +127,14 @@ namespace gamehooks
         }
 
         // Ids are unique across every hook, so a wrong UnhookX() finds nothing.
-        GameHookId s_lastHookId = 0;
+        Source2ModGameHookId s_lastHookId = 0;
 
         template <typename CONTEXT>
         struct Listener
         {
             PluginId owner;
             GameHookHandler<CONTEXT> handler;
-            GameHookId id;
+            Source2ModGameHookId id;
         };
 
         // The listeners of one hook, pre and post, and the dispatch over them:
@@ -144,14 +144,14 @@ namespace gamehooks
         class Listeners
         {
         public:
-            GameHookId Add(PluginId owner, GameHookHandler<CONTEXT> handler, bool post)
+            Source2ModGameHookId Add(PluginId owner, GameHookHandler<CONTEXT> handler, bool post)
             {
-                const GameHookId id = ++s_lastHookId;
+                const Source2ModGameHookId id = ++s_lastHookId;
                 (post ? m_post : m_pre).push_back({ owner, std::move(handler), id });
                 return id;
             }
 
-            bool Remove(GameHookId id)
+            bool Remove(Source2ModGameHookId id)
             {
                 const auto match = [id](const Listener<CONTEXT>& l) { return l.id == id; };
                 return std::erase_if(m_pre, match) + std::erase_if(m_post, match) > 0;
@@ -257,14 +257,14 @@ namespace gamehooks
 
             const char* Name() const override { return m_pszName; }
 
-            GameHookId Add(PluginId owner, GameHookHandler<CONTEXT> handler, bool post)
+            Source2ModGameHookId Add(PluginId owner, GameHookHandler<CONTEXT> handler, bool post)
             {
-                const GameHookId id = m_listeners.Add(owner, std::move(handler), post);
+                const Source2ModGameHookId id = m_listeners.Add(owner, std::move(handler), post);
                 Install();
                 return id;
             }
 
-            bool Remove(GameHookId id) override { return m_listeners.Remove(id); }
+            bool Remove(Source2ModGameHookId id) override { return m_listeners.Remove(id); }
 
             bool RemoveHandler(PluginId owner, const void* handler, bool post) override
             {
@@ -698,7 +698,7 @@ namespace gamehooks
 
 // The owner is the plugin the handler's code lies in (Source2ModCallback::Origin).
 #define GAMEHOOK_ADD(Method, HookType, Ctx, Which) \
-    GameHookId GameHooksManager::Method(GameHookHandler<Ctx> handler, bool post) \
+    Source2ModGameHookId GameHooksManager::Method(GameHookHandler<Ctx> handler, bool post) \
     { \
         const PluginId owner = hookid::OwnerOfHandler(handler); \
         return As<HookType>(m_hooks[static_cast<size_t>(GameHook::Which)]).Add(owner, std::move(handler), post); \
@@ -745,7 +745,7 @@ namespace gamehooks
     // The detour stays until Tick(): an UnhookX() may come from inside the
     // hook's own dispatch.
 #define GAMEHOOK_REMOVE(Method, Ctx, Which) \
-    bool GameHooksManager::Method(GameHookId id) \
+    bool GameHooksManager::Method(Source2ModGameHookId id) \
     { \
         return m_hooks[static_cast<size_t>(GameHook::Which)]->Remove(id); \
     } \

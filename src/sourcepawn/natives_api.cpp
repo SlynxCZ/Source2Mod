@@ -186,7 +186,7 @@ namespace sourcepawn
 
         cell_t N_Unregister(IPluginContext*, const cell_t* params)
         {
-            return static_cast<ISource2ModCommands&>(commands::commandsManager).UnregisterConCommand(static_cast<Source2ModHookId>(params[1]));
+            return static_cast<ISource2ModCommands&>(commands::commandsManager).UnregisterConCommand(static_cast<Source2ModCommandId>(params[1]));
         }
 
         // ReplyToCommand(context, format, ...)

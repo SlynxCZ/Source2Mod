@@ -347,7 +347,7 @@ namespace transmit
     Hooks
     ========================= */
 
-    Source2ModHookId TransmitManager::HookCheckTransmit(PluginId owner, CheckTransmitHook handler)
+    Source2ModTransmitHookId TransmitManager::HookCheckTransmit(PluginId owner, CheckTransmitHook handler)
     {
         return m_checkHooks.Add(owner, std::move(handler));
     }

@@ -135,13 +135,13 @@ namespace transmit
         void ResetViewer(CPlayerSlot viewer) override;
 
 
-        Source2ModHookId HookCheckTransmit(CheckTransmitHook handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookCheckTransmit(owner, std::move(handler)); }
+        Source2ModTransmitHookId HookCheckTransmit(CheckTransmitHook handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookCheckTransmit(owner, std::move(handler)); }
         bool UnhookCheckTransmit(const CheckTransmitHook& handler) override { return UnhookCheckTransmit(hookid::OwnerOfHandler(handler), handler); }
-        bool UnhookCheckTransmit(Source2ModHookId id) override { return UnhookCheckTransmitId(id); }
+        bool UnhookCheckTransmit(Source2ModTransmitHookId id) override { return UnhookCheckTransmitId(id); }
 
         // The same with the owner spelled out: what the calls above resolve
         // to, and what the core itself calls.
-        Source2ModHookId HookCheckTransmit(PluginId owner, CheckTransmitHook handler);
+        Source2ModTransmitHookId HookCheckTransmit(PluginId owner, CheckTransmitHook handler);
         bool UnhookCheckTransmit(PluginId owner, const CheckTransmitHook& handler);
         bool UnhookCheckTransmitId(Source2ModHookId id);
 

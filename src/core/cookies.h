@@ -54,8 +54,8 @@ namespace cookies
         int64_t GetCookieTime(CPlayerSlot slot, Source2ModCookieId cookie) override;
         bool SetCookieBySteamID(uint64 steamId, Source2ModCookieId cookie, const char* value) override;
 
-        Source2ModHookId AddCookiesCachedListener(CookiesCachedCallback callback) override;
-        bool RemoveCookiesCachedListener(Source2ModHookId id) override;
+        Source2ModCookiesListenerId AddCookiesCachedListener(CookiesCachedCallback callback) override;
+        bool RemoveCookiesCachedListener(Source2ModCookiesListenerId id) override;
 
         /// Opens the database (and loads the players already authorized, for a late load).
         void Init();

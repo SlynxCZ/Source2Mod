@@ -194,13 +194,13 @@ namespace sounds
         const char* LookupSoundName(uint32_t hash) override;
 
 
-        Source2ModHookId HookSound(SoundHook handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookSound(owner, std::move(handler)); }
+        Source2ModSoundHookId HookSound(SoundHook handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookSound(owner, std::move(handler)); }
         bool UnhookSound(const SoundHook& handler) override { return UnhookSound(hookid::OwnerOfHandler(handler), handler); }
-        bool UnhookSound(Source2ModHookId id) override { return UnhookSoundId(id); }
+        bool UnhookSound(Source2ModSoundHookId id) override { return UnhookSoundId(id); }
 
         // The same with the owner spelled out: what the calls above resolve
         // to, and what the core itself calls.
-        Source2ModHookId HookSound(PluginId owner, SoundHook handler);
+        Source2ModSoundHookId HookSound(PluginId owner, SoundHook handler);
         bool UnhookSound(PluginId owner, const SoundHook& handler);
         bool UnhookSoundId(Source2ModHookId id);
 

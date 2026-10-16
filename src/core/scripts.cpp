@@ -488,7 +488,7 @@ namespace scripts
     Messages
     ========================= */
 
-    Source2ModHookId ScriptsManager::HookScriptMessage(PluginId owner, const char* pszChannel, ScriptMessageHandler handler)
+    Source2ModScriptMessageHookId ScriptsManager::HookScriptMessage(PluginId owner, const char* pszChannel, ScriptMessageHandler handler)
     {
         if (!pszChannel || !*pszChannel || !handler)
             return 0;

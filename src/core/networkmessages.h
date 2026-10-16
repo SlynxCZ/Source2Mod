@@ -144,23 +144,23 @@ namespace networkmessages
         void SendMessageToPlayers(void* msg, int msgid, uint64_t playermask) override;
 
 
-        Source2ModHookId HookServerMessage(NetMessageServerHook handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookServerMessage(owner, std::move(handler)); }
+        Source2ModNetMessageHookId HookServerMessage(NetMessageServerHook handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookServerMessage(owner, std::move(handler)); }
         bool UnhookServerMessage(const NetMessageServerHook& handler) override { return UnhookServerMessage(hookid::OwnerOfHandler(handler), handler); }
-        bool UnhookServerMessage(Source2ModHookId id) override { return m_serverHooks.RemoveId(id); }
-        Source2ModHookId HookClientMessage(NetMessageClientHook handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookClientMessage(owner, std::move(handler)); }
+        bool UnhookServerMessage(Source2ModNetMessageHookId id) override { return m_serverHooks.RemoveId(id); }
+        Source2ModNetMessageHookId HookClientMessage(NetMessageClientHook handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookClientMessage(owner, std::move(handler)); }
         bool UnhookClientMessage(const NetMessageClientHook& handler) override { return UnhookClientMessage(hookid::OwnerOfHandler(handler), handler); }
-        bool UnhookClientMessage(Source2ModHookId id) override { return m_clientHooks.RemoveId(id); }
-        Source2ModHookId HookServerInternalMessage(NetMessageClientHook handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookServerInternalMessage(owner, std::move(handler)); }
+        bool UnhookClientMessage(Source2ModNetMessageHookId id) override { return m_clientHooks.RemoveId(id); }
+        Source2ModNetMessageHookId HookServerInternalMessage(NetMessageClientHook handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookServerInternalMessage(owner, std::move(handler)); }
         bool UnhookServerInternalMessage(const NetMessageClientHook& handler) override { return UnhookServerInternalMessage(hookid::OwnerOfHandler(handler), handler); }
-        bool UnhookServerInternalMessage(Source2ModHookId id) override { return m_serverInternalHooks.RemoveId(id); }
+        bool UnhookServerInternalMessage(Source2ModNetMessageHookId id) override { return m_serverInternalHooks.RemoveId(id); }
 
         // The same with the owner spelled out: what the calls above resolve
         // to, and what the core itself calls.
-        Source2ModHookId HookServerMessage(PluginId owner, NetMessageServerHook handler);
+        Source2ModNetMessageHookId HookServerMessage(PluginId owner, NetMessageServerHook handler);
         bool UnhookServerMessage(PluginId owner, const NetMessageServerHook& handler);
-        Source2ModHookId HookClientMessage(PluginId owner, NetMessageClientHook handler);
+        Source2ModNetMessageHookId HookClientMessage(PluginId owner, NetMessageClientHook handler);
         bool UnhookClientMessage(PluginId owner, const NetMessageClientHook& handler);
-        Source2ModHookId HookServerInternalMessage(PluginId owner, NetMessageClientHook handler);
+        Source2ModNetMessageHookId HookServerInternalMessage(PluginId owner, NetMessageClientHook handler);
         bool UnhookServerInternalMessage(PluginId owner, const NetMessageClientHook& handler);
         // Any of the three kinds -- the script side, which checks the kind itself.
         bool UnhookNetMessage(Source2ModHookId id);

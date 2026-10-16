@@ -417,7 +417,7 @@ namespace cookies
 
     // ---- listeners ---------------------------------------------------------------
 
-    Source2ModHookId CookiesManager::AddCookiesCachedListener(CookiesCachedCallback callback)
+    Source2ModCookiesListenerId CookiesManager::AddCookiesCachedListener(CookiesCachedCallback callback)
     {
         const PluginId owner = hookid::OwnerOfHandler(callback);
         const Source2ModHookId id = hookid::Next();
@@ -425,7 +425,7 @@ namespace cookies
         return id;
     }
 
-    bool CookiesManager::RemoveCookiesCachedListener(Source2ModHookId id)
+    bool CookiesManager::RemoveCookiesCachedListener(Source2ModCookiesListenerId id)
     {
         const size_t before = m_listeners.size();
         std::erase_if(m_listeners, [id](const Listener& l) { return l.id == id; });

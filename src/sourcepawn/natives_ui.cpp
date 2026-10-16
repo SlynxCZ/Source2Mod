@@ -685,7 +685,7 @@ namespace sourcepawn
                 args.PushString(buttonId ? buttonId : "");
                 Invoke(fn, args);
             });
-            const Source2ModHookId id = customhud::customHudManager.HookCustomHudClick(owner, layout, std::move(handler));
+            const Source2ModCustomHudHookId id = customhud::customHudManager.HookCustomHudClick(owner, layout, std::move(handler));
             if (id)
                 g_hudHooks[id] = { owner, layout->GetRefEHandle() };
             return static_cast<cell_t>(id);
@@ -783,7 +783,7 @@ namespace sourcepawn
                 args.PushString(payload ? payload : "");
                 Invoke(fn, args);
             });
-            const Source2ModHookId id = scripts::scriptsManager.HookScriptMessage(owner, LocalString(ctx, params[1]), std::move(handler));
+            const Source2ModScriptMessageHookId id = scripts::scriptsManager.HookScriptMessage(owner, LocalString(ctx, params[1]), std::move(handler));
             if (id)
                 g_scriptHooks[id] = owner;
             return static_cast<cell_t>(id);

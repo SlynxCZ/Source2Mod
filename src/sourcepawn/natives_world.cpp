@@ -298,7 +298,7 @@ namespace sourcepawn
                 Handles().Free(args, 0, true);
                 Handles().Free(context, 0, true);
             });
-            const Source2ModHookId id = Perms().SetAccessDeniedHandler(std::move(handler));
+            const Source2ModAccessDeniedHandlerId id = Perms().SetAccessDeniedHandler(std::move(handler));
             if (id)
                 g_deniedHandlers[id] = owner;
             return static_cast<cell_t>(id);

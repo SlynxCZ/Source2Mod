@@ -49,7 +49,7 @@ namespace customhud
 {
     CustomHudManager customHudManager;
 
-    Source2ModHookId CustomHudManager::HookCustomHudClick(PluginId owner, CCSCustomHudLayout* pLayout, CustomHudClickHandler handler)
+    Source2ModCustomHudHookId CustomHudManager::HookCustomHudClick(PluginId owner, CCSCustomHudLayout* pLayout, CustomHudClickHandler handler)
     {
         if (!pLayout || !handler)
             return 0;

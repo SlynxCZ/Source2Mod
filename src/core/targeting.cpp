@@ -379,7 +379,7 @@ namespace targeting
         }
     }
 
-    Source2ModHookId TargetingManager::AddTargetFilter(const char* name, Source2ModTargetFilter filter, const char* phrase, bool phraseIsTranslation)
+    Source2ModTargetFilterId TargetingManager::AddTargetFilter(const char* name, Source2ModTargetFilter filter, const char* phrase, bool phraseIsTranslation)
     {
         const PluginId owner = hookid::OwnerOfHandler(filter);
         return AddTargetFilterFor(owner, name, std::move(filter), phrase, phraseIsTranslation);
@@ -407,7 +407,7 @@ namespace targeting
         return id;
     }
 
-    bool TargetingManager::RemoveTargetFilter(Source2ModHookId id)
+    bool TargetingManager::RemoveTargetFilter(Source2ModTargetFilterId id)
     {
         const auto before = m_filters.size();
         std::erase_if(m_filters, [id](const Filter& f) { return f.id == id; });

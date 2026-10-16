@@ -99,13 +99,13 @@ namespace convars {
         void DeleteConVar(uint16 accessIndex) override;
 
 
-        Source2ModHookId HookConVarChange(ConVarChangeHandler handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookConVarChange(owner, std::move(handler)); }
+        Source2ModConVarHookId HookConVarChange(ConVarChangeHandler handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookConVarChange(owner, std::move(handler)); }
         bool UnhookConVarChange(const ConVarChangeHandler& handler) override { return UnhookConVarChange(hookid::OwnerOfHandler(handler), handler); }
-        bool UnhookConVarChange(Source2ModHookId id) override { return UnhookConVarChangeId(id); }
+        bool UnhookConVarChange(Source2ModConVarHookId id) override { return UnhookConVarChangeId(id); }
 
         // The same with the owner spelled out: what the calls above resolve
         // to, and what the core itself calls.
-        Source2ModHookId HookConVarChange(PluginId owner, ConVarChangeHandler handler);
+        Source2ModConVarHookId HookConVarChange(PluginId owner, ConVarChangeHandler handler);
         bool UnhookConVarChange(PluginId owner, const ConVarChangeHandler& handler);
         bool UnhookConVarChangeId(Source2ModHookId id);
 

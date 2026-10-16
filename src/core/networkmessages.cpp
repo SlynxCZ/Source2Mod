@@ -991,7 +991,7 @@ namespace networkmessages
     Hooks
     ========================= */
 
-    Source2ModHookId NetworkMessagesManager::HookServerMessage(PluginId owner, NetMessageServerHook handler)
+    Source2ModNetMessageHookId NetworkMessagesManager::HookServerMessage(PluginId owner, NetMessageServerHook handler)
     {
         return m_serverHooks.Add(owner, std::move(handler));
     }
@@ -1001,7 +1001,7 @@ namespace networkmessages
         return m_serverHooks.RemoveHandler(owner, handler);
     }
 
-    Source2ModHookId NetworkMessagesManager::HookClientMessage(PluginId owner, NetMessageClientHook handler)
+    Source2ModNetMessageHookId NetworkMessagesManager::HookClientMessage(PluginId owner, NetMessageClientHook handler)
     {
         return m_clientHooks.Add(owner, std::move(handler));
     }
@@ -1011,7 +1011,7 @@ namespace networkmessages
         return m_clientHooks.RemoveHandler(owner, handler);
     }
 
-    Source2ModHookId NetworkMessagesManager::HookServerInternalMessage(PluginId owner, NetMessageClientHook handler)
+    Source2ModNetMessageHookId NetworkMessagesManager::HookServerInternalMessage(PluginId owner, NetMessageClientHook handler)
     {
         return m_serverInternalHooks.Add(owner, std::move(handler));
     }

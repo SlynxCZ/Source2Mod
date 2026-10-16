@@ -88,13 +88,13 @@ namespace scripts
         bool FireInput(const char* pszName, const char* pszInput) override;
 
 
-        Source2ModHookId HookScriptMessage(const char* pszChannel, ScriptMessageHandler handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookScriptMessage(owner, pszChannel, std::move(handler)); }
+        Source2ModScriptMessageHookId HookScriptMessage(const char* pszChannel, ScriptMessageHandler handler) override { const PluginId owner = hookid::OwnerOfHandler(handler); return HookScriptMessage(owner, pszChannel, std::move(handler)); }
         bool UnhookScriptMessage(const char* pszChannel, const ScriptMessageHandler& handler) override { return UnhookScriptMessage(hookid::OwnerOfHandler(handler), pszChannel, handler); }
-        bool UnhookScriptMessage(Source2ModHookId id) override { return UnhookScriptMessageId(id); }
+        bool UnhookScriptMessage(Source2ModScriptMessageHookId id) override { return UnhookScriptMessageId(id); }
 
         // The same with the owner spelled out: what the calls above resolve
         // to, and what the core itself calls.
-        Source2ModHookId HookScriptMessage(PluginId owner, const char* pszChannel, ScriptMessageHandler handler);
+        Source2ModScriptMessageHookId HookScriptMessage(PluginId owner, const char* pszChannel, ScriptMessageHandler handler);
         bool UnhookScriptMessage(PluginId owner, const char* pszChannel, const ScriptMessageHandler& handler);
         bool UnhookScriptMessageId(Source2ModHookId id);
 

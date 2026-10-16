@@ -712,7 +712,7 @@ namespace commands {
         return found;
     }
 
-    Source2ModHookId CommandsManager::RegisterChatListener(PluginId owner, const char* pchName, ChatHandler handler, const char* pchPermission) {
+    Source2ModChatListenerId CommandsManager::RegisterChatListener(PluginId owner, const char* pchName, ChatHandler handler, const char* pchPermission) {
         const Source2ModHookId id = ++s_lastCommandId;
         AddAliases(owner, id, pchName, handler, pchPermission);
         return id;
@@ -768,7 +768,7 @@ namespace commands {
         return hashes.Remove(token, token.GetHashCode());
     }
 
-    Source2ModHookId CommandsManager::RegisterConCommand(PluginId owner, const char* pchName, ChatHandler handler, const char* pchPermission) {
+    Source2ModCommandId CommandsManager::RegisterConCommand(PluginId owner, const char* pchName, ChatHandler handler, const char* pchPermission) {
 
         // Already ours: the ConCommand is Source2Mod's claim on the name and
         // outlives the plugin that asked for it. Unloading parks it (see
@@ -802,7 +802,7 @@ namespace commands {
         return id;
     }
 
-    Source2ModHookId CommandsManager::RegisterConListener(PluginId owner, const char* pchName, CommandHandler handler, bool post) {
+    Source2ModCommandHookId CommandsManager::RegisterConListener(PluginId owner, const char* pchName, CommandHandler handler, bool post) {
         const Source2ModHookId id = ++s_lastCommandId;
         consoleListeners[pchName].push_back({ owner, id, std::move(handler), post, {}, {}, {} });
         return id;

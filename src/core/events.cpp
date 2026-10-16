@@ -58,7 +58,7 @@ namespace events {
         }
     }
 
-    Source2ModHookId EventManager::HookGameEvent(PluginId owner, const char* name, GameEventHandler handler, bool post)
+    Source2ModEventHookId EventManager::HookGameEvent(PluginId owner, const char* name, GameEventHandler handler, bool post)
     {
         // 0 for an event the game does not have: a listener on a name that
         // never fires would only sit there.

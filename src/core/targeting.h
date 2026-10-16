@@ -55,8 +55,8 @@ namespace targeting
         int FindTarget(const char* pattern, CPlayerSlot caller, int flags, CPlayerSlot& target) override;
         const char* GetTargetErrorPhrase(int error) override;
         const char* GetTargetErrorText(int error) override;
-        Source2ModHookId AddTargetFilter(const char* name, Source2ModTargetFilter filter, const char* phrase, bool phraseIsTranslation) override;
-        bool RemoveTargetFilter(Source2ModHookId id) override;
+        Source2ModTargetFilterId AddTargetFilter(const char* name, Source2ModTargetFilter filter, const char* phrase, bool phraseIsTranslation) override;
+        bool RemoveTargetFilter(Source2ModTargetFilterId id) override;
 
         // ---- core side ----
 

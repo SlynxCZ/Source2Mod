@@ -925,7 +925,7 @@ namespace sounds
     Hooks
     ========================= */
 
-    Source2ModHookId SoundsManager::HookSound(PluginId owner, SoundHook handler)
+    Source2ModSoundHookId SoundsManager::HookSound(PluginId owner, SoundHook handler)
     {
         return m_hooks.Add(owner, std::move(handler));
     }
