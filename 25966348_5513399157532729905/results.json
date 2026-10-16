@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-16T16:54:11+00:00",
+  "generated_at": "2026-10-16T18:20:24+00:00",
   "build": {
     "buildid": "25966348",
     "linux_manifest": "5513399157532729905",
@@ -85,20 +85,6 @@
       }
     },
     {
-      "name": "CBaseEntity::SetSubclass",
-      "kind": "signature",
-      "windows": {
-        "matches": 1,
-        "address": "0x1803c7070",
-        "status": "ok"
-      },
-      "linux": {
-        "matches": 1,
-        "address": "0xd5f740",
-        "status": "ok"
-      }
-    },
-    {
       "name": "CBaseEntity::StartTouch",
       "kind": "offset",
       "windows": {
@@ -163,6 +149,20 @@
         "class": "CBaseEntity",
         "library": "server",
         "vtable_size": 239,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBaseEntity::UpdateSubclassVData",
+      "kind": "signature",
+      "windows": {
+        "matches": 1,
+        "address": "0x1803bffc0",
+        "status": "ok"
+      },
+      "linux": {
+        "matches": 1,
+        "address": "0xd4edc0",
         "status": "ok"
       }
     },
