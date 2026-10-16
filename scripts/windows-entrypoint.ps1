@@ -70,7 +70,7 @@ if (Test-Path $SDK_DIR) { Remove-Item -Recurse -Force $SDK_DIR }
 New-Item -ItemType Directory -Force $SDK_DIR | Out-Null
 
 Write-Host "=== Downloading Source2Mod-SDK ==="
-git clone --recursive https://github.com/SlynxCZ/Source2Mod-sdk.git $SOURCE2MODSDK_DIR
+git clone --recursive https://github.com/SlynxCZ/source2mod-sdk.git $SOURCE2MODSDK_DIR
 
 # s2sdk is the SDK's vendor/s2sdk submodule, at the commit the SDK pins.
 $S2SDK_DIR = "$SOURCE2MODSDK_DIR\vendor\s2sdk"

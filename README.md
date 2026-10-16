@@ -1,7 +1,7 @@
 # Source2Mod
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/SlynxCZ/Source2Mod/build.yml?branch=main)](https://github.com/SlynxCZ/Source2Mod/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/SlynxCZ/source2mod/build.yml?branch=main)](https://github.com/SlynxCZ/source2mod/actions)
 [![Website](https://img.shields.io/badge/Website-source2toolkit.net-blue)](https://www.source2toolkit.net)
 [![Discord](https://img.shields.io/badge/Discord-join-7289da?logo=discord&logoColor=white)](https://discord.gg/4Ck56eDNXj)
 
@@ -71,7 +71,7 @@ Designed for both beginners and hardcore engine hackers.
 ## Building Source2Mod
 
 ```bash
-git clone --recurse-submodules https://github.com/SlynxCZ/Source2Mod.git
+git clone --recurse-submodules https://github.com/SlynxCZ/source2mod.git
 cd Source2Mod
 
 docker compose -f docker/docker-compose.yml up

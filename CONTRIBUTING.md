@@ -13,7 +13,7 @@ fork, against `main`.
 
 ## Workflow
 
-1. **Fork** [Source2Mod/source2mod](https://github.com/SlynxCZ/Source2Mod)
+1. **Fork** [Source2Mod/source2mod](https://github.com/SlynxCZ/source2mod)
    on GitHub (the *Fork* button, top right).
 
 2. **Clone your fork** with its submodules:
@@ -26,7 +26,7 @@ fork, against `main`.
 3. **Add the upstream remote**, so you can pull in what lands on `main`:
 
    ```bash
-   git remote add upstream https://github.com/SlynxCZ/Source2Mod.git
+   git remote add upstream https://github.com/SlynxCZ/source2mod.git
    git fetch upstream
    ```
 
@@ -70,7 +70,7 @@ fork, against `main`.
   the old one still served -- see
   [Compatibility](https://www.source2toolkit.net/docs/development/compatibility).
   Such changes usually need a matching pull request in
-  [source2mod-sdk](https://github.com/SlynxCZ/Source2Mod-sdk);
+  [source2mod-sdk](https://github.com/SlynxCZ/source2mod-sdk);
   link the two.
 - **Gamedata** changes: give the Linux and the Windows entry, and the CS2 build
   you checked them against.
