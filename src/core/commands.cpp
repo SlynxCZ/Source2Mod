@@ -542,8 +542,8 @@ namespace commands {
         if (key < 1 || key > 9)
             return;
 
-        slotinput::OnMenuCommand(ctx.GetPlayerSlot(), key);
-        menus::menuManager.OnKeyPress(player, key);
+        if (slotinput::OnMenuCommand(ctx.GetPlayerSlot(), key))
+            menus::menuManager.OnKeyPress(player, key);
     }
 
     void InitCommands()

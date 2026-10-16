@@ -62,8 +62,10 @@ namespace slotinput {
     void Inject();
     void BlockForViewer(CCheckTransmitInfo* info);
 
-    // A "1".."9" command, before the menu gets it.
-    void OnMenuCommand(CPlayerSlot slot, int key);
+    // A "1".."9" command, before the menu gets it. False: the same press
+    // already went to the menu through its slot key ("slotN;N" whose slot
+    // half arrived first), so the menu must not get it again.
+    bool OnMenuCommand(CPlayerSlot slot, int key);
 
     void ResetPlayer(CPlayerSlot slot);
 }

@@ -66,7 +66,7 @@ namespace slotinput {
             int Key;
             const char* Classname;
             uint16_t DefIndex;      // item definition index
-            const char* Subclass;   // the vdata SetSubclass assigns
+            const char* Subclass;   // the vdata the fake gets (m_nSubclassID)
         };
 
         // How the client finds the weapon for each key (CCSHudWeaponSelection):
@@ -219,18 +219,21 @@ namespace slotinput {
             return pawn ? pawn->m_pWeaponServices() : nullptr;
         }
 
-        // CBaseEntity::SetSubclass(name), what subclass_change runs: looks the
-        // vdata up by name and assigns it with m_nSubclassID. A bare
-        // CreateEntityByName leaves the vdata null and CCSWeaponBase::Spawn
-        // reads it straight away.
-        using SetSubclass_t = void (*)(CBaseEntity* entity, const char* subclass);
+        // CBaseEntity::UpdateSubclassVData: looks the vdata up for the
+        // entity's m_nSubclassID (the subclass name as a string token) and
+        // stores it. A bare CreateEntityByName leaves the vdata null and
+        // CCSWeaponBase::Spawn reads it straight away. SetSubclass (what
+        // subclass_change runs) does the same and then sets the model, which
+        // asserts for an entity not spawned yet (SetupModel,
+        // EF_IN_STAGING_LIST) -- Spawn sets the model from the vdata anyway.
+        using UpdateSubclassVData_t = void (*)(CBaseEntity* entity);
 
-        SetSubclass_t GetSetSubclass()
+        UpdateSubclassVData_t GetUpdateSubclassVData()
         {
-            static SetSubclass_t fn = [] {
-                SetSubclass_t found = shared::g_pGameConfig ? shared::g_pGameConfig->ResolveSignature("CBaseEntity::SetSubclass").RCast<SetSubclass_t>() : nullptr;
+            static UpdateSubclassVData_t fn = [] {
+                UpdateSubclassVData_t found = shared::g_pGameConfig ? shared::g_pGameConfig->ResolveSignature("CBaseEntity::UpdateSubclassVData").RCast<UpdateSubclassVData_t>() : nullptr;
                 if (!found)
-                    FP_ERROR("SlotInput: gamedata signature CBaseEntity::SetSubclass not found; menu keys need binds");
+                    FP_ERROR("SlotInput: gamedata signature CBaseEntity::UpdateSubclassVData not found; menu keys need binds");
                 return found;
             }();
             return fn;
@@ -238,8 +241,8 @@ namespace slotinput {
 
         CBasePlayerWeapon* CreateFake(CCSPlayerPawn* pawn, const KeyDef& def)
         {
-            SetSubclass_t setSubclass = GetSetSubclass();
-            if (!setSubclass)
+            UpdateSubclassVData_t updateSubclassVData = GetUpdateSubclassVData();
+            if (!updateSubclassVData)
                 return nullptr;
 
             // Always a knife, carrying the vdata of the weapon the key stands
@@ -253,10 +256,11 @@ namespace slotinput {
             if (!weapon)
                 return nullptr;
 
-            setSubclass(weapon, def.Subclass);
+            *weapon->m_nSubclassID() = CUtlStringToken(def.Subclass);
+            updateSubclassVData(weapon);
             if (!weapon->GetVData())
             {
-                FP_ERROR("SlotInput: no vdata for {} ({}) after SetSubclass", def.Classname, def.Subclass);
+                FP_ERROR("SlotInput: no vdata for {} ({})", def.Classname, def.Subclass);
                 weapon->Remove();
                 return nullptr;
             }
@@ -441,8 +445,8 @@ namespace slotinput {
         }
 
         // A slot key read from a usercmd. Either the command already brought
-        // it, or it goes out -- now for a key known to be slot-only, after
-        // the window for one not seen yet.
+        // it, or it goes out right away; should the "N" of a "slotN;N" bind
+        // turn up after it, OnMenuCommand swallows that one.
         void OnSlotKey(int slot, CCSPlayerController* player, int key)
         {
             Learned& learned = LearnedFor(slot, player);
@@ -457,8 +461,7 @@ namespace slotinput {
                 return;
             }
 
-            const bool known = learned.Source[key] == KeySource::SlotOnly;
-            g_Pending.push_back({ slot, key, known ? tick : tick + kWindowTicks });
+            g_Pending.push_back({ slot, key, tick });
         }
 
         void DeliverPending()
@@ -651,15 +654,15 @@ namespace slotinput {
         std::erase_if(g_Pending, [s](const PendingKey& p) { return p.Slot == s; });
     }
 
-    void OnMenuCommand(CPlayerSlot playerSlot, int key)
+    bool OnMenuCommand(CPlayerSlot playerSlot, int key)
     {
         const int slot = playerSlot.Get();
         if (key < 1 || key > kMaxKey || slot < 0 || slot >= ABSOLUTE_PLAYER_LIMIT)
-            return;
+            return true;
 
         CCSPlayerController* player = CCSPlayerController::FromSlot(slot);
         if (!player)
-            return;
+            return true;
 
         Learned& learned = LearnedFor(slot, player);
         const int tick = TickCount();
@@ -686,6 +689,8 @@ namespace slotinput {
 
         if (twin)
             learned.Source[key] = KeySource::CommandBound;
+
+        return !slotDelivered;
     }
 
     void OnFrame()
