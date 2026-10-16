@@ -24,17 +24,33 @@ Source2Mod's equivalents are open for anyone to write:
 - **Reserved slots** -- slots kept free for players with a permission.
 - **Anti-flood** -- chat and command rate limits.
 
-## Core (in progress)
+## Starter bundle
 
-Worked on in this repository:
+A set of first plugins to ship next to the core, so a fresh server has
+something to run: helpers like the HUD manager (on-screen texts, toasts,
+timers and HUD menus), plus the community plugins above as they appear.
 
-- Translations (phrase files per plugin, the player's language, `%t` / `%T`).
-- Files, KeyValues and a streaming KeyValues parser.
-- Utilities: string helpers, sorting, regex, profiler, time, file logging,
-  IntMap.
-- SQL: `ISource2ModSQL` with MySQL and SQLite drivers (was `ISource2ModMySQL`).
-- Targeting: command text to players, with immunity.
-- Menu builder: pages, submenus, back button, dynamic items.
-- Client helpers still missing from the API (current map, fake client
-  commands, ...).
-- Client preferences (cookies), GeoIP, map lists and next map, feature checks.
+## Core
+
+The pieces that were listed here are in: translations, files and KeyValues
+with a streaming parser, utilities (strings, sorting, regex, profiler, time,
+file logging, IntMap), SQL with MySQL and SQLite drivers, targeting with
+immunity, the menu builder, client helpers, client preferences, GeoIP, map
+lists and next map, and feature checks -- in C++ and in SourcePawn.
+
+Still open:
+
+- **Hot reload on Windows** -- the file watcher is Linux-only (inotify).
+  Plugins load from a private copy now, so the file in `plugins/` can be
+  replaced while it is loaded; what is missing is the watch itself
+  (`ReadDirectoryChangesW`).
+- **Menu keys without binds, keys 1, 2, 4 and 5** -- the view flicks for one
+  frame when the player has no real weapon in that slot (the fake key weapon
+  is then alone in its gear slot). Keys 3 and 6-9 do not flick. No fix found
+  without a client addon.
+- **SourcePawn gaps** -- custom menu instances (a C++ `IMenuInstance`
+  subclass), per-plugin menu cooldown handlers, `TraceShapeEx` and
+  `CheckAreaOverlappingEntity` are C++ only.
+- **Guides** -- the API reference covers every interface; hand-written guides
+  for translations, targeting, clients, client preferences and files /
+  KeyValues are still to be written.
