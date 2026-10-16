@@ -68,6 +68,9 @@ namespace menus {
         IBaseMenu* Current() const { return path_.back().menu; }
         /// Whether @p menu is the root or on the submenu path.
         bool Uses(const IMenu* menu) const;
+        /// The keys the page last drawn does something with (bit = key):
+        /// its numbered options, 7 Back, 8 Next, 9 Exit.
+        uint32_t KeyMask() const override { return keyMask_; }
 
     private:
         struct Level
@@ -90,6 +93,7 @@ namespace menus {
 
         std::vector<Level> path_;
         std::chrono::steady_clock::time_point opened_;
+        uint32_t keyMask_ = 0;
     };
 
     class MenuManager : public ISource2ModMenus
@@ -106,6 +110,11 @@ namespace menus {
     public:
         /// The plugin whose menu the player has open, 0 for none.
         PluginId OwnerOf(CCSPlayerController* player) const;
+
+        /// The keys the player's open menu does something with right now
+        /// (bit = key, IMenuInstance::KeyMask), 0 for no menu or one that
+        /// takes no keys.
+        uint32_t ActiveKeyMask(CCSPlayerController* player);
 
         void Tick();
 

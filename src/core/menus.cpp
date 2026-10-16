@@ -257,6 +257,18 @@ namespace menus
         }
 
         const Level& level = path_.back();
+
+        uint32_t keys = 0;
+        for (int k = 1; k < key; k++)
+            keys |= 1u << k;
+        if (level.page > 0 || path_.size() > 1)
+            keys |= 1u << 7;
+        if (level.page < pages - 1)
+            keys |= 1u << 8;
+        if (chMenu_->GetExitButton())
+            keys |= 1u << 9;
+        keyMask_ = keys;
+
         if (level.page > 0 || path_.size() > 1)
             html += "<font color='" + chMenu_->PrevPageColor + "'>!7</font> &lt;- Back<br>\n";
         if (level.page < pages - 1)
@@ -493,6 +505,15 @@ namespace menus
         if (!inst)
             return nullptr;
         return ownInstances_.count(inst) ? static_cast<CenterHtmlMenuInstance*>(inst)->Current() : inst->Menu();
+    }
+
+    uint32_t MenuManager::ActiveKeyMask(CCSPlayerController* player)
+    {
+        IMenuInstance* instance = GetActiveMenu(player);
+        if (!instance || !instance->AcceptsKeys())
+            return 0;
+
+        return instance->KeyMask();
     }
 
     void MenuManager::OnKeyPress(CCSPlayerController* player, int key)

@@ -44,6 +44,7 @@
 #include "pluginmanager.h"
 #include "raytrace.h"
 #include "shared.h"
+#include "slotinput.h"
 #include "slowguard.h"
 #include "utils/consoletable.h"
 #include "utils/log.h"
@@ -541,6 +542,7 @@ namespace commands {
         if (key < 1 || key > 9)
             return;
 
+        slotinput::OnMenuCommand(ctx.GetPlayerSlot(), key);
         menus::menuManager.OnKeyPress(player, key);
     }
 

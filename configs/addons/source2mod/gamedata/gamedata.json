@@ -45,6 +45,13 @@
       "linux": "55 66 0F EF C0 48 89 E5 41 57 41 56 41 55 49 89 FD 31 FF"
     }
   },
+  "CBaseEntity::SetSubclass": {
+    "signatures": {
+      "library": "server",
+      "windows": "48 89 5C 24 18 57 48 83 EC 20 48 8B DA 48 8B F9 E8 ? ? ? ? 84 C0 0F 84 ? ? ? ? 48 8B 07 48 8B CF 48 89 6C 24 30",
+      "linux": "55 48 89 E5 41 57 49 89 F7 41 56 41 55 41 54 53 48 89 FB 48 81 EC ? ? ? ? E8 ? ? ? ? 84 C0 74 ? 48 8D 05 ? ? ? ? 48 89 DF 4C 8B 20 48 8B 03 FF 90"
+    }
+  },
   "CBaseEntity::Teleport": {
     "offsets": {
       "windows": 165,

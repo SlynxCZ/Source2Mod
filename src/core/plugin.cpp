@@ -59,6 +59,7 @@
 #include "pluginmanager.h"
 #include "raytrace.h"
 #include "scripts.h"
+#include "slotinput.h"
 #include "shared.h"
 #include "slowguard.h"
 #include "sounds.h"
@@ -182,6 +183,7 @@ bool Source2ModCore::Load(PluginId id, ISmmAPI* ismm, char* error, size_t maxlen
     ConVar_Register(FCVAR_RELEASE | FCVAR_CLIENT_CAN_EXECUTE | FCVAR_GAMEDLL);
 
     commands::InitCommands();
+    slotinput::Init();
     slow::g_flWarnMs = shared::g_pCoreConfig->SlowCallbackWarnMs;
 
     // Before plugins load: their Load() may already grant and check.
@@ -225,6 +227,7 @@ bool Source2ModCore::Unload(char* error, size_t maxlen)
     pluginManager.UnloadAll();
 
     commands::DestructCommands();
+    slotinput::Shutdown();
     events::DestructEvents();
     // None of the hooked game functions is on the stack here, so these come
     // out synchronously like the rest.

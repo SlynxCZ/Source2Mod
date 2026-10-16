@@ -67,6 +67,7 @@ namespace virtualhooks {
         void DestructListeners();
     public:
         KHook::Return<void> Hook_GameFrame(ISource2Server* pThis, bool simulating, bool bFirstTick, bool bLastTick);
+        KHook::Return<void> Hook_GameFramePre(ISource2Server* pThis, bool simulating, bool bFirstTick, bool bLastTick);
         KHook::Return<void> Hook_StartupServer(INetworkServerService* pThis, const GameSessionConfiguration_t& config, ISource2WorldSession* pWorldSession, const char* pszMapName);
         KHook::Return<void> Hook_DispatchConCommand(ICvar* pThis, ConCommandRef cmd, const CCommandContext& ctx, const CCommand& args);
         KHook::Return<void> Hook_ClientCommand(ISource2GameClients* pThis, CPlayerSlot slot, const CCommand& args);

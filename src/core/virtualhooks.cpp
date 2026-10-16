@@ -52,6 +52,7 @@
 #include "pluginmanager.h"
 #include "scripts.h"
 #include "shared.h"
+#include "slotinput.h"
 #include "sounds.h"
 #include "tkvprof.h"
 #include "transmit.h"
@@ -78,7 +79,7 @@ namespace virtualhooks
     static std::vector<IGameEvent*> eventStack;
 
     Virtuals::Virtuals() :
-        KHOOK_NEW(m_hGameFrame, &ISource2Server::GameFrame, this, nullptr, &Virtuals::Hook_GameFrame),
+        KHOOK_NEW(m_hGameFrame, &ISource2Server::GameFrame, this, &Virtuals::Hook_GameFramePre, &Virtuals::Hook_GameFrame),
         KHOOK_NEW(m_hStartupServer, &INetworkServerService::StartupServer, this, nullptr, &Virtuals::Hook_StartupServer),
         KHOOK_NEW(m_hDispatchConCommand, &ICvar::DispatchConCommand, this, &Virtuals::Hook_DispatchConCommand, nullptr),
         KHOOK_NEW(m_hClientCommand, &ISource2GameClients::ClientCommand, this, &Virtuals::Hook_ClientCommand, nullptr),
@@ -266,6 +267,14 @@ namespace virtualhooks
         m_pCServerSideClientPreFilterVTable = nullptr;
     }
 
+    // Before the game's frame: the menu-key fakes leave m_hMyWeapons, so no
+    // game code ever sees them (slotinput.cpp).
+    KHook::Return<void> Virtuals::Hook_GameFramePre(ISource2Server* pThis, bool simulating, bool bFirstTick, bool bLastTick)
+    {
+        slotinput::Eject();
+        return { KHook::Action::Ignore };
+    }
+
     KHook::Return<void> Virtuals::Hook_GameFrame(ISource2Server* pThis, bool simulating, bool bFirstTick, bool bLastTick)
     {
         TK_VPROF("Source2Mod::GameFrame");
@@ -280,6 +289,9 @@ namespace virtualhooks
         // frame. MenuManager::Tick() existed but nothing called it, which left
         // a menu on screen for a moment and then gone.
         menus::menuManager.Tick();
+
+        // After the redraw: the key mask of the page now on screen.
+        slotinput::OnFrame();
 
         // Persistent scripts whose entity went away (round restart, map
         // change) are spawned again here, never inside the deletion itself.
@@ -360,6 +372,8 @@ namespace virtualhooks
     {
         TK_VPROF("Source2Mod::ClientPutInServer");
 
+        slotinput::ResetPlayer(slot);
+
         // First: a plugin's OnClientPutInServer may already check permissions.
         permissions::permissionsManager.OnClientPutInServer(slot, type, xuid);
 
@@ -388,6 +402,8 @@ namespace virtualhooks
 
     KHook::Return<void> Virtuals::Hook_DispatchConCommand(ICvar* pThis, ConCommandRef cmd, const CCommandContext& ctx, const CCommand& args)
     {
+        slotinput::Eject();
+
         // "meta unload <this plugin>": metamod would call Unload() from inside
         // this very dispatch, and Unload() deleting this hook would then wait
         // for the dispatch to return -- a deadlock the watchdog ends. So the
@@ -467,6 +483,8 @@ namespace virtualhooks
     KHook::Return<void> Virtuals::Hook_ClientCommand(ISource2GameClients* pThis, CPlayerSlot slot, const CCommand& args)
     {
         TK_VPROF("Source2Mod::ClientCommand");
+
+        slotinput::Eject();
 
         if (slot != -1 && !V_strncmp(args.Arg(0), "jointeam", 8))
         {
@@ -601,6 +619,12 @@ namespace virtualhooks
     KHook::Return<void> Virtuals::Hook_CheckTransmit(ISource2GameEntities* pThis, CCheckTransmitInfo** ppInfoList, int nInfoCount, CBitVec<16384>& unionTransmitEdicts, CBitVec<16384>& unionTransmitEdicts2, const Entity2Networkable_t** pNetworkables, const uint16* pEntityIndicies, int nEntities)
     {
         TK_VPROF("Source2Mod::CheckTransmit");
+
+        // The menu-key fakes go into m_hMyWeapons for this pack only, and stay
+        // off every wire but their owner's.
+        slotinput::Inject();
+        for (int i = 0; i < nInfoCount; i++)
+            slotinput::BlockForViewer(reinterpret_cast<CCheckTransmitInfo*>(ppInfoList[i]));
 
         transmit::transmitManager.OnCheckTransmit(ppInfoList, nInfoCount, pEntityIndicies, nEntities);
 
