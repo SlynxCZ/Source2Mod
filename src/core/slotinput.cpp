@@ -636,12 +636,22 @@ namespace slotinput {
         if (g_RunCommandHook)
             gamehooks::gameHooksManager.UnhookRunCommand(g_RunCommandHook);
         g_RunCommandHook = 0;
+        g_Pending.clear();
+
+        // Server shutdown: the entity system is gone before the core unloads,
+        // and the fakes with it. A handle can no longer be looked up then
+        // (GetEntityInstance on a null system crashed the shutdown).
+        if (!GameEntitySystem())
+        {
+            for (Session& s : g_Sessions)
+                s = Session{};
+            g_bAnyInjected = false;
+            return;
+        }
 
         Eject();
         for (int slot = 0; slot < ABSOLUTE_PLAYER_LIMIT; slot++)
             Stop(slot);
-
-        g_Pending.clear();
     }
 
     void ResetPlayer(CPlayerSlot slot)
