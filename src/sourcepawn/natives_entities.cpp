@@ -65,6 +65,8 @@
 #include <source2mod/schema/entity/classes/CCSCustomHudLayout.h>
 #include <source2mod/schema/entity/classes/CCSGameRules.h>
 #include <source2mod/schema/entity/classes/CCSPlayerController.h>
+#include <source2mod/schema/entity/classes/CCSPlayerLegacyJump.h>
+#include <source2mod/schema/entity/classes/CCSPlayer_MovementServices.h>
 #include <source2mod/schema/entity/classes/CCSPlayerPawn.h>
 #include <source2mod/schema/entity/classes/CCSPlayerPawnBase.h>
 #include <source2mod/schema/entity/classes/CCSObserverPawn.h>
@@ -78,6 +80,7 @@
 #include <source2mod/schema/entity/classes/CPlayerPawnComponent.h>
 #include <source2mod/schema/entity/classes/CPlayer_ItemServices.h>
 #include <source2mod/schema/entity/classes/CPlayer_WeaponServices.h>
+#include <source2mod/schema/entity/classes/CPointWorldText.h>
 #include <source2mod/schema/entity/classes/CSkeletonInstance.h>
 #include <source2mod/schema/entity/classes/CSmokeGrenadeProjectile.h>
 #include <source2mod/utils/plat.h>
@@ -1388,6 +1391,50 @@ namespace sourcepawn
             return EntityCellIndex(params[1]);
         }
 
+        cell_t N_BaseIsPlayerController(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            return ent ? EntityCell(ent->IsPlayerController()) : -1;
+        }
+
+        cell_t N_BaseIsPlayerPawn(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            return ent ? EntityCell(ent->IsPlayerPawn()) : -1;
+        }
+
+        cell_t N_BaseGetTeam(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            return ent ? static_cast<cell_t>(ent->GetTeam()) : CS_TEAM_NONE;
+        }
+
+        cell_t N_BaseIsAlive(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            return ent && ent->IsAlive();
+        }
+
+        cell_t N_BaseAddFlags(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]))
+                ent->AddFlags(static_cast<uint32_t>(params[2]));
+            return 0;
+        }
+
+        cell_t N_BaseClearFlags(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]))
+                ent->ClearFlags(static_cast<uint32_t>(params[2]));
+            return 0;
+        }
+
+        cell_t N_BaseHasFlags(IPluginContext* ctx, const cell_t* params)
+        {
+            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
+            return ent && ent->HasFlags(static_cast<uint32_t>(params[2]));
+        }
+
         cell_t N_ModelGetModelName(IPluginContext* ctx, const cell_t* params)
         {
             CBaseModelEntity* ent = As<CBaseModelEntity>(ctx, params[1]);
@@ -1593,6 +1640,72 @@ namespace sourcepawn
         {
             CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]);
             return pc ? EntityCell(pc->GetObserverPawn()) : -1;
+        }
+
+        cell_t N_PCSetPlayerName(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]))
+                pc->SetPlayerName(LocalString(ctx, params[2]));
+            return 0;
+        }
+
+        cell_t N_PCIsConnected(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]);
+            return pc && pc->IsConnected();
+        }
+
+        cell_t N_PCGetPawnState(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]);
+            return static_cast<cell_t>(pc ? pc->GetPawnState() : CSPlayerState::STATE_WELCOME);
+        }
+
+        cell_t N_PCGetObserverTarget(IPluginContext* ctx, const cell_t* params)
+        {
+            CBasePlayerController* pc = As<CBasePlayerController>(ctx, params[1]);
+            return pc ? EntityCell(pc->GetObserverTarget()) : -1;
+        }
+
+        cell_t N_CSGetPlayerPawnState(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]);
+            return static_cast<cell_t>(pc ? pc->GetPlayerPawnState() : CSPlayerState::STATE_WELCOME);
+        }
+
+        template <int (CCSPlayerController::*Get)()>
+        cell_t N_CSGetInt(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]);
+            return pc ? (pc->*Get)() : 0;
+        }
+
+        template <void (CCSPlayerController::*Set)(int)>
+        cell_t N_CSSetInt(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]))
+                (pc->*Set)(params[2]);
+            return 0;
+        }
+
+        cell_t N_CSSetArmor(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CCSPlayerController* pc = As<CCSPlayerController>(ctx, params[1]))
+                pc->SetArmor(params[2], params[0] >= 3 && params[3]);
+            return 0;
+        }
+
+        cell_t N_LegacyJumpGetMovementServices(IPluginContext* ctx, const cell_t* params)
+        {
+            CCSPlayerLegacyJump* jump = ObjectOf<CCSPlayerLegacyJump>(ctx, params[1]);
+            return jump ? SchemaObjectForPointer(jump->GetMovementServices()) : 0;
+        }
+
+        cell_t N_WorldTextSetMessage(IPluginContext* ctx, const cell_t* params)
+        {
+            if (CPointWorldText* text = As<CPointWorldText>(ctx, params[1]))
+                text->SetMessage(LocalString(ctx, params[2]));
+            return 0;
         }
 
         // ---- pawns ----------------------------------------------------------------
@@ -2176,6 +2289,13 @@ namespace sourcepawn
             { "CBaseEntity.Teleport", N_BaseTeleport },
             { "CBaseEntity.Remove", N_BaseRemove },
             { "CBaseEntity.GetIndex", N_BaseGetIndex },
+            { "CBaseEntity.IsPlayerController", N_BaseIsPlayerController },
+            { "CBaseEntity.IsPlayerPawn", N_BaseIsPlayerPawn },
+            { "CBaseEntity.GetTeam", N_BaseGetTeam },
+            { "CBaseEntity.IsAlive", N_BaseIsAlive },
+            { "CBaseEntity.AddFlags", N_BaseAddFlags },
+            { "CBaseEntity.ClearFlags", N_BaseClearFlags },
+            { "CBaseEntity.HasFlags", N_BaseHasFlags },
             { "CBaseEntity.AddEntityIOEvent", N_BaseAddEntityIOEvent },
             { "CBaseEntity.GetAngRotation", N_BaseGetVector<QAngle, &CBaseEntity::GetAngRotation> },
             { "CBaseEntity.GetAbsRotation", N_BaseGetVector<QAngle, &CBaseEntity::GetAbsRotation> },
@@ -2223,6 +2343,20 @@ namespace sourcepawn
             { "CCSPlayerController.ChangeTeam", N_CSChangeTeam },
             { "CCSPlayerController.GetPlayerPawn", N_CSGetPlayerPawn },
             { "CCSPlayerController.GetObserverPawn", N_CSGetObserverPawn },
+            { "CBasePlayerController.SetPlayerName", N_PCSetPlayerName },
+            { "CBasePlayerController.IsConnected", N_PCIsConnected },
+            { "CBasePlayerController.GetPawnState", N_PCGetPawnState },
+            { "CBasePlayerController.GetObserverTarget", N_PCGetObserverTarget },
+            { "CCSPlayerController.GetPlayerPawnState", N_CSGetPlayerPawnState },
+            { "CCSPlayerController.GetHealth", N_CSGetInt<&CCSPlayerController::GetHealth> },
+            { "CCSPlayerController.GetMaxHealth", N_CSGetInt<&CCSPlayerController::GetMaxHealth> },
+            { "CCSPlayerController.SetHealth", N_CSSetInt<&CCSPlayerController::SetHealth> },
+            { "CCSPlayerController.AddHealth", N_CSSetInt<&CCSPlayerController::AddHealth> },
+            { "CCSPlayerController.SetMaxHealth", N_CSSetInt<&CCSPlayerController::SetMaxHealth> },
+            { "CCSPlayerController.SetArmor", N_CSSetArmor },
+            { "CCSPlayerController.AddArmor", N_CSSetInt<&CCSPlayerController::AddArmor> },
+            { "CCSPlayerLegacyJump.GetMovementServices", N_LegacyJumpGetMovementServices },
+            { "CPointWorldText.SetMessage", N_WorldTextSetMessage },
             { "CBasePlayerPawn.CommitSuicide", N_PawnCommitSuicide },
             { "CBasePlayerPawn.SnapViewAngles", N_PawnSnapViewAngles },
             { "CBasePlayerPawn.GetController", N_PawnGetController },

@@ -29,6 +29,18 @@
 	public native int GetIndex();
 	// ParticleAttachment_t (PATTACH_ABSORIGIN_FOLLOW = 1); recipients: a player mask, all players by default.
 	public native void DispatchParticleEffect(const char[] particle, int attachType = 1, int attachmentPoint = 0, bool resetAllParticles = false, const int recipients[2] = {-1, -1}, Source2ModHookChain chain = HookChain_Default);
+	// This entity as a player controller / pawn (by designer name), NULL_ENTITY when it is something else.
+	public native CCSPlayerController IsPlayerController();
+	public native CCSPlayerPawn IsPlayerPawn();
+	// m_iTeamNum as a team (CS_TEAM_*); anything outside CS_TEAM_NONE..CS_TEAM_CT reads as CS_TEAM_NONE.
+	public native int GetTeam();
+	// m_lifeState is LIFE_ALIVE.
+	public native bool IsAlive();
+	// m_fFlags bits (FL_*), networked.
+	public native void AddFlags(int mask);
+	public native void ClearFlags(int mask);
+	// Every bit of the mask is set.
+	public native bool HasFlags(int mask);
 @CBaseModelEntity
 	public native int GetModelName(char[] buffer, int maxlen);
 	public native void GetEyePosition(float position[3]);
@@ -54,6 +66,14 @@
 	public native void GetIpAddress(char[] buffer, int maxlen);
 	public native void ReplicateConVar(const char[] name, const char[] value);
 	public native void FireEventToClient(IGameEvent event);
+	// Overwrites the networked player name (128 bytes, cut to fit).
+	public native void SetPlayerName(const char[] name);
+	// m_iConnected is PlayerConnectedState Connected.
+	public native bool IsConnected();
+	// m_iPlayerState (STATE_*) of the current pawn, the player or the observer one; STATE_WELCOME without one.
+	public native int GetPawnState();
+	// Who the current pawn is spectating, NULL_ENTITY when nobody.
+	public native CBaseEntity GetObserverTarget();
 @CCSPlayerController
 	// The controller in a player slot, NULL_ENTITY when the slot is empty.
 	public static native CCSPlayerController FromSlot(CPlayerSlot slot);
@@ -70,6 +90,18 @@
 	public native void ChangeTeam(int team, Source2ModHookChain chain = HookChain_Default);
 	public native CCSPlayerPawn GetPlayerPawn();
 	public native CCSObserverPawn GetObserverPawn();
+	// m_iPlayerState (STATE_*) of the player pawn; STATE_WELCOME without one.
+	public native int GetPlayerPawnState();
+	// Health and armor of the living player pawn (0 / nothing without one). SetHealth raises max health
+	// to fit and ignores values below 1 (kill with damage); AddHealth may take away but not below 1;
+	// AddArmor may take away, not below 0.
+	public native int GetHealth();
+	public native int GetMaxHealth();
+	public native void SetHealth(int health);
+	public native void AddHealth(int delta);
+	public native void SetMaxHealth(int maxHealth);
+	public native void SetArmor(int armor, bool helmet = false);
+	public native void AddArmor(int delta);
 @CBasePlayerPawn
 	public native void CommitSuicide(bool explode, bool force, Source2ModHookChain chain = HookChain_Default);
 	public native void SnapViewAngles(const float angles[3], Source2ModHookChain chain = HookChain_Default);
@@ -130,3 +162,9 @@
 	public native void SetDialogVariableString(const char[] panelId, const char[] variable, const char[] value, CCSPlayerController controller = NULL_ENTITY);
 	public native void SetInputCaptureEnabled(bool enable, CCSPlayerController controller = NULL_ENTITY);
 	public native bool IsInputCaptureEnabled(CCSPlayerController controller = NULL_ENTITY);
+@CCSPlayerLegacyJump
+	// The movement services that own this jump object (the pawn's m_pMovementServices).
+	public native CCSPlayer_MovementServices GetMovementServices();
+@CPointWorldText
+	// Sets the text (512 bytes, cut to fit), networked.
+	public native void SetMessage(const char[] message);
