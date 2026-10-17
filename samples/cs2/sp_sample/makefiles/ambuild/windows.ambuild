@@ -1,9 +1,0 @@
-# vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
-#
-# Windows settings -- AMBuild twin of makefiles/cmake/windows.cmake.
-import os
-
-# Nothing platform specific: a .smx is the same bytecode everywhere, and the
-# SDK's SdkPlugin.ambuild finds spcomp (spcomp.exe) by itself.
-def Spcomp(SPPlugin):
-  return SPPlugin.spcomp

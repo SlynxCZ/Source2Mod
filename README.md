@@ -29,8 +29,9 @@ The core tells the two kinds apart by the file itself, so both go into
 `addons/source2mod/plugins/`. The script API mirrors the C++ one name for
 name -- `ISource2ModCommands::RegisterConCommand` is
 `Source2ModCommands.RegisterConCommand` -- and C++ plugins can give scripts
-natives of their own. `samples/cs2/cpp_sample` and `samples/cs2/sp_sample` are
-the same plugin in both languages, section for section.
+natives of their own. `cpp_sample` and `sp_sample` in
+[source2mod-samples](https://github.com/Source2Mod/source2mod-samples) are the
+same plugin in both languages, section for section.
 
 ```cpp
 // C++
@@ -111,11 +112,14 @@ The documentation is on [source2mod.net](https://source2mod.net): every
 example in C++ and SourcePawn, guides and the full API reference.
 
 - **C++** -- add the [Source2Mod SDK](https://github.com/Source2Mod/source2mod-sdk)
-  to your project and `add_source2mod_plugin(...)`; `samples/cs2/cpp_sample`
+  to your project and `add_source2mod_plugin(...)`;
+  [`cpp_sample`](https://github.com/Source2Mod/source2mod-samples/tree/main/cs2/cpp_sample)
   shows every area of the API.
 - **SourcePawn** -- `#include <source2mod/api>` and compile with
-  `addons/source2mod/scripting/spcomp`; `samples/cs2/sp_sample` is the same
-  plugin as a script.
+  `addons/source2mod/scripting/spcomp` (the include set is also the SDK's
+  `public/scripting`);
+  [`sp_sample`](https://github.com/Source2Mod/source2mod-samples/tree/main/cs2/sp_sample)
+  is the same plugin as a script.
 
 ---
 
