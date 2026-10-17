@@ -145,6 +145,7 @@ namespace sourcepawn
             StringPtr,      // CUtlSymbolLarge, CUtlString, CGlobalSymbol: a char* at the field
             Pointer,        // to a schema class
             Embedded,       // a schema class in place
+            Array,          // a fixed array of anything but char (elem* below)
             Other,
         };
 
@@ -158,6 +159,12 @@ namespace sourcepawn
             bool isSigned = true;
             Kind kind = Kind::Other;
             std::string typeName;
+            // Kind::Array: how many elements, and what one of them is.
+            int count = 0;
+            int elemSize = 0;
+            bool elemSigned = true;
+            Kind elemKind = Kind::Other;
+            std::string elemTypeName;
         };
 
         CSchemaClassInfo* FindClass(const char* name)
@@ -204,8 +211,21 @@ namespace sourcepawn
             case SCHEMA_TYPE_FIXED_ARRAY:
             {
                 auto* arr = static_cast<CSchemaType_FixedArray*>(type);
-                if (arr->m_pElementType && strcmp(arr->m_pElementType->m_sTypeName.Get(), "char") == 0)
+                if (!arr->m_pElementType)
+                    return;
+                if (strcmp(arr->m_pElementType->m_sTypeName.Get(), "char") == 0)
+                {
                     f.kind = Kind::CharArray;
+                    return;
+                }
+                Field elem;
+                Classify(arr->m_pElementType, elem);
+                f.kind = Kind::Array;
+                f.count = arr->m_nElementCount;
+                f.elemSize = arr->m_nElementSize;
+                f.elemSigned = elem.isSigned;
+                f.elemKind = elem.kind;
+                f.elemTypeName = elem.typeName;
                 return;
             }
             case SCHEMA_TYPE_POINTER:
@@ -438,7 +458,7 @@ namespace sourcepawn
 
         // A networked field changed: tell the owner, through the class's
         // chainer when it has one -- what SCHEMA_FIELD's setter does.
-        void Changed(const Access& a)
+        void Changed(const Access& a, int extra = 0)
         {
             const char* cls = a.field->declClass.c_str();
             const char* name = a.field->name.c_str();
@@ -447,9 +467,51 @@ namespace sourcepawn
                 return;
             const int16_t chain = schema::FindChainOffset(cls);
             if (chain != 0)
-                ChainNetworkStateChanged(reinterpret_cast<uintptr_t>(a.base) + chain, key.offset);
+                ChainNetworkStateChanged(reinterpret_cast<uintptr_t>(a.base) + chain, key.offset + extra);
             else
-                EntityNetworkStateChanged(reinterpret_cast<uintptr_t>(a.base), key.offset);
+                EntityNetworkStateChanged(reinterpret_cast<uintptr_t>(a.base), key.offset + extra);
+        }
+
+        // Element `params[index]` of a fixed array field (instance, class,
+        // field, index, ...): a.addr is the element, `extra` its offset in
+        // the field. Throws on a field that is no such array, a wrong element
+        // type or an index outside the array.
+        bool LookupElement(IPluginContext* ctx, const cell_t* params, Access& a, int& extra, Kind want, const char* what)
+        {
+            const char* cls = LocalString(ctx, params[2]);
+            const char* name = LocalString(ctx, params[3]);
+            const Field& f = FindField(cls, name);
+            if (!f.found)
+            {
+                ctx->ThrowNativeError("No field %s::%s in the running game's schema", cls, name);
+                return false;
+            }
+            const bool ok = f.kind == Kind::Array
+                && (f.elemKind == want || (want == Kind::Int && f.elemKind == Kind::Bool));
+            if (!ok)
+            {
+                ctx->ThrowNativeError("Field %s::%s is %s, not an array of %s", cls, name, f.typeName.c_str(), what);
+                return false;
+            }
+            const cell_t index = params[4];
+            if (index < 0 || index >= f.count)
+            {
+                ctx->ThrowNativeError("Index %d out of bounds for %s::%s (%d elements)", index, cls, name, f.count);
+                return false;
+            }
+            if (params[1] == 0)
+            {
+                ctx->ThrowNativeError("Null schema object");
+                return false;
+            }
+            void* base = Base(ctx, params[1]);
+            if (!base)
+                return false;
+            extra = index * f.elemSize;
+            a.base = static_cast<uint8_t*>(base);
+            a.addr = a.base + f.offset + extra;
+            a.field = &f;
+            return true;
         }
 
         cell_t ReadInt(const uint8_t* addr, int size, bool isSigned)
@@ -487,21 +549,221 @@ namespace sourcepawn
         }
 
         // Source2ModSchema.GetInt(any instance, const char[] className, const char[] field)
+        // A 64-bit field does not fit a cell: GetInt64 / SetInt64.
+        bool Not64(IPluginContext* ctx, const Access& a, const char* use)
+        {
+            if (a.field->size != 8)
+                return true;
+            ctx->ThrowNativeError("Field %s::%s is 64-bit: use %s", a.field->declClass.c_str(), a.field->name.c_str(), use);
+            return false;
+        }
+
         cell_t N_GetInt(IPluginContext* ctx, const cell_t* params)
         {
             Access a;
-            return Lookup(ctx, params, a, Kind::Int, "an integer") ? ReadInt(a.addr, a.field->size, a.field->isSigned) : 0;
+            return Lookup(ctx, params, a, Kind::Int, "an integer") && Not64(ctx, a, "GetInt64") ? ReadInt(a.addr, a.field->size, a.field->isSigned) : 0;
         }
 
         cell_t N_SetInt(IPluginContext* ctx, const cell_t* params)
         {
             Access a;
-            if (Lookup(ctx, params, a, Kind::Int, "an integer"))
+            if (Lookup(ctx, params, a, Kind::Int, "an integer") && Not64(ctx, a, "SetInt64"))
             {
                 WriteInt(a.addr, a.field->size, a.field->kind == Kind::Bool ? (params[4] != 0) : params[4]);
                 Changed(a);
             }
             return 0;
+        }
+
+        // Source2ModSchema.GetInt64 / SetInt64: a 64-bit integer field as two
+        // cells, value[0] the low half (GetInt would lose the high one).
+        cell_t N_GetInt64(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            if (!Lookup(ctx, params, a, Kind::Int, "an integer"))
+                return 0;
+            if (a.field->size != 8)
+                return ctx->ThrowNativeError("Field %s::%s is %d bytes, not 64-bit: use GetInt",
+                                             a.field->declClass.c_str(), a.field->name.c_str(), a.field->size);
+            const uint64_t v = *reinterpret_cast<const uint64_t*>(a.addr);
+            cell_t* out;
+            ctx->LocalToPhysAddr(params[4], &out);
+            out[0] = static_cast<cell_t>(v & 0xFFFFFFFFu);
+            out[1] = static_cast<cell_t>(v >> 32);
+            return 0;
+        }
+
+        cell_t N_SetInt64(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            if (!Lookup(ctx, params, a, Kind::Int, "an integer"))
+                return 0;
+            if (a.field->size != 8)
+                return ctx->ThrowNativeError("Field %s::%s is %d bytes, not 64-bit: use SetInt",
+                                             a.field->declClass.c_str(), a.field->name.c_str(), a.field->size);
+            cell_t* in;
+            ctx->LocalToPhysAddr(params[4], &in);
+            *reinterpret_cast<uint64_t*>(a.addr) = static_cast<uint32_t>(in[0]) | (static_cast<uint64_t>(static_cast<uint32_t>(in[1])) << 32);
+            Changed(a);
+            return 0;
+        }
+
+        // ---- fixed arrays (SCHEMA_FIELD_POINTER in C++) ------------------------------
+
+        // Source2ModSchema.GetArraySize(className, field): elements of a fixed
+        // array field, 0 for anything else.
+        cell_t N_GetArraySize(IPluginContext* ctx, const cell_t* params)
+        {
+            const Field& f = FindField(LocalString(ctx, params[1]), LocalString(ctx, params[2]));
+            return f.found && f.kind == Kind::Array ? f.count : 0;
+        }
+
+        cell_t N_GetArrayInt(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            int extra;
+            if (!LookupElement(ctx, params, a, extra, Kind::Int, "integers"))
+                return 0;
+            if (a.field->elemSize == 8)
+                return ctx->ThrowNativeError("Elements of %s::%s are 64-bit: use GetArrayInt64", a.field->declClass.c_str(), a.field->name.c_str());
+            if (a.field->elemKind == Kind::Bool)
+                return *a.addr != 0;
+            return ReadInt(a.addr, a.field->elemSize, a.field->elemSigned);
+        }
+
+        cell_t N_SetArrayInt(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            int extra;
+            if (!LookupElement(ctx, params, a, extra, Kind::Int, "integers"))
+                return 0;
+            if (a.field->elemSize == 8)
+                return ctx->ThrowNativeError("Elements of %s::%s are 64-bit: use SetArrayInt64", a.field->declClass.c_str(), a.field->name.c_str());
+            if (a.field->elemKind == Kind::Bool)
+                *a.addr = params[5] ? 1 : 0;
+            else
+                WriteInt(a.addr, a.field->elemSize, params[5]);
+            Changed(a, extra);
+            return 0;
+        }
+
+        cell_t N_GetArrayInt64(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            int extra;
+            if (!LookupElement(ctx, params, a, extra, Kind::Int, "integers"))
+                return 0;
+            if (a.field->elemSize != 8)
+                return ctx->ThrowNativeError("Elements of %s::%s are not 64-bit: use GetArrayInt", a.field->declClass.c_str(), a.field->name.c_str());
+            const uint64_t v = *reinterpret_cast<const uint64_t*>(a.addr);
+            cell_t* out;
+            ctx->LocalToPhysAddr(params[5], &out);
+            out[0] = static_cast<cell_t>(v & 0xFFFFFFFFu);
+            out[1] = static_cast<cell_t>(v >> 32);
+            return 0;
+        }
+
+        cell_t N_SetArrayInt64(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            int extra;
+            if (!LookupElement(ctx, params, a, extra, Kind::Int, "integers"))
+                return 0;
+            if (a.field->elemSize != 8)
+                return ctx->ThrowNativeError("Elements of %s::%s are not 64-bit: use SetArrayInt", a.field->declClass.c_str(), a.field->name.c_str());
+            cell_t* in;
+            ctx->LocalToPhysAddr(params[5], &in);
+            *reinterpret_cast<uint64_t*>(a.addr) = static_cast<uint32_t>(in[0]) | (static_cast<uint64_t>(static_cast<uint32_t>(in[1])) << 32);
+            Changed(a, extra);
+            return 0;
+        }
+
+        cell_t N_GetArrayFloat(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            int extra;
+            if (!LookupElement(ctx, params, a, extra, Kind::Float, "floats"))
+                return 0;
+            const float v = a.field->elemSize == 8 ? static_cast<float>(*reinterpret_cast<double*>(a.addr)) : *reinterpret_cast<float*>(a.addr);
+            return sp_ftoc(v);
+        }
+
+        cell_t N_SetArrayFloat(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            int extra;
+            if (!LookupElement(ctx, params, a, extra, Kind::Float, "floats"))
+                return 0;
+            if (a.field->elemSize == 8)
+                *reinterpret_cast<double*>(a.addr) = sp_ctof(params[5]);
+            else
+                *reinterpret_cast<float*>(a.addr) = sp_ctof(params[5]);
+            Changed(a, extra);
+            return 0;
+        }
+
+        cell_t N_GetArrayVector(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            int extra;
+            if (!LookupElement(ctx, params, a, extra, Kind::Vector, "vectors"))
+                return 0;
+            cell_t* out;
+            ctx->LocalToPhysAddr(params[5], &out);
+            for (int i = 0; i < 3; i++)
+                out[i] = sp_ftoc(reinterpret_cast<float*>(a.addr)[i]);
+            return 0;
+        }
+
+        cell_t N_SetArrayVector(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            int extra;
+            if (!LookupElement(ctx, params, a, extra, Kind::Vector, "vectors"))
+                return 0;
+            cell_t* in;
+            ctx->LocalToPhysAddr(params[5], &in);
+            for (int i = 0; i < 3; i++)
+                reinterpret_cast<float*>(a.addr)[i] = sp_ctof(in[i]);
+            Changed(a, extra);
+            return 0;
+        }
+
+        cell_t N_GetArrayHandle(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            int extra;
+            if (!LookupElement(ctx, params, a, extra, Kind::Handle, "entity handles"))
+                return -1;
+            const CEntityHandle h = *reinterpret_cast<CEntityHandle*>(a.addr);
+            return EntityCell(h.IsValid() ? GetEntitySystem()->GetEntityInstance(h) : nullptr);
+        }
+
+        cell_t N_SetArrayHandle(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            int extra;
+            if (!LookupElement(ctx, params, a, extra, Kind::Handle, "entity handles"))
+                return 0;
+            bool ok;
+            CEntityInstance* other = OptionalEntity(ctx, params[5], &ok);
+            if (!ok)
+                return 0;
+            *reinterpret_cast<CEntityHandle*>(a.addr) = other ? other->GetRefEHandle() : CEntityHandle();
+            Changed(a, extra);
+            return 0;
+        }
+
+        cell_t N_GetArrayString(IPluginContext* ctx, const cell_t* params)
+        {
+            Access a;
+            int extra;
+            if (!LookupElement(ctx, params, a, extra, Kind::StringPtr, "strings"))
+                return 0;
+            const char* s = *reinterpret_cast<const char* const*>(a.addr);
+            size_t written = 0;
+            ctx->StringToLocalUTF8(params[5], params[6], s ? s : "", &written);
+            return static_cast<cell_t>(written);
         }
 
         cell_t N_GetBool(IPluginContext* ctx, const cell_t* params)
@@ -1858,6 +2120,20 @@ namespace sourcepawn
             // source2mod/schema.inc
             { "Source2ModSchema.GetInt", N_GetInt },
             { "Source2ModSchema.SetInt", N_SetInt },
+            { "Source2ModSchema.GetInt64", N_GetInt64 },
+            { "Source2ModSchema.SetInt64", N_SetInt64 },
+            { "Source2ModSchema.GetArraySize", N_GetArraySize },
+            { "Source2ModSchema.GetArrayInt", N_GetArrayInt },
+            { "Source2ModSchema.SetArrayInt", N_SetArrayInt },
+            { "Source2ModSchema.GetArrayInt64", N_GetArrayInt64 },
+            { "Source2ModSchema.SetArrayInt64", N_SetArrayInt64 },
+            { "Source2ModSchema.GetArrayFloat", N_GetArrayFloat },
+            { "Source2ModSchema.SetArrayFloat", N_SetArrayFloat },
+            { "Source2ModSchema.GetArrayVector", N_GetArrayVector },
+            { "Source2ModSchema.SetArrayVector", N_SetArrayVector },
+            { "Source2ModSchema.GetArrayHandle", N_GetArrayHandle },
+            { "Source2ModSchema.SetArrayHandle", N_SetArrayHandle },
+            { "Source2ModSchema.GetArrayString", N_GetArrayString },
             { "Source2ModSchema.GetFloat", N_GetFloat },
             { "Source2ModSchema.SetFloat", N_SetFloat },
             { "Source2ModSchema.GetBool", N_GetBool },
