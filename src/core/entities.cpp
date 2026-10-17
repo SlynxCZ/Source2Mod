@@ -96,6 +96,22 @@ namespace entities
         addresses::source2modAddresses.CEntityInstance_AcceptInput()(pTarget, pszInput, pActivator, pCaller, variant_t(pszValue));
     }
 
+    std::vector<CBaseEntity*> EntitiesManager::FindAllEntitiesByDesignerName(const char* pszDesignerName)
+    {
+        std::vector<CBaseEntity*> results;
+        CGameEntitySystem* pEntitySystem = shared::g_pEntitySystem;
+        if (!pszDesignerName || !pEntitySystem)
+            return results;
+
+        for (CEntityIdentity* pIdentity = pEntitySystem->m_EntityList.m_pFirstActiveEntity; pIdentity; pIdentity = pIdentity->m_pNext)
+        {
+            const char* pszDesigner = pIdentity->m_pInstance ? pIdentity->m_designerName.String() : nullptr;
+            if (pszDesigner && std::strcmp(pszDesigner, pszDesignerName) == 0)
+                results.push_back(static_cast<CBaseEntity*>(pIdentity->m_pInstance));
+        }
+        return results;
+    }
+
     void EntitiesManager::AddEntityIOEvent(CEntityInstance* pTarget, const char* pszInput, CEntityInstance* pActivator, CEntityInstance* pCaller, const char* pszValue, float flDelay)
     {
         if (!shared::g_pEntitySystem)

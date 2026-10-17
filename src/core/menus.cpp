@@ -39,6 +39,9 @@
 
 #include <source2mod/schema/entity/classes/CCSCustomHudLayout.h>
 #include <source2mod/schema/entity/classes/CCSPlayerController.h>
+#include <source2mod/schema/schema.h>
+
+#include <entity2/globalvars_base.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -56,8 +59,19 @@ namespace menus
         // the title and the one navigation line that is 8, what the center
         // panel shows in full.
         constexpr int kMaxLinesPerPage = 6;
-        // The panel is shown for 3 seconds a time; sent again before that.
-        constexpr auto kResendAfter = std::chrono::seconds(1);
+        // How long the client shows one send of the panel, and how long
+        // before that runs out an unchanged menu is sent again. Changes go
+        // out at once; an unchanged menu costs one send per ~25 s.
+        constexpr int kPanelSeconds = 30;
+        constexpr float kRefreshAfter = kPanelSeconds - 5.0f;
+
+        /// Game time: stops with the game (paused, hibernating), like the
+        /// menu's own timeout should.
+        float Now()
+        {
+            CGlobalVars* globals = GetGlobalVars();
+            return globals ? globals->curtime : 0.0f;
+        }
 
         std::string Escape(const std::string& text)
         {
@@ -84,7 +98,7 @@ namespace menus
     // and it copies an option before calling into it.
 
     CenterHtmlMenuInstance::CenterHtmlMenuInstance(CCSPlayerController *player, CenterHtmlMenu *menu, uint64_t serial)
-        : IMenuInstance(player, menu), chMenu_(menu), serial_(serial), opened_(std::chrono::steady_clock::now())
+        : IMenuInstance(player, menu), chMenu_(menu), serial_(serial), opened_(Now())
     {
         path_.push_back({ menu, 0 });
         menuManager.ownInstances_.insert(this);
@@ -131,7 +145,7 @@ namespace menus
     void CenterHtmlMenuInstance::OnFrame()
     {
         const int timeout = chMenu_->GetTimeout();
-        if (timeout > 0 && std::chrono::steady_clock::now() - opened_ >= std::chrono::seconds(timeout))
+        if (timeout > 0 && Now() - opened_ >= static_cast<float>(timeout))
         {
             End(MenuEndReason::Timeout);
             return;
@@ -293,15 +307,15 @@ namespace menus
         if (!nav.empty())
             html += nav + "<br>\n";
 
-        // Built every frame (the evaluators may change it), sent only when it
-        // changed or the panel is about to run out -- not 64 times a second.
-        const auto now = std::chrono::steady_clock::now();
-        if (html == sentHtml_ && now - sentAt_ < kResendAfter)
+        // Built every frame (the evaluators may change it), sent when it
+        // changed -- and, unchanged, only before the client's copy runs out.
+        const float now = Now();
+        if (html == sentHtml_ && now - sentAt_ < kRefreshAfter)
             return;
         sentHtml_ = std::move(html);
         sentAt_ = now;
 
-        player->PrintToCenterHtml(sentHtml_.c_str(), 3, true);
+        player->PrintToCenterHtml(sentHtml_.c_str(), kPanelSeconds, true);
     }
 
     void CenterHtmlMenuInstance::OnKeyPress(CCSPlayerController* p, int key)

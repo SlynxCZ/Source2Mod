@@ -124,7 +124,7 @@ public:
 
 extern PluginApi pluginApi;
 
-/// Points the SDK's source2mod globals (g_Source2ModAPI, g_pSource2ModAddresses, ...)
+/// Points the SDK's source2mod globals (g_pSource2ModAPI, g_pSource2ModAddresses, ...)
 /// at the core's own interfaces. Call once the game config exists: the
 /// game-config interface is the only one that is not a static object.
 void FillSource2ModGlobals();

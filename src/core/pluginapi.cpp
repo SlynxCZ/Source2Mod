@@ -89,6 +89,7 @@
 #include <source2mod/ISource2ModSounds.h>
 #include <source2mod/ISource2ModTrace.h>
 #include <source2mod/ISource2ModTransmit.h>
+#include <source2mod/ISource2ModSchemaMethods.h>
 
 #include <cstring>
 #include <stdarg.h>
@@ -102,7 +103,7 @@ SOURCE2MOD_DEFINE_GLOBALVARS()
 
 void FillSource2ModGlobals()
 {
-    g_Source2ModAPI = &pluginApi;
+    g_pSource2ModAPI = &pluginApi;
     SOURCE2MOD_FILLVARS(&pluginApi)
 }
 
@@ -326,6 +327,7 @@ namespace
             { SOURCE2MOD_PATHS_INTERFACE, &paths::pathsManager },
             { SOURCE2MOD_PERMISSIONS_INTERFACE, &permissions::permissionsManager },
             { SOURCE2MOD_NATIVES_INTERFACE, sourcepawn::NativesInterface() },
+            { SOURCE2MOD_SCHEMAMETHODS_INTERFACE, Source2ModSchemaMethodsImpl() },
         };
         count = sizeof(s_current) / sizeof(s_current[0]);
         return s_current;

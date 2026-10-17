@@ -37,7 +37,6 @@
 #include <playerslot.h>
 #include <source2mod/ISource2ModMenus.h>
 
-#include <chrono>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -92,13 +91,14 @@ namespace menus {
         uint64_t serial_;
 
         std::vector<Level> path_;
-        std::chrono::steady_clock::time_point opened_;
+        float opened_;                  // game time (gpGlobals->curtime)
         uint32_t keyMask_ = 0;
 
-        /// What the panel was last sent, and when: Display() runs every frame,
-        /// the panel only gets it again when it changed or before it runs out.
+        /// What the panel was last sent, and when (game time): Display() runs
+        /// every frame, the panel only gets it again when it changed or before
+        /// the client's copy runs out.
         std::string sentHtml_;
-        std::chrono::steady_clock::time_point sentAt_{};
+        float sentAt_ = -1.0e9f;
     };
 
     class MenuManager : public ISource2ModMenus

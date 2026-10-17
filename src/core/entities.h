@@ -54,6 +54,8 @@ namespace entities {
         CBaseEntity* FindEntityByClassname(CEntityInstance* pStart, const char* name) override;
         CBaseEntity* FindEntityByName(CEntityInstance* pStartEntity, const char* szName, CEntityInstance* pSearchingEntity = nullptr, CEntityInstance* pActivator = nullptr, CEntityInstance* pCaller = nullptr, IEntityFindFilter* pFilter = nullptr) override;
 
+        std::vector<CBaseEntity*> FindAllEntitiesByDesignerName(const char* pszDesignerName) override;
+
         CBaseEntity* CreateEntityByName(const char* pszClassName) override;
 
         void AcceptInput(CEntityInstance* pTarget, const char* pszInput, CEntityInstance* pActivator, CEntityInstance* pCaller, const char* pszValue = "") override;
