@@ -9,7 +9,7 @@
 	url = https://github.com/SlynxCZ/breakpad.git
 [submodule "vendor/sourcepawn"]
 	path = vendor/sourcepawn
-	url = https://github.com/SlynxCZ/sourcepawn.git
+	url = https://github.com/Source2Mod/sourcepawn.git
 [submodule "vendor/maxminddb"]
 	path = vendor/maxminddb
 	url = https://github.com/maxmind/libmaxminddb.git
