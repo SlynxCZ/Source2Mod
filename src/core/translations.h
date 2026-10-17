@@ -79,6 +79,7 @@ namespace translations
         size_t Translate(PluginId owner, const char* phrase, CPlayerSlot target, char* buffer, size_t maxlen) override;
         size_t FormatPhrase(PluginId owner, const char* phrase, CPlayerSlot target,
                             const char* const* args, int numArgs, char* buffer, size_t maxlen) override;
+        size_t TranslateLanguage(PluginId owner, const char* phrase, int language, char* buffer, size_t maxlen) override;
 
         // ---- core side ----
 
@@ -87,6 +88,8 @@ namespace translations
 
         /// The text for a target: its language, the server's, English; nullptr when none.
         const std::string* TextFor(const Phrase& phrase, CPlayerSlot target);
+        /// The same for a language index (-1 = the server's).
+        const std::string* TextForLanguage(const Phrase& phrase, int language);
 
         /// Parses "{1:s},{2:d}" into a phrase's format.
         static void ParseFormat(Phrase& phrase, const char* format);

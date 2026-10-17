@@ -435,7 +435,13 @@ namespace translations
     const std::string* TranslationsManager::TextFor(const Phrase& phrase, CPlayerSlot target)
     {
         EnsureLanguages();
-        const int langs[] = { target.Get() < 0 ? m_serverLanguage : GetPlayerLanguage(target), m_serverLanguage,
+        return TextForLanguage(phrase, target.Get() < 0 ? m_serverLanguage : GetPlayerLanguage(target));
+    }
+
+    const std::string* TranslationsManager::TextForLanguage(const Phrase& phrase, int language)
+    {
+        EnsureLanguages();
+        const int langs[] = { language < 0 ? m_serverLanguage : language, m_serverLanguage,
                               std::max(0, LanguageByCode("en")) };
         for (int lang : langs)
         {
@@ -450,6 +456,13 @@ namespace translations
     {
         const Phrase* p = Find(owner, phrase);
         const std::string* text = p ? TextFor(*p, target) : nullptr;
+        return Copy(buffer, maxlen, text ? *text : std::string(phrase ? phrase : ""));
+    }
+
+    size_t TranslationsManager::TranslateLanguage(PluginId owner, const char* phrase, int language, char* buffer, size_t maxlen)
+    {
+        const Phrase* p = Find(owner, phrase);
+        const std::string* text = p ? TextForLanguage(*p, language) : nullptr;
         return Copy(buffer, maxlen, text ? *text : std::string(phrase ? phrase : ""));
     }
 
