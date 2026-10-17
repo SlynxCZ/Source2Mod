@@ -71,11 +71,10 @@ namespace sourcepawn
     /// What MaxClients holds for every script: CS2's slot count.
     constexpr cell_t kMaxClients = 64;
 
-    // enum Action (core.inc)
-    constexpr cell_t kPluginContinue = 0;
-    constexpr cell_t kPluginChanged = 1;
-    constexpr cell_t kPluginHandled = 3;
-    constexpr cell_t kPluginStop = 4;
+    // enum Source2ModAction (types.inc): what hooks and forward functions answer
+    constexpr cell_t kActionIgnore = 0;
+    constexpr cell_t kActionOverride = 1;
+    constexpr cell_t kActionSupersede = 2;
 
     /// Every native the core binds, terminated by { nullptr, nullptr }.
     const sp_nativeinfo_t* GetCoreNatives();

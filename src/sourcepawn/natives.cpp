@@ -601,10 +601,9 @@ namespace sourcepawn
             }
         };
 
-        // A timer of either API: SourceMod's callback gets (Handle timer, any
-        // data) and stops a repeating timer with Plugin_Stop; Source2Mod's
-        // gets (any data) and repeats until it is killed.
-        cell_t StartTimer(IPluginContext* ctx, float interval, cell_t funcId, cell_t data, int flags, bool sourcemod)
+        // Source2ModScheduler.AddTimer: the callback gets (any data); a repeating
+        // timer repeats until it is killed.
+        cell_t StartTimer(IPluginContext* ctx, float interval, cell_t funcId, cell_t data, int flags)
         {
             ScriptPlugin* plugin = Plugin(ctx);
             IPluginFunction* fn = ctx->GetFunctionById(funcId);
@@ -625,25 +624,18 @@ namespace sourcepawn
                 return ctx->ThrowNativeError("Handle limit reached");
             }
 
-            // Action (Handle timer, any data); Plugin_Stop ends a repeating timer.
-            const bool repeat = (state->flags & TIMER_FLAG_REPEAT) != 0;
             auto guard = std::make_shared<TimerGuard>(state);
-            TimerCallback callback([guard, fn, repeat, sourcemod]()
+            TimerCallback callback([guard, fn]()
             {
                 const std::shared_ptr<TimerState>& s = guard->state;
                 if (!s->handle)
                     return;
 
                 sp::CallArgs args;
-                if (sourcemod)
-                    args.PushCell(s->handle);
                 args.PushCell(s->data);
 
-                cell_t res = kPluginContinue;
+                cell_t res = 0;
                 Invoke(fn, args, &res);
-
-                if (sourcemod && repeat && res == kPluginStop && s->handle)
-                    Handles().Free(s->handle, s->owner, true);
             });
 
             // The script's timer flags are SourceMod's and match the scheduler's
@@ -656,7 +648,7 @@ namespace sourcepawn
         // Source2ModScheduler.AddTimer(float interval, Source2ModTask callback, any data = 0, int flags = 0)
         cell_t N_S2MAddTimer(IPluginContext* ctx, const cell_t* params)
         {
-            return StartTimer(ctx, sp_ctof(params[1]), params[2], params[3], params[4], false);
+            return StartTimer(ctx, sp_ctof(params[1]), params[2], params[3], params[4]);
         }
 
         // Source2ModScheduler.KillTimer(Source2ModTimer timer): one that has ended is fine.

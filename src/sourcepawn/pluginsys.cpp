@@ -715,11 +715,11 @@ namespace sourcepawn
         struct ResultCombiner
         {
             explicit ResultCombiner(cell_t type)
-                : execType(type), result(type == ET_LowEvent ? kPluginStop : kPluginContinue)
+                : execType(type), result(type == ET_LowEvent ? kActionSupersede : kActionIgnore)
             {
             }
 
-            // false: ET_Hook got Plugin_Stop, the rest are not called.
+            // false: ET_Hook got Action_Supersede, the rest are not called.
             bool Add(cell_t res)
             {
                 if (execType == ET_Single || !any)
@@ -729,7 +729,7 @@ namespace sourcepawn
                 else if (execType == ET_LowEvent)
                     result = std::min(result, res);
                 any = true;
-                return !(execType == ET_Hook && res == kPluginStop);
+                return !(execType == ET_Hook && res >= kActionSupersede);
             }
 
             cell_t Result() const { return execType == ET_Ignore ? 0 : result; }
