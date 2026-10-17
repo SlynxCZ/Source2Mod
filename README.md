@@ -2,7 +2,7 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/Source2Mod/source2mod/build.yml?branch=main)](https://github.com/Source2Mod/source2mod/actions)
-[![Website](https://img.shields.io/badge/Website-source2mod.net-blue)](https://source2mod.net)
+[![Website](https://img.shields.io/badge/Website-source2mod.net-blue)](https://www.source2mod.net)
 [![Discord](https://img.shields.io/badge/Discord-join-7289da?logo=discord&logoColor=white)](https://discord.gg/4Ck56eDNXj)
 
 **Source2Mod** is a server modification for Counter-Strike 2 on top of
@@ -108,7 +108,7 @@ The build puts the core, the gamedata and `addons/source2mod/scripting`
 
 ## Writing plugins
 
-The documentation is on [source2mod.net](https://source2mod.net): every
+The documentation is on [source2mod.net](https://www.source2mod.net): every
 example in C++ and SourcePawn, guides and the full API reference.
 
 - **C++** -- add the [Source2Mod SDK](https://github.com/Source2Mod/source2mod-sdk)

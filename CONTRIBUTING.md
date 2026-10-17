@@ -62,13 +62,13 @@ fork, against `main`.
 ## Before you open the pull request
 
 - **It builds** on Linux (and on Windows if you touched platform code). See
-  [Building](https://source2mod.net/docs/development/building).
+  [Building](https://www.source2mod.net/docs/development/building).
 - **It was tested** on a server, if it changes runtime behaviour. Say in the
   pull request what you tested and how.
 - **Public interfaces** (`ISource2Mod*` in the SDK) are versioned. A change to an
   existing interface's layout is a new revision (`ISource2ModX002` -> `003`) with
   the old one still served -- see
-  [Compatibility](https://source2mod.net/docs/development/compatibility).
+  [Compatibility](https://www.source2mod.net/docs/development/compatibility).
   Such changes usually need a matching pull request in
   [source2mod-sdk](https://github.com/Source2Mod/source2mod-sdk);
   link the two.

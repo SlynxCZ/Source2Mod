@@ -60,7 +60,7 @@
 #define BUILD_TIMESTAMP __DATE__ " " __TIME__
 #define BUILD_ID SEMVER ":" GITHUB_SHA
 
-#define SOURCE2MOD_WEBSITE "https://source2mod.net"
+#define SOURCE2MOD_WEBSITE "https://www.source2mod.net"
 #define SOURCE2MOD_REPO    "https://github.com/Source2Mod/source2mod"
 
 // The console colours of the "s2m" command, FUNPLAY's log style: the
