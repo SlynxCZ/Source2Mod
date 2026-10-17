@@ -132,6 +132,7 @@ namespace sourcepawn
         if (!g_pEnv)
             return;
 
+        crashinfo::Shutdown();
         g_pEnv->SetDebugger(nullptr);
         g_pEnv->Shutdown();
         delete g_pEnv;

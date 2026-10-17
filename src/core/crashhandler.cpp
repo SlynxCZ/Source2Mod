@@ -138,6 +138,14 @@ namespace crashhandler
         char s_szSessionStatePath[560];
 
         google_breakpad::ExceptionHandler* s_pExceptionHandler = nullptr;
+
+        // Memory every dump carries; see RegisterAppMemory().
+        struct AppMemory
+        {
+            void* ptr;
+            size_t length;
+        };
+        AppMemory s_appMemory[16];
         CMiniDumpComment s_MiniDumpComment(95000);
 
         // The crash is processed during Init(), long before the Steam API
@@ -182,29 +190,65 @@ namespace crashhandler
         // source2mod. The crashed thread's stack comes from the dump.
         char s_szSourcePawn[16384];
 
-        size_t DescribeSourcePawn(google_breakpad::Minidump* dump)
+        // The crashed thread's stack from the dump, for the context scan and
+        // the JIT frame walk.
+        bool GetCrashedStack(google_breakpad::Minidump* dump, sourcepawn::crashinfo::StackCopy* out)
         {
-            sourcepawn::crashinfo::StackCopy copy{};
-            const sourcepawn::crashinfo::StackCopy* stack = nullptr;
-
             google_breakpad::MinidumpException* exception = dump ? dump->GetException() : nullptr;
             google_breakpad::MinidumpThreadList* threads = dump ? dump->GetThreadList() : nullptr;
             uint32_t threadId = 0;
-            if (exception && threads && exception->GetThreadID(&threadId))
+            if (!exception || !threads || !exception->GetThreadID(&threadId))
+                return false;
+
+            google_breakpad::MinidumpThread* thread = threads->GetThreadByID(threadId);
+            google_breakpad::MinidumpMemoryRegion* memory = thread ? thread->GetMemory() : nullptr;
+            google_breakpad::MinidumpContext* context = exception->GetContext();
+            uint64_t sp = 0;
+            const uint8_t* bytes = memory ? memory->GetMemory() : nullptr;
+            if (!bytes || !context || !context->GetStackPointer(&sp))
+                return false;
+
+            *out = { bytes, memory->GetBase(), memory->GetSize(), sp };
+            return true;
+        }
+
+        size_t DescribeSourcePawn(google_breakpad::Minidump* dump)
+        {
+            sourcepawn::crashinfo::StackCopy stack{};
+            const bool haveStack = GetCrashedStack(dump, &stack);
+            return sourcepawn::crashinfo::Describe(s_szSourcePawn, sizeof(s_szSourcePawn), haveStack ? &stack : nullptr);
+        }
+
+        // The section rebuilt from the dump alone -- the plugin block and the
+        // call record it carries -- for when the callback did not write it.
+        std::string DescribeSourcePawnFromDump(google_breakpad::Minidump& dump)
+        {
+            std::vector<sourcepawn::crashinfo::DumpRegion> regions;
+            if (google_breakpad::MinidumpMemoryList* list = dump.GetMemoryList())
             {
-                google_breakpad::MinidumpThread* thread = threads->GetThreadByID(threadId);
-                google_breakpad::MinidumpMemoryRegion* memory = thread ? thread->GetMemory() : nullptr;
-                google_breakpad::MinidumpContext* context = exception->GetContext();
-                uint64_t sp = 0;
-                const uint8_t* bytes = memory ? memory->GetMemory() : nullptr;
-                if (bytes && context && context->GetStackPointer(&sp))
+                for (unsigned int i = 0; i < list->region_count(); ++i)
                 {
-                    copy = { bytes, memory->GetBase(), memory->GetSize(), sp };
-                    stack = &copy;
+                    google_breakpad::MinidumpMemoryRegion* region = list->GetMemoryRegionAtIndex(i);
+                    const uint8_t* bytes = region ? region->GetMemory() : nullptr;
+                    if (bytes)
+                        regions.push_back({ bytes, region->GetBase(), region->GetSize() });
                 }
             }
 
-            return sourcepawn::crashinfo::Describe(s_szSourcePawn, sizeof(s_szSourcePawn), stack);
+            sourcepawn::crashinfo::StackCopy stack{};
+            const bool haveStack = GetCrashedStack(&dump, &stack);
+            const size_t length = sourcepawn::crashinfo::DescribeFromDump(s_szSourcePawn, sizeof(s_szSourcePawn),
+                                                                          regions.data(), regions.size(), haveStack ? &stack : nullptr);
+            if (!length)
+                return {};
+
+            // Same shape as ReadSourcePawnSection(): without the markers.
+            std::string section(s_szSourcePawn, length);
+            const size_t begin = section.find('\n');
+            const size_t end = section.find("-------- SOURCEPAWN END --------");
+            if (begin == std::string::npos || end == std::string::npos || end < begin)
+                return {};
+            return section.substr(begin + 1, end - begin - 1);
         }
 
         // What the crash callback wrote between the SOURCEPAWN markers.
@@ -1057,7 +1101,13 @@ namespace crashhandler
             // A script running when it crashed is the better culprit than the
             // native it called in source2mod -- or than nothing at all, when
             // the crash is in the JIT code itself.
-            const std::string sourcePawn = ReadSourcePawnSection(szTxtPath);
+            std::string sourcePawn = ReadSourcePawnSection(szTxtPath);
+            if (sourcePawn.empty())
+            {
+                sourcePawn = DescribeSourcePawnFromDump(miniDump);
+                if (!sourcePawn.empty())
+                    FP_INFO("No SOURCEPAWN section in {}, rebuilt it from the dump.", szTxtPath);
+            }
             constexpr std::string_view kBlaming = "Blaming: ";
             if (sourcePawn.starts_with(kBlaming) && sourcePawn.compare(kBlaming.size(), 6, "<none>") != 0)
             {
@@ -1105,6 +1155,12 @@ namespace crashhandler
 
             s_pVectoredHandler = AddVectoredExceptionHandler(0, BreakpadVectoredHandler);
 #endif
+
+            for (const AppMemory& memory : s_appMemory)
+            {
+                if (memory.ptr)
+                    s_pExceptionHandler->RegisterAppMemory(memory.ptr, memory.length);
+            }
         }
 
         void RemoveExceptionHandler()
@@ -1249,5 +1305,34 @@ namespace crashhandler
     void OnSteamAPIActivated()
     {
         FlushPendingDiscordReport();
+    }
+
+    void RegisterAppMemory(void* ptr, size_t length)
+    {
+        for (AppMemory& memory : s_appMemory)
+        {
+            if (memory.ptr)
+                continue;
+
+            memory = { ptr, length };
+            if (s_pExceptionHandler)
+                s_pExceptionHandler->RegisterAppMemory(ptr, length);
+            return;
+        }
+        FP_WARN("Crash handler: no room to register more app memory for the dumps.");
+    }
+
+    void UnregisterAppMemory(void* ptr)
+    {
+        for (AppMemory& memory : s_appMemory)
+        {
+            if (memory.ptr != ptr)
+                continue;
+
+            memory = {};
+            if (s_pExceptionHandler)
+                s_pExceptionHandler->UnregisterAppMemory(ptr);
+            return;
+        }
     }
 }

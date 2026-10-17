@@ -35,6 +35,8 @@
  */
 #pragma once
 
+#include <cstddef>
+
 /// Crash handler: Google Breakpad minidumps with local symbolization and a
 /// Discord webhook report.
 ///
@@ -47,6 +49,10 @@
 /// inside a bare steamrt container -- prints the stack with the suspected
 /// culprit and, when CrashDiscordWebhook is set in the core config, posts it
 /// to Discord with the .txt attached.
+///
+/// SourcePawn: like Accelerator, the dump carries a block describing every
+/// loaded script (sourcepawn/crashinfo.h), and the .txt gets a SOURCEPAWN
+/// section naming the script, function and native that were running.
 ///
 /// Linux only; every function below is a no-op on Windows.
 namespace crashhandler
@@ -73,4 +79,10 @@ namespace crashhandler
     /// Steam's HTTP client is there now -- sends the report that waited for
     /// it. The crash is processed during Load(), long before that.
     void OnSteamAPIActivated();
+
+    /// Memory every dump carries from now on (breakpad's app memory), as
+    /// Accelerator does with its plugin contexts. Kept across reinstalls of
+    /// the handler and registered as soon as there is one.
+    void RegisterAppMemory(void* ptr, size_t length);
+    void UnregisterAppMemory(void* ptr);
 }
