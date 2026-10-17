@@ -57,6 +57,7 @@
 #include "slowguard.h"
 #include "sounds.h"
 #include "transmit.h"
+#include "functions.h"
 #include "sourcepawn/scriptplugin.h"
 #include "utils/log.h"
 #include "utils/paths.h"
@@ -435,6 +436,7 @@ bool PluginManager::AddPlugin(const char* fullPath, LibHandle lib, const void* m
         cookies::cookiesManager.RemoveAllForPlugin(failedId);
         translations::translationsManager.RemoveAllForPlugin(failedId);
         targeting::targetingManager.RemoveAllForPlugin(failedId);
+        functions::functionsManager.RemoveAllForPlugin(failedId);
         sourcepawn::RemoveAllForPlugin(failedId);
 
         m_plugins.pop_back();
@@ -559,6 +561,7 @@ bool PluginManager::ReloadPlugin(int id)
         cookies::cookiesManager.RemoveAllForPlugin(id);
         translations::translationsManager.RemoveAllForPlugin(id);
         targeting::targetingManager.RemoveAllForPlugin(id);
+        functions::functionsManager.RemoveAllForPlugin(id);
         sourcepawn::RemoveAllForPlugin(id);
 
         CloseLibNextFrame(**it, path);
@@ -624,6 +627,7 @@ bool PluginManager::UnloadPlugin(PluginId id)
         cookies::cookiesManager.RemoveAllForPlugin(id);
         translations::translationsManager.RemoveAllForPlugin(id);
         targeting::targetingManager.RemoveAllForPlugin(id);
+        functions::functionsManager.RemoveAllForPlugin(id);
         sourcepawn::RemoveAllForPlugin(id);
 
         CloseLibNextFrame(*p);
@@ -756,6 +760,7 @@ void PluginManager::UnloadAll()
         cookies::cookiesManager.RemoveAllForPlugin(p->id);
         translations::translationsManager.RemoveAllForPlugin(p->id);
         targeting::targetingManager.RemoveAllForPlugin(p->id);
+        functions::functionsManager.RemoveAllForPlugin(p->id);
         sourcepawn::RemoveAllForPlugin(p->id);
     }
 

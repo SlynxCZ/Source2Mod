@@ -90,6 +90,11 @@ bool CGameConfig::LoadSingle(const std::string& path, char* conf_error, int conf
                 }
             }
 
+            if (v.contains("function") && v["function"].is_object())
+            {
+                m_umFunctions.try_emplace(k, v["function"]);
+            }
+
             if (v.contains("patches"))
             {
                 if (auto patch = v["patches"][platform]; patch.is_string())
@@ -287,4 +292,15 @@ int CGameConfig::GetOffset(const char* pchName)
         return -1;
     }
     return it->second;
+}
+
+const CGameConfig::json* CGameConfig::GetFunction(const char* pchName) const
+{
+    auto it = m_umFunctions.find(pchName);
+    return it == m_umFunctions.end() ? nullptr : &it->second;
+}
+
+bool CGameConfig::HasSignature(const char* pchName) const
+{
+    return m_umSignatures.find(pchName) != m_umSignatures.end();
 }

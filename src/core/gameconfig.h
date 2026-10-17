@@ -73,6 +73,12 @@ public:
     ISource2ModMemory ResolveSignature(const char* pchName) override;
     int GetOffset(const char* pchName) override;
 
+    /// The entry's "function" object (ISource2ModFunctions.h), or null.
+    const json* GetFunction(const char* pchName) const;
+
+    /// Whether the entry has a pattern or symbol (as opposed to an offset).
+    bool HasSignature(const char* pchName) const;
+
 private:
     std::string m_sPath;
     // use Valve KeyValues in the future.
@@ -83,6 +89,7 @@ private:
     std::unordered_map<std::string, void*> m_umAddresses;
     std::unordered_map<std::string, std::string> m_umLibraries;
     std::unordered_map<std::string, std::string> m_umPatches;
+    std::unordered_map<std::string, json> m_umFunctions;
 
     /// Modules loaded on demand by GetModule, keyed by library name.
     std::unordered_map<std::string, DynLibUtils::CModule> m_umModules;

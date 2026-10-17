@@ -57,6 +57,7 @@
 #include "handles.h"
 #include "scriptplugin.h"
 
+#include "core/functions.h"
 #include "core/gameconfig.h"
 #include "core/module.h"
 #include "core/shared.h"
@@ -222,6 +223,8 @@ namespace sourcepawn
             return t > T_Void && t <= T_FloatRef && t != T_Command;
         }
 
+        Function* FnOf(IPluginContext* ctx, cell_t handle);
+
         cell_t NewFunction(IPluginContext* ctx, void* address, void** vtable, int vtableIndex, cell_t returnType)
         {
             if (returnType < T_Void || returnType > T_Pointer)
@@ -244,6 +247,22 @@ namespace sourcepawn
                 return 0;
             const uintptr_t addr = shared::g_pGameConfig->ResolveSignature(LocalString(ctx, params[1])).GetAddr();
             return addr ? NewFunction(ctx, reinterpret_cast<void*>(addr), nullptr, -1, params[2]) : 0;
+        }
+
+        // Find(const char[] name): a function described in gamedata (ISource2ModFunctions,
+        // shared with C++), its parameters and return type from the "function" object.
+        // Source2ModType_* and Source2ModType have the same values.
+        cell_t N_FnFind(IPluginContext* ctx, const cell_t* params)
+        {
+            ISource2ModFunction* described = functions::functionsManager.Find(LocalString(ctx, params[1]));
+            if (!described)
+                return 0;
+            auto* src = static_cast<functions::CFunction*>(described);
+            const cell_t h = NewFunction(ctx, src->address, src->vtable, src->vtableIndex, static_cast<cell_t>(src->returnType));
+            if (Function* fn = h ? FnOf(ctx, h) : nullptr)
+                for (Source2ModType t : src->params)
+                    fn->params.push_back(static_cast<Type>(t));
+            return h;
         }
 
         // FromSignature(const char[] module, const char[] signature, Source2ModType returnType, const char[] section = "")
@@ -822,6 +841,7 @@ namespace sourcepawn
             { "Source2ModGameConfig.GetPlatform", N_GCGetPlatform },
             { "Source2ModGameConfig.Resolves", N_GCResolves },
             { "Source2ModGameConfig.SignatureMatches", N_GCSignatureMatches },
+            { "Source2ModFunction.Find", N_FnFind },
             { "Source2ModFunction.FromGameConfig", N_FnFromGameConfig },
             { "Source2ModFunction.FromSignature", N_FnFromSignature },
             { "Source2ModFunction.FromSignatureRelative", N_FnFromSignatureRelative },
