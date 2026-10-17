@@ -99,3 +99,10 @@ approach of zer0k-z's sql_mm (https://github.com/zer0k-z/sql_mm,
 GPL-3.0): an SQLite file behind the same asynchronous connection,
 query and transaction calls as MySQL, results read on a worker thread
 and handed back on the main one.
+
+## GeoLite2
+
+configs/addons/source2mod/shared/GeoLite2-City.mmdb and
+GeoLite2-Country.mmdb are GeoLite2 data created by MaxMind, available
+from https://www.maxmind.com, under the GeoLite2 End User License
+Agreement.

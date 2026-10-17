@@ -77,8 +77,8 @@ public:
     std::string ServerLang = "en";
 
     /// The GeoLite2 database (.mmdb) GeoIP lookups read; relative paths are
-    /// under addons/source2mod. Not shipped -- see ISource2ModGeoIP.h.
-    std::string GeoIPDatabase = "geoip/GeoLite2-City.mmdb";
+    /// under addons/source2mod. GeoLite2-City and GeoLite2-Country ship in shared/.
+    std::string GeoIPDatabase = "shared/GeoLite2-City.mmdb";
 
     /// The SQLite file client preferences (cookies) are kept in; relative
     /// paths are under addons/source2mod.

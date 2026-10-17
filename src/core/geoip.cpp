@@ -146,7 +146,7 @@ namespace geoip
     {
         std::string configured = shared::g_pCoreConfig ? shared::g_pCoreConfig->GeoIPDatabase : std::string();
         if (configured.empty())
-            configured = "geoip/GeoLite2-City.mmdb";
+            configured = "shared/GeoLite2-City.mmdb";
 
         std::filesystem::path path(configured);
         if (!path.is_absolute())
