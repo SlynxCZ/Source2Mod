@@ -149,12 +149,9 @@ static void ForEachPlayer(FN &&fn)
 
 bool SamplePlugin::Load(PluginId id, ISource2ModAPI* api, char* error, size_t maxlen, bool late)
 {
+    // Also points s2sdk's engine globals (g_pSource2Server, g_pCVar, ...)
+    // at the engine: SOURCE2MOD_FILLGAMEVARS().
     SOURCE2MOD_SAVEVARS();
-
-    g_pSource2Server = api->GetSource2Server();
-    g_pSource2GameClients = api->GetSource2GameClients();
-    g_pEngineServer = api->GetEngineServer();
-    g_pCVar = api->GetCVar();
 
     SOURCE2MOD_LOG(this, "Starting plugin.\n");
 
