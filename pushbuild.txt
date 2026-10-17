@@ -1,0 +1,1 @@
+First Source2Mod release: Source2Toolkit renamed and carried on, with SourcePawn plugins (.smx) next to native ones on one API, plugin API 5.
