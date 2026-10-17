@@ -1,11 +1,11 @@
 # Gamedata validation
 
-CS2 build **25966348** · Linux manifest `5513399157532729905` · Windows manifest `8766757721818354077` · 2026-10-17T11:01:32+00:00
+CS2 build **25966348** · Linux manifest `5513399157532729905` · Windows manifest `8766757721818354077` · 2026-10-17T13:47:52+00:00
 
 | | Windows | Linux |
 |---|---|---|
 | Signatures | 🟢 67 | 🟢 67 |
-| Offsets | 🟢 39 ⚪ 4 | 🟢 39 ⚪ 4 |
+| Offsets | 🟢 44 ⚪ 4 | 🟢 44 ⚪ 4 |
 
 ## Everything resolves
 
@@ -14,14 +14,19 @@ CS2 build **25966348** · Linux manifest `5513399157532729905` · Windows manife
 
 - 🟢🟢 `BotNavIgnore1`
 - 🟢🟢 `CAttributeList::SetOrAddAttributeValueByName`
+- 🟢🟢 `CBaseEntity::Blocked` — W 155/238 · L 154/239
 - 🟢🟢 `CBaseEntity::CollisionRulesChanged` — W 188/238 · L 187/239
 - 🟢🟢 `CBaseEntity::DispatchSpawn`
 - 🟢🟢 `CBaseEntity::EndTouch` — W 152/238 · L 151/239
+- 🟢🟢 `CBaseEntity::Event_Killed` — W 131/238 · L 130/239
+- 🟢🟢 `CBaseEntity::Spawn` — W 9/238 · L 10/239
 - 🟢🟢 `CBaseEntity::StartTouch` — W 150/238 · L 149/239
 - 🟢🟢 `CBaseEntity::TakeDamageOld`
 - 🟢🟢 `CBaseEntity::Teleport` — W 165/238 · L 164/239
+- 🟢🟢 `CBaseEntity::Think` — W 160/238 · L 159/239
 - 🟢🟢 `CBaseEntity::Touch` — W 151/238 · L 150/239
 - 🟢🟢 `CBaseEntity::UpdateSubclassVData`
+- 🟢🟢 `CBaseEntity::Use` — W 147/238 · L 146/239
 - 🟢🟢 `CBaseModelEntity::SetModel`
 - 🟢🟢 `CBasePlayerController::OnSimulateUserCommands`
 - 🟢🟢 `CBasePlayerController::SetPawn`

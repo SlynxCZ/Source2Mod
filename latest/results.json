@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-17T11:01:32+00:00",
+  "generated_at": "2026-10-17T13:47:52+00:00",
   "build": {
     "buildid": "25966348",
     "linux_manifest": "5513399157532729905",
@@ -31,6 +31,24 @@
       "linux": {
         "matches": 1,
         "address": "0x1ca1f00",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBaseEntity::Blocked",
+      "kind": "offset",
+      "windows": {
+        "value": 155,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 238,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 154,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 239,
         "status": "ok"
       }
     },
@@ -78,6 +96,42 @@
       },
       "linux": {
         "value": 151,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 239,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBaseEntity::Event_Killed",
+      "kind": "offset",
+      "windows": {
+        "value": 131,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 238,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 130,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 239,
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBaseEntity::Spawn",
+      "kind": "offset",
+      "windows": {
+        "value": 9,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 238,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 10,
         "class": "CBaseEntity",
         "library": "server",
         "vtable_size": 239,
@@ -135,6 +189,24 @@
       }
     },
     {
+      "name": "CBaseEntity::Think",
+      "kind": "offset",
+      "windows": {
+        "value": 160,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 238,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 159,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 239,
+        "status": "ok"
+      }
+    },
+    {
       "name": "CBaseEntity::Touch",
       "kind": "offset",
       "windows": {
@@ -163,6 +235,24 @@
       "linux": {
         "matches": 1,
         "address": "0xd4edc0",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "CBaseEntity::Use",
+      "kind": "offset",
+      "windows": {
+        "value": 147,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 238,
+        "status": "ok"
+      },
+      "linux": {
+        "value": 146,
+        "class": "CBaseEntity",
+        "library": "server",
+        "vtable_size": 239,
         "status": "ok"
       }
     },
