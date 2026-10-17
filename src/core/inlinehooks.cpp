@@ -35,10 +35,13 @@
  */
 #include "inlinehooks.h"
 
+#include "entities.h"
+
 #include "addresses.h"
 #include "commands.h"
 #include "core/scheduler.h"
 #include "events.h"
+#include "hooks.h"
 #include "networkmessages.h"
 #include "plugin.h"
 #include "shared.h"
@@ -55,7 +58,6 @@
 namespace inlinehooks
 {
     Inlines inlines;
-    std::unordered_map<OutputKey, EntityIOCallbackPair, OutputKeyHash> entityIOListenerStack;
 
     Inlines::Inlines() :
         // void CEntityIOOutput::FireOutputInternal(CEntityInstance* pActivator, CEntityInstance* pCaller, void* variantValue, float delay, void* unk01, void* unk02)
@@ -81,63 +83,25 @@ namespace inlinehooks
     {
         TK_VPROF("Source2Mod::FireOutputInternal");
 
-        const char* outputName = pThis->m_pDesc->m_pName;
-        const char* callerClass = pCaller ? pCaller->GetClassname() : "*";
+        const char* outputName = pThis->m_pDesc ? pThis->m_pDesc->m_pName : "";
 
-        std::vector<OutputKey> searchKeys{
-            {"*", outputName},
-            {"*", "*"}
-        };
+        // ISource2ModEntities' output listeners: pre may Supersede (the output
+        // does not fire), post sees it fired.
+        if (!entities::entitiesManager.HasOutputListeners())
+            return { KHook::Action::Ignore };
 
-        if (pCaller)
-        {
-            searchKeys.push_back({callerClass, outputName});
-            searchKeys.push_back({callerClass, "*"});
-        }
-
-        std::unordered_set<EntityIOCallbackPair*> unique;
-
-        for (auto& key : searchKeys)
-        {
-            auto it = entityIOListenerStack.find(key);
-            if (it != entityIOListenerStack.end())
-                unique.insert(&it->second);
-        }
-
-        std::vector matched(unique.begin(), unique.end());
-
-        for (auto* pair : matched)
-        {
-            for (auto* listener : pair->m_vecPre)
-            {
-                auto action = listener->OnEntityOutput(
-                    outputName,
-                    pActivator,
-                    pCaller,
-                    delay,
-                    false
-                );
-
-                if (action == Action::Supersede)
-                    return { KHook::Action::Supersede };
-            }
-        }
+        if (entities::entitiesManager.NotifyOutput(pCaller, outputName, pActivator, delay, false) == Action::Supersede)
+            return { KHook::Action::Supersede };
 
         // Run the rest of the hook chain and the original now, so the post
-        // listeners below see the output fired. Unlike CallOriginal this leaves
+        // calls below see the output fired. Unlike CallOriginal this leaves
         // the original skipped when another hook on it superseded. Only the
         // type of the member pointer matters, KHook recalls through the detour.
         using FireOutputInternal_t = void (CEntityIOOutput::*)(CEntityInstance*, CEntityInstance*, void*, float, void*, void*);
         auto result = KHook::Recall(static_cast<FireOutputInternal_t>(nullptr), KHook::Return<void>{ KHook::Action::Ignore },
                                     pThis, pActivator, pCaller, variantValue, delay, unk01, unk02);
 
-        for (auto* pair : matched)
-        {
-            for (auto* listener : pair->m_vecPost)
-            {
-                listener->OnEntityOutput(outputName, pActivator, pCaller, delay, true);
-            }
-        }
+        entities::entitiesManager.NotifyOutput(pCaller, outputName, pActivator, delay, true);
 
         return result;
     }

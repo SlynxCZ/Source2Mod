@@ -1954,7 +1954,13 @@ namespace sourcepawn
             return 0;
         }
 
-        // A script's IEntityListener: four optional functions.
+        PluginId CallerId(IPluginContext* ctx)
+        {
+            ScriptPlugin* plugin = ScriptPlugin::FromContext(ctx);
+            return plugin ? plugin->Id() : 0;
+        }
+
+        // A script's entity listener: four optional functions.
         class ScriptEntityListener final : public IEntityListener
         {
         public:
@@ -1963,6 +1969,7 @@ namespace sourcepawn
             IPluginFunction* spawned = nullptr;
             IPluginFunction* deleted = nullptr;
             IPluginFunction* parentChanged = nullptr;
+            CEntityHandle only;     // for one entity; invalid for every one
 
             void OnEntityCreated(CEntityInstance* e) override { Fire(created, e); }
             void OnEntitySpawned(CEntityInstance* e) override { Fire(spawned, e); }
@@ -1988,25 +1995,21 @@ namespace sourcepawn
             }
         };
 
-        class ScriptIOListener final : public IEntityIOListener
+        class ScriptOutputListener final : public IEntityOutputListener
         {
         public:
             PluginId owner = 0;
             IPluginFunction* fn = nullptr;
-            std::string className, outputName;
-            bool post = false;
-            CEntityHandle only;     // AddSingleEntityIOListener: the one entity whose outputs count
+            CEntityHandle only;
 
-            Action OnEntityOutput(const char* output, CEntityInstance* activator, CEntityInstance* caller, float delay, bool isPost) override
+            Action OnEntityOutput(CEntityInstance* caller, const char* output, CEntityInstance* activator, float delay, bool post) override
             {
-                if (only.IsValid() && (!caller || caller->GetRefEHandle() != only))
-                    return Action::Ignore;
                 sp::CallArgs args;
+                args.PushCell(EntityCell(caller));
                 args.PushString(output ? output : "");
                 args.PushCell(EntityCell(activator));
-                args.PushCell(EntityCell(caller));
                 args.PushFloat(delay);
-                args.PushCell(isPost ? 1 : 0);
+                args.PushCell(post ? 1 : 0);
                 cell_t res = 0;
                 Invoke(fn, args, &res);
                 return static_cast<Action>(std::clamp<cell_t>(res, 0, 2));
@@ -2015,28 +2018,42 @@ namespace sourcepawn
 
         cell_t g_nextListenerId = 1;
         std::map<cell_t, std::unique_ptr<ScriptEntityListener>> g_entityListeners;
-        std::map<cell_t, std::unique_ptr<ScriptIOListener>> g_ioListeners;
-
-        PluginId CallerId(IPluginContext* ctx)
-        {
-            ScriptPlugin* plugin = ScriptPlugin::FromContext(ctx);
-            return plugin ? plugin->Id() : 0;
-        }
+        std::map<cell_t, std::unique_ptr<ScriptOutputListener>> g_outputListeners;
 
         IPluginFunction* OptionalFunction(IPluginContext* ctx, cell_t id)
         {
             return id == 0 || id == -1 ? nullptr : ctx->GetFunctionById(static_cast<funcid_t>(id));
         }
 
+        // A listener for one entity is dropped by the core with the entity;
+        // the script's object goes on the next add, once the handle no longer
+        // resolves. Never during a dispatch of its own: the core skips a
+        // dropped entry without touching the listener.
+        template <typename MAP>
+        void SweepGone(MAP& map)
+        {
+            std::erase_if(map, [](const auto& e) { return e.second->only.IsValid() && !e.second->only.Get(); });
+        }
+
+        // AddEntityListener(created, spawned, deleted, parentChanged, designerName, entity)
         cell_t N_EntsAddEntityListener(IPluginContext* ctx, const cell_t* params)
         {
+            bool ok;
+            CEntityInstance* entity = OptionalEntity(ctx, params[6], &ok);
+            if (!ok)
+                return 0;
+            SweepGone(g_entityListeners);
+
             auto listener = std::make_unique<ScriptEntityListener>();
             listener->owner = CallerId(ctx);
             listener->created = OptionalFunction(ctx, params[1]);
             listener->spawned = OptionalFunction(ctx, params[2]);
             listener->deleted = OptionalFunction(ctx, params[3]);
             listener->parentChanged = OptionalFunction(ctx, params[4]);
-            entities::entitiesManager.AddEntityListener(listener->owner, listener.get());
+            if (entity)
+                listener->only = entity->GetRefEHandle();
+            const char* designer = LocalString(ctx, params[5]);
+            entities::entitiesManager.AddEntityListener(listener->owner, listener.get(), *designer ? designer : nullptr, entity);
             const cell_t id = g_nextListenerId++;
             g_entityListeners[id] = std::move(listener);
             return id;
@@ -2052,47 +2069,40 @@ namespace sourcepawn
             return 1;
         }
 
-        // AddEntityIOListener(handler, className, outputName, post)
-        cell_t N_EntsAddEntityIOListener(IPluginContext* ctx, const cell_t* params)
+        // AddEntityOutputListener(callback, designerName, output, entity)
+        cell_t N_EntsAddEntityOutputListener(IPluginContext* ctx, const cell_t* params)
         {
             IPluginFunction* fn = ctx->GetFunctionById(static_cast<funcid_t>(params[1]));
             if (!fn)
                 return ctx->ThrowNativeError("Invalid function id (%X)", params[1]);
-            auto listener = std::make_unique<ScriptIOListener>();
+            bool ok;
+            CEntityInstance* entity = OptionalEntity(ctx, params[4], &ok);
+            if (!ok)
+                return 0;
+            SweepGone(g_outputListeners);
+
+            auto listener = std::make_unique<ScriptOutputListener>();
             listener->owner = CallerId(ctx);
             listener->fn = fn;
-            listener->className = LocalString(ctx, params[2]);
-            listener->outputName = LocalString(ctx, params[3]);
-            listener->post = params[4] != 0;
-            entities::entitiesManager.AddEntityIOListener(listener->owner, listener.get(),
-                                                          listener->className.empty() ? nullptr : listener->className.c_str(),
-                                                          listener->outputName.empty() ? nullptr : listener->outputName.c_str(), listener->post);
+            if (entity)
+                listener->only = entity->GetRefEHandle();
+            const char* designer = LocalString(ctx, params[2]);
+            const char* output = LocalString(ctx, params[3]);
+            entities::entitiesManager.AddEntityOutputListener(listener->owner, listener.get(), *designer ? designer : nullptr,
+                                                              *output ? output : nullptr, entity);
             const cell_t id = g_nextListenerId++;
-            g_ioListeners[id] = std::move(listener);
+            g_outputListeners[id] = std::move(listener);
             return id;
         }
 
-        // CBaseEntity.AddSingleEntityIOListener(output, handler, post): the class-wide
-        // listener for this output, kept to this entity; RemoveEntityIOListener takes the id.
-        cell_t N_BaseAddSingleEntityIOListener(IPluginContext* ctx, const cell_t* params)
+        cell_t N_EntsRemoveEntityOutputListener(IPluginContext* ctx, const cell_t* params)
         {
-            CBaseEntity* ent = As<CBaseEntity>(ctx, params[1]);
-            IPluginFunction* fn = ctx->GetFunctionById(static_cast<funcid_t>(params[3]));
-            if (!ent)
+            auto it = g_outputListeners.find(params[1]);
+            if (it == g_outputListeners.end() || it->second->owner != CallerId(ctx))
                 return 0;
-            if (!fn)
-                return ctx->ThrowNativeError("Invalid function id (%X)", params[3]);
-            auto listener = std::make_unique<ScriptIOListener>();
-            listener->owner = CallerId(ctx);
-            listener->fn = fn;
-            listener->outputName = LocalString(ctx, params[2]);
-            listener->post = params[4] != 0;
-            listener->only = ent->GetRefEHandle();
-            entities::entitiesManager.AddEntityIOListener(listener->owner, listener.get(), nullptr,
-                                                          listener->outputName.empty() ? nullptr : listener->outputName.c_str(), listener->post);
-            const cell_t id = g_nextListenerId++;
-            g_ioListeners[id] = std::move(listener);
-            return id;
+            entities::entitiesManager.RemoveEntityOutputListener(it->second.get());
+            g_outputListeners.erase(it);
+            return 1;
         }
 
         // FindAllEntitiesByDesignerName(name) -> ArrayList of entities (UTIL_FindAllEntitiesByDesignerName).
@@ -2102,18 +2112,6 @@ namespace sourcepawn
             for (CEntityInstance* e : UTIL_FindAllEntitiesByDesignerName<CEntityInstance>(LocalString(ctx, params[1])))
                 found.push_back(EntityCell(e));
             return NewCellList(found, CallerId(ctx));
-        }
-
-        cell_t N_EntsRemoveEntityIOListener(IPluginContext* ctx, const cell_t* params)
-        {
-            auto it = g_ioListeners.find(params[1]);
-            if (it == g_ioListeners.end() || it->second->owner != CallerId(ctx))
-                return 0;
-            ScriptIOListener* l = it->second.get();
-            entities::entitiesManager.RemoveEntityIOListener(l, l->className.empty() ? nullptr : l->className.c_str(),
-                                                             l->outputName.empty() ? nullptr : l->outputName.c_str(), l->post);
-            g_ioListeners.erase(it);
-            return 1;
         }
 
         const sp_nativeinfo_t g_entityNatives[] = {
@@ -2179,7 +2177,6 @@ namespace sourcepawn
             { "CBaseEntity.Remove", N_BaseRemove },
             { "CBaseEntity.GetIndex", N_BaseGetIndex },
             { "CBaseEntity.AddEntityIOEvent", N_BaseAddEntityIOEvent },
-            { "CBaseEntity.AddSingleEntityIOListener", N_BaseAddSingleEntityIOListener },
             { "CBaseEntity.GetAngRotation", N_BaseGetVector<QAngle, &CBaseEntity::GetAngRotation> },
             { "CBaseEntity.GetAbsRotation", N_BaseGetVector<QAngle, &CBaseEntity::GetAbsRotation> },
             { "CBaseEntity.GetAbsVelocity", N_BaseGetVector<Vector, &CBaseEntity::GetAbsVelocity> },
@@ -2258,6 +2255,10 @@ namespace sourcepawn
             { "CCSCustomHudLayout.SetInputCaptureEnabled", N_HudSetInputCaptureEnabled },
             { "CCSCustomHudLayout.IsInputCaptureEnabled", N_HudIsInputCaptureEnabled },
             { "Source2ModEntities.FindAllEntitiesByDesignerName", N_EntsFindAllEntitiesByDesignerName },
+            { "Source2ModEntities.AddEntityListener", N_EntsAddEntityListener },
+            { "Source2ModEntities.RemoveEntityListener", N_EntsRemoveEntityListener },
+            { "Source2ModEntities.AddEntityOutputListener", N_EntsAddEntityOutputListener },
+            { "Source2ModEntities.RemoveEntityOutputListener", N_EntsRemoveEntityOutputListener },
             { "CPlayer_ItemServices.DropActivePlayerWeapon", N_ItemsDropActive },
             { "CPlayer_ItemServices.RemoveWeapons", N_ItemsRemoveWeapons },
             { "CPlayer_ItemServices.GiveNamedItem", N_ItemsGiveNamedItem },
@@ -2272,12 +2273,8 @@ namespace sourcepawn
             { "Source2ModEntities.FindEntityByClassname", N_EntsFindEntityByClassname },
             { "Source2ModEntities.FindEntityByName", N_EntsFindEntityByName },
             { "Source2ModEntities.CreateEntityByName", N_EntsCreateEntityByName },
-            { "Source2ModEntities.AddEntityListener", N_EntsAddEntityListener },
-            { "Source2ModEntities.RemoveEntityListener", N_EntsRemoveEntityListener },
             { "Source2ModEntities.AcceptInput", N_EntsAcceptInput },
             { "Source2ModEntities.AddEntityIOEvent", N_EntsAddEntityIOEvent },
-            { "Source2ModEntities.AddEntityIOListener", N_EntsAddEntityIOListener },
-            { "Source2ModEntities.RemoveEntityIOListener", N_EntsRemoveEntityIOListener },
             { nullptr, nullptr },
         };
     }
@@ -2375,9 +2372,21 @@ namespace sourcepawn
 
     void ForgetEntityListeners(PluginId id)
     {
-        // The manager took them off the engine already (RemoveAllForPlugin).
-        std::erase_if(g_entityListeners, [id](const auto& e) { return e.second->owner == id; });
-        std::erase_if(g_ioListeners, [id](const auto& e) { return e.second->owner == id; });
+        // Off the manager first, whichever way the script went.
+        std::erase_if(g_entityListeners, [id](const auto& e)
+        {
+            if (e.second->owner != id)
+                return false;
+            entities::entitiesManager.RemoveEntityListener(e.second.get());
+            return true;
+        });
+        std::erase_if(g_outputListeners, [id](const auto& e)
+        {
+            if (e.second->owner != id)
+                return false;
+            entities::entitiesManager.RemoveEntityOutputListener(e.second.get());
+            return true;
+        });
     }
 
     const sp_nativeinfo_t* GetEntityNatives()

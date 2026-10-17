@@ -204,11 +204,21 @@ namespace sourcepawn
             Type returnType = T_Void;
             std::vector<Type> params;
             bool bypass = false;            // BypassHooks: every Call* goes past the hooks
+            // The same function for the core (ISource2ModFunctions): what
+            // Source2ModHooks.HookFunction hooks. Owned unless it came from Find.
+            ISource2ModFunction* described = nullptr;
+            bool owned = false;
         };
 
         HandleType FunctionType()
         {
-            static const HandleType t = Handles().CreateType("Source2ModFunction", [](void* p) { delete static_cast<Function*>(p); });
+            static const HandleType t = Handles().CreateType("Source2ModFunction", [](void* p)
+            {
+                auto* fn = static_cast<Function*>(p);
+                if (fn->owned && fn->described)
+                    functions::functionsManager.Destroy(fn->described);
+                delete fn;
+            });
             return t;
         }
 
@@ -218,9 +228,11 @@ namespace sourcepawn
         }
 
         // A parameter type a call can pass.
+        // Command is for hooks only (FunctionContext.GetCommandArgs): a call
+        // with one is refused when it is made.
         bool ValidParam(cell_t t)
         {
-            return t > T_Void && t <= T_FloatRef && t != T_Command;
+            return t > T_Void && t <= T_FloatRef;
         }
 
         Function* FnOf(IPluginContext* ctx, cell_t handle);
@@ -234,6 +246,9 @@ namespace sourcepawn
             fn->vtable = vtable;
             fn->vtableIndex = vtableIndex;
             fn->returnType = static_cast<Type>(returnType);
+            fn->described = functions::functionsManager.Create(CallerId(ctx), address, vtable, vtableIndex, vtableIndex >= 0,
+                                                               static_cast<Source2ModType>(returnType), nullptr, 0);
+            fn->owned = fn->described != nullptr;
             const cell_t h = Handles().Create(FunctionType(), fn, CallerId(ctx));
             if (!h)
                 delete fn;
@@ -260,8 +275,14 @@ namespace sourcepawn
             auto* src = static_cast<functions::CFunction*>(described);
             const cell_t h = NewFunction(ctx, src->address, src->vtable, src->vtableIndex, static_cast<cell_t>(src->returnType));
             if (Function* fn = h ? FnOf(ctx, h) : nullptr)
+            {
                 for (Source2ModType t : src->params)
                     fn->params.push_back(static_cast<Type>(t));
+                if (fn->owned)
+                    functions::functionsManager.Destroy(fn->described);
+                fn->described = described;
+                fn->owned = false;
+            }
             return h;
         }
 
@@ -331,7 +352,11 @@ namespace sourcepawn
                 return 0;
             if (!ValidParam(params[2]))
                 return ctx->ThrowNativeError("Invalid parameter type %d", params[2]);
+            if (!fn->owned)
+                return ctx->ThrowNativeError("The function's parameters come from its gamedata entry");
             fn->params.push_back(static_cast<Type>(params[2]));
+            if (auto* cf = static_cast<functions::CFunction*>(fn->described))
+                cf->params.push_back(static_cast<Source2ModType>(params[2]));
             return 0;
         }
 
@@ -586,6 +611,9 @@ namespace sourcepawn
                     strings.emplace_back(LocalString(ctx, params[first + p]));
                     a.bits = reinterpret_cast<uintptr_t>(strings.back().c_str());
                     break;
+                case T_Command:
+                    ctx->ThrowNativeError("Parameter %d is a Command: a function with one can be hooked, not called", static_cast<int>(p));
+                    return false;
                 case T_BufferString:
                     buffers.push_back(std::make_unique<CBufferString>(LocalString(ctx, params[first + p])));
                     a.bits = reinterpret_cast<uintptr_t>(buffers.back().get());
@@ -859,6 +887,12 @@ namespace sourcepawn
             { "Source2ModFunction.CallVector", N_FnCallVector },
             { nullptr, nullptr },
         };
+    }
+
+    ISource2ModFunction* DescribedFunction(IPluginContext* ctx, cell_t handle)
+    {
+        Function* fn = FnOf(ctx, handle);
+        return fn ? fn->described : nullptr;
     }
 
     const sp_nativeinfo_t* GetGameConfigNatives()

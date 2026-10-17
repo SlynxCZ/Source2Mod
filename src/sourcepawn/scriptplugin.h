@@ -108,18 +108,6 @@ namespace sourcepawn
         void OnAllSource2ModPluginsLoaded() override;
         void OnLevelInit(const char* mapName, const char* mapEntities, const char* oldLevel, const char* landmarkName, bool loadGame, bool background) override;
         void OnLevelShutdown() override;
-        void OnGameFrame(bool simulating, bool firstTick, bool lastTick) override;
-        void OnStartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* session, const char* mapName) override;
-        bool OnClientConnect(CPlayerSlot slot, const char* name, uint64 xuid, const char* networkId, bool unk1, CBufferString* rejectReason) override;
-        void OnClientConnected(CPlayerSlot slot, const char* name, uint64 xuid, const char* networkId, const char* address, bool fakePlayer) override;
-        void OnClientPutInServer(CPlayerSlot slot, const char* name, int type, uint64 xuid) override;
-        void OnClientDisconnect(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId) override;
-        void OnClientDisconnectPost(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId) override;
-        void OnClientVoice(CPlayerSlot slot) override;
-        void OnClientSettingsChanged(CPlayerSlot slot) override;
-        void OnGameServerSteamAPIActivated() override;
-        void OnGameServerSteamAPIDeactivated() override;
-        void OnLoadEventsFromFile(IGameEventManager2* manager, const char* filename, bool searchAll) override;
         void OnClientAuthorized(CPlayerSlot slot, uint64 steamId) override;
         void OnClientAuthorizeFailed(CPlayerSlot slot, uint64 steamId) override;
         void OnPermissionsChanged(uint64 steamId) override;
@@ -187,7 +175,6 @@ namespace sourcepawn
 
         std::string m_name, m_description, m_author, m_version, m_url;
 
-        SourcePawn::IPluginFunction* m_s2mOnGameFrame = nullptr;   // source2mod/listener.inc
 
         bool m_autoExec = false;
         bool m_autoCreate = true;

@@ -35,14 +35,15 @@
  */
 #pragma once
 
-#include "hookid.h"
-
 #include <engine2/isource2server.h>
 #include <engine2/ivengineserver2.h>
 #include <entitysystem.h>
 #include <source2mod/ISource2ModEntities.h>
 #include <source2mod/schema/entityio.h>
 
+#include "hookid.h"
+
+#include <string>
 #include <vector>
 
 namespace entities {
@@ -55,66 +56,64 @@ namespace entities {
 
         CBaseEntity* CreateEntityByName(const char* pszClassName) override;
 
-        // A listener object's vtable lies in the module that defined its class:
-        // that is whose it is.
-        void AddEntityListener(IEntityListener* pListener) override
-        {
-            AddEntityListener(pListener ? hookid::OwnerOf(*reinterpret_cast<void* const*>(pListener)) : 0, pListener);
-        }
-        void AddEntityListener(PluginId owner, IEntityListener* pListener);
-        void RemoveEntityListener(IEntityListener* pListener) override;
-
         void AcceptInput(CEntityInstance* pTarget, const char* pszInput, CEntityInstance* pActivator, CEntityInstance* pCaller, const char* pszValue = "") override;
         void AddEntityIOEvent(CEntityInstance* pTarget, const char* pszInput, CEntityInstance* pActivator = nullptr, CEntityInstance* pCaller = nullptr, const char* pszValue = "", float flDelay = 0.0f) override;
 
-        void AddEntityIOListener(IEntityIOListener* pListener, const char* pchClassName, const char* pchOutputName, bool post = false) override
+        // The listeners belong to the plugin whose class they are (read off the vtable).
+        void AddEntityListener(IEntityListener* pListener, const char* pszDesignerName = nullptr, CEntityInstance* pEntity = nullptr) override
         {
-            AddEntityIOListener(pListener ? hookid::OwnerOf(*reinterpret_cast<void* const*>(pListener)) : 0, pListener, pchClassName, pchOutputName, post);
+            AddEntityListener(pListener ? hookid::OwnerOf(*reinterpret_cast<void* const*>(pListener)) : 0, pListener, pszDesignerName, pEntity);
         }
-        void AddEntityIOListener(PluginId owner, IEntityIOListener* pListener, const char* pchClassName, const char* pchOutputName, bool post = false);
-        void RemoveEntityIOListener(IEntityIOListener* pListener, const char* pchClassName, const char* pchOutputName, bool post = false) override;
+        void AddEntityListener(PluginId owner, IEntityListener* pListener, const char* pszDesignerName, CEntityInstance* pEntity);
+        void RemoveEntityListener(IEntityListener* pListener) override;
 
-    public:
-        /// Attaches every registered listener to the current entity system.
-        /// Called on StartupServer, including when the engine has made a new
-        /// one for the next map.
-        void AttachEntityListeners();
+        void AddEntityOutputListener(IEntityOutputListener* pListener, const char* pszDesignerName = nullptr, const char* pszOutput = nullptr, CEntityInstance* pEntity = nullptr) override
+        {
+            AddEntityOutputListener(pListener ? hookid::OwnerOf(*reinterpret_cast<void* const*>(pListener)) : 0, pListener, pszDesignerName, pszOutput, pEntity);
+        }
+        void AddEntityOutputListener(PluginId owner, IEntityOutputListener* pListener, const char* pszDesignerName, const char* pszOutput, CEntityInstance* pEntity);
+        void RemoveEntityOutputListener(IEntityOutputListener* pListener) override;
 
-        /// Takes this plugin's listeners off the entity system and out of the
-        /// entity I/O stack. Both hold the listener object itself, which lives
-        /// inside the plugin's library, so it has to go before the library is
-        /// closed -- the engine would otherwise keep calling a vtable that is
-        /// no longer mapped.
         void RemoveAllForPlugin(PluginId id);
 
-    private:
-        /// Forgets who registered an I/O listener, once it is off every output
-        /// it was watching.
-        void DropIOListenerRecord(IEntityIOListener* pListener);
+        // From the core's own entity listener and FireOutputInternal.
+        void NotifyCreated(CEntityInstance* pEntity);
+        void NotifySpawned(CEntityInstance* pEntity);
+        void NotifyDeleted(CEntityInstance* pEntity);
+        void NotifyParentChanged(CEntityInstance* pEntity, CEntityInstance* pNewParent);
+        bool HasOutputListeners() const { return !m_OutputListeners.empty(); }
+        Action NotifyOutput(CEntityInstance* pCaller, const char* pszOutput, CEntityInstance* pActivator, float flDelay, bool post);
 
-        struct ListenerEntry
+    private:
+        struct EntityListenerEntry
         {
             PluginId owner;
             IEntityListener* listener;
+            std::string designerName;
+            CEntityInstance* entity;
+            bool removed = false;
         };
 
-        struct IOListenerEntry
+        struct OutputListenerEntry
         {
             PluginId owner;
-            IEntityIOListener* listener;
+            IEntityOutputListener* listener;
+            std::string designerName;
+            std::string output;
+            CEntityInstance* entity;
+            bool removed = false;
         };
 
-        // Every listener a plugin has registered, kept for as long as it is
-        // registered rather than until it is first attached. A plugin
-        // registers while it loads, which is before the engine has made an
-        // entity system at all, and the engine may make another one on the
-        // next map -- both are handled by re-attaching this list.
-        std::vector<ListenerEntry> m_Listeners;
+        template <typename FN>
+        void ForEachEntityListener(CEntityInstance* pEntity, FN&& fn);
+        void Compact();
 
-        // The I/O listeners themselves live in inlinehooks::entityIOListenerStack,
-        // keyed by the output they watch. This is only who registered what, so
-        // a plugin's can be found again when it unloads.
-        std::vector<IOListenerEntry> m_IOListeners;
+        // Entries are appended during a dispatch and marked removed, then
+        // erased once no dispatch is running: a callback may add or remove
+        // listeners (its own too) without invalidating the walk.
+        std::vector<EntityListenerEntry> m_EntityListeners;
+        std::vector<OutputListenerEntry> m_OutputListeners;
+        int m_nDispatchDepth = 0;
     };
 
     extern EntitiesManager entitiesManager;

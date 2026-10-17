@@ -51,7 +51,7 @@
 #include "entities.h"
 #include "events.h"
 #include "features.h"
-#include "gamehooks.h"
+#include "hooks.h"
 #include "gamesystems.h"
 #include "geoip.h"
 #include "http.h"
@@ -305,7 +305,7 @@ namespace
             { SOURCE2MOD_GAMECONFIG_INTERFACE, shared::g_pGameConfig },
             { SOURCE2MOD_GAMESYSTEMS_INTERFACE, &gamesystems::gameSystemsManager },
             { SOURCE2MOD_GEOIP_INTERFACE, &geoip::geoIpManager },
-            { SOURCE2MOD_GAMEHOOKS_INTERFACE, &gamehooks::gameHooksManager },
+            { SOURCE2MOD_HOOKS_INTERFACE, &hooks::hooksManager },
             { SOURCE2MOD_HTTP_INTERFACE, &http::httpManager },
             { SOURCE2MOD_JSON_INTERFACE, &json::jsonManager },
             { SOURCE2MOD_MAPS_INTERFACE, &maps::mapsManager },
@@ -487,9 +487,9 @@ ISource2ModSounds* PluginApi::Sounds()
     return &sounds::soundsManager;
 }
 
-ISource2ModGameHooks* PluginApi::GameHooks()
+ISource2ModHooks* PluginApi::Hooks()
 {
-    return &gamehooks::gameHooksManager;
+    return &hooks::hooksManager;
 }
 
 ISource2ModTransmit* PluginApi::Transmit()

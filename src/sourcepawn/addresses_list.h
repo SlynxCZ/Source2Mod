@@ -17,7 +17,6 @@
     X(CGameEntitySystem_FindEntityByClassName) \
     X(CGameEntitySystem_FindEntityByName) \
     X(CTakeDamageInfo_CTakeDamageInfo) \
-    X(INetworkMessageProcessingPreFilter_FilterMessage) \
     X(CEntityIdentity_AcceptInput) \
     X(CCSPlayer_ItemServices_CanAcquire) \
     X(CCSPlayerPawnBase_CanMove) \

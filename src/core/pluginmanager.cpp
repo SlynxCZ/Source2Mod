@@ -38,7 +38,7 @@
 #include "commands.h"
 #include "convars.h"
 #include "cookies.h"
-#include "core/gamehooks.h"
+#include "core/hooks.h"
 #include "core/http.h"
 #include "core/menus.h"
 #include "core/translations.h"
@@ -429,9 +429,9 @@ bool PluginManager::AddPlugin(const char* fullPath, LibHandle lib, const void* m
         scheduler::schedulerManager.RemoveAllForPlugin(failedId);
         http::httpManager.RemoveAllForPlugin(failedId);
         mysql::mysqlManager.RemoveAllForPlugin(failedId);
-        entities::entitiesManager.RemoveAllForPlugin(failedId);
         menus::menuManager.RemoveAllForPlugin(failedId);
-        gamehooks::gameHooksManager.RemoveAllForPlugin(failedId);
+        hooks::hooksManager.RemoveAllForPlugin(failedId);
+        entities::entitiesManager.RemoveAllForPlugin(failedId);
         permissions::permissionsManager.RemoveAllForPlugin(failedId);
         cookies::cookiesManager.RemoveAllForPlugin(failedId);
         translations::translationsManager.RemoveAllForPlugin(failedId);
@@ -554,9 +554,9 @@ bool PluginManager::ReloadPlugin(int id)
         scheduler::schedulerManager.RemoveAllForPlugin(id);
         http::httpManager.RemoveAllForPlugin(id);
         mysql::mysqlManager.RemoveAllForPlugin(id);
-        entities::entitiesManager.RemoveAllForPlugin(id);
         menus::menuManager.RemoveAllForPlugin(id);
-        gamehooks::gameHooksManager.RemoveAllForPlugin(id);
+        hooks::hooksManager.RemoveAllForPlugin(id);
+        entities::entitiesManager.RemoveAllForPlugin(id);
         permissions::permissionsManager.RemoveAllForPlugin(id);
         cookies::cookiesManager.RemoveAllForPlugin(id);
         translations::translationsManager.RemoveAllForPlugin(id);
@@ -620,9 +620,9 @@ bool PluginManager::UnloadPlugin(PluginId id)
         scheduler::schedulerManager.RemoveAllForPlugin(id);
         http::httpManager.RemoveAllForPlugin(id);
         mysql::mysqlManager.RemoveAllForPlugin(id);
-        entities::entitiesManager.RemoveAllForPlugin(id);
         menus::menuManager.RemoveAllForPlugin(id);
-        gamehooks::gameHooksManager.RemoveAllForPlugin(id);
+        hooks::hooksManager.RemoveAllForPlugin(id);
+        entities::entitiesManager.RemoveAllForPlugin(id);
         permissions::permissionsManager.RemoveAllForPlugin(id);
         cookies::cookiesManager.RemoveAllForPlugin(id);
         translations::translationsManager.RemoveAllForPlugin(id);
@@ -753,9 +753,9 @@ void PluginManager::UnloadAll()
         scheduler::schedulerManager.RemoveAllForPlugin(p->id);
         http::httpManager.RemoveAllForPlugin(p->id);
         mysql::mysqlManager.RemoveAllForPlugin(p->id);
-        entities::entitiesManager.RemoveAllForPlugin(p->id);
         menus::menuManager.RemoveAllForPlugin(p->id);
-        gamehooks::gameHooksManager.RemoveAllForPlugin(p->id);
+        hooks::hooksManager.RemoveAllForPlugin(p->id);
+        entities::entitiesManager.RemoveAllForPlugin(p->id);
         permissions::permissionsManager.RemoveAllForPlugin(p->id);
         cookies::cookiesManager.RemoveAllForPlugin(p->id);
         translations::translationsManager.RemoveAllForPlugin(p->id);
@@ -993,82 +993,6 @@ const char* PluginManager::NameOf(int id) const
 
     return "an unloaded plugin";
 }
-
-void PluginManager::OnGameFrame(bool simulating, bool firstTick, bool lastTick)
-{
-    PLUGINS_FANOUT(2, OnGameFrame(simulating, firstTick, lastTick))
-}
-
-void PluginManager::OnStartupServer(const GameSessionConfiguration_t& config, ISource2WorldSession* session, const char* mapName)
-{
-    PLUGINS_FANOUT(2, OnStartupServer(config, session, mapName))
-}
-
-void PluginManager::OnClientPutInServer(CPlayerSlot slot, const char* name, int type, uint64 xuid)
-{
-    PLUGINS_FANOUT(2, OnClientPutInServer(slot, name, type, xuid))
-}
-
-void PluginManager::OnClientVoice(CPlayerSlot slot)
-{
-    PLUGINS_FANOUT(2, OnClientVoice(slot))
-}
-
-void PluginManager::OnClientSettingsChanged(CPlayerSlot slot)
-{
-    PLUGINS_FANOUT(2, OnClientSettingsChanged(slot))
-}
-
-void PluginManager::OnClientDisconnect(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId)
-{
-    PLUGINS_FANOUT(2, OnClientDisconnect(slot, reason, name, xuid, networkId))
-}
-
-// ---- connections (plugin API 4) ---------------------------------------------
-
-bool PluginManager::OnClientConnect(CPlayerSlot slot, const char* name, uint64 xuid, const char* networkId, bool unk1, CBufferString* rejectReason)
-{
-    // Not PLUGINS_FANOUT: the first refusal ends it.
-    for (auto& p : m_plugins)
-    {
-        if (p->apiVersion < 4)
-            continue;
-        for (auto* l : p->listeners)
-        {
-            ::slow::Guard slowGuard("listener callback", "OnClientConnect", p->id);
-            if (!l->OnClientConnect(slot, name, xuid, networkId, unk1, rejectReason))
-                return false;
-        }
-    }
-    return true;
-}
-
-void PluginManager::OnClientConnected(CPlayerSlot slot, const char* name, uint64 xuid, const char* networkId, const char* address, bool fakePlayer)
-{
-    PLUGINS_FANOUT(4, OnClientConnected(slot, name, xuid, networkId, address, fakePlayer))
-}
-
-void PluginManager::OnClientDisconnectPost(CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* name, uint64 xuid, const char* networkId)
-{
-    PLUGINS_FANOUT(4, OnClientDisconnectPost(slot, reason, name, xuid, networkId))
-}
-
-void PluginManager::OnGameServerSteamAPIActivated()
-{
-    PLUGINS_FANOUT(2, OnGameServerSteamAPIActivated())
-}
-
-void PluginManager::OnGameServerSteamAPIDeactivated()
-{
-    PLUGINS_FANOUT(2, OnGameServerSteamAPIDeactivated())
-}
-
-void PluginManager::OnLoadEventsFromFile(IGameEventManager2* manager, const char* filename, bool searchAll)
-{
-    PLUGINS_FANOUT(2, OnLoadEventsFromFile(manager, filename, searchAll))
-}
-
-// ---- players and permissions (plugin API 3) ---------------------------------
 
 void PluginManager::OnClientAuthorized(CPlayerSlot slot, uint64 steamId)
 {

@@ -6,8 +6,6 @@
 	public static native CBaseEntity CreateEntityByName(const char[] className);
 	public native void AcceptInput(const char[] input, CEntityInstance activator = NULL_ENTITY, CEntityInstance caller = NULL_ENTITY, const char[] value = "", Source2ModHookChain chain = HookChain_Default);
 	public native void AddEntityIOEvent(const char[] input, CEntityInstance activator = NULL_ENTITY, CEntityInstance caller = NULL_ENTITY, const char[] value = "", float delay = 0.0, Source2ModHookChain chain = HookChain_Default);
-	// AddSingleEntityIOListener: an output of this entity only; the id goes to Source2ModEntities.RemoveEntityIOListener.
-	public native int AddSingleEntityIOListener(const char[] output, Source2ModEntityOutputHandler handler, bool post = false);
 	public native void GetAbsOrigin(float origin[3]);
 	public native void GetAngRotation(float angles[3]);
 	public native void GetAbsRotation(float angles[3]);

@@ -40,7 +40,9 @@
  */
 #include "functions.h"
 
+#include "dynamichooks.h"
 #include "gameconfig.h"
+#include "module.h"
 #include "shared.h"
 #include "utils/log.h"
 
@@ -321,8 +323,6 @@ namespace functions
     {
         if (!address && vtableIndex < 0)
             return nullptr;
-        if (vtableIndex >= 0 && count < 1)
-            return nullptr;     // a virtual needs `this`
         auto fn = std::make_unique<CFunction>();
         fn->owner = owner;
         fn->address = vtableIndex >= 0 ? nullptr : address;
@@ -336,8 +336,83 @@ namespace functions
         return created_.back().get();
     }
 
+    uintptr_t FunctionsManager::FindSignature(const char* moduleName, const char* signature, const char* section)
+    {
+        if (!moduleName || !signature)
+            return 0;
+        Source2ModModule module(moduleName);
+        if (!section || !*section)
+            return module.FindPattern(signature).GetAddr();
+        if (!module.GetSectionByName(section).IsValid())
+            return 0;
+        return module.FindPatternInSection(signature, section).GetAddr();
+    }
+
+    namespace
+    {
+        ISource2ModFunction* CreateWith(FunctionsManager& m, PluginId owner, void* address, void** vtable, int index, const FunctionTypes& t)
+        {
+            return m.Create(owner, address, vtable, index, t.isMember || index >= 0, t.returnType, t.params, t.count);
+        }
+    }
+
+    ISource2ModFunction* FunctionsManager::FromGameConfig(PluginId owner, const char* name, const FunctionTypes& types)
+    {
+        CGameConfig* config = shared::g_pGameConfig;
+        if (!config || !name)
+            return nullptr;
+        if (config->HasSignature(name))
+        {
+            void* address = reinterpret_cast<void*>(config->ResolveSignature(name).GetAddr());
+            return address ? CreateWith(*this, owner, address, nullptr, -1, types) : nullptr;
+        }
+        const int offset = config->GetOffset(name);
+        return offset >= 0 ? CreateWith(*this, owner, nullptr, nullptr, offset, types) : nullptr;
+    }
+
+    ISource2ModFunction* FunctionsManager::FromSignature(PluginId owner, const char* module, const char* signature,
+                                                         const FunctionTypes& types, const char* section)
+    {
+        const uintptr_t address = FindSignature(module, signature, section);
+        return address ? CreateWith(*this, owner, reinterpret_cast<void*>(address), nullptr, -1, types) : nullptr;
+    }
+
+    ISource2ModFunction* FunctionsManager::FromSignatureRelative(PluginId owner, const char* module, const char* signature, int offset,
+                                                                 int nextInstructionOffset, const FunctionTypes& types, const char* section)
+    {
+        const uintptr_t match = FindSignature(module, signature, section);
+        if (!match)
+            return nullptr;
+        const uintptr_t address = ISource2ModMemory(match).ResolveRelativeAddress(offset, nextInstructionOffset).GetAddr();
+        return address ? CreateWith(*this, owner, reinterpret_cast<void*>(address), nullptr, -1, types) : nullptr;
+    }
+
+    ISource2ModFunction* FunctionsManager::FromSymbol(PluginId owner, const char* module, const char* symbol, const FunctionTypes& types)
+    {
+        if (!module || !symbol)
+            return nullptr;
+        const uintptr_t address = Source2ModModule(module).GetFunctionByName(symbol).GetAddr();
+        return address ? CreateWith(*this, owner, reinterpret_cast<void*>(address), nullptr, -1, types) : nullptr;
+    }
+
+    ISource2ModFunction* FunctionsManager::FromVirtualTable(PluginId owner, const char* module, const char* className, int index,
+                                                            const FunctionTypes& types, const char* baseName)
+    {
+        if (!module || !className || index < 0)
+            return nullptr;
+        Source2ModModule m(module);
+        const uintptr_t vtable = (baseName && *baseName ? m.GetVirtualTableByBase(className, baseName) : m.GetVirtualTableByName(className)).GetAddr();
+        return vtable ? CreateWith(*this, owner, nullptr, reinterpret_cast<void**>(vtable), index, types) : nullptr;
+    }
+
+    ISource2ModFunction* FunctionsManager::FromVirtual(PluginId owner, int index, const FunctionTypes& types)
+    {
+        return index >= 0 ? CreateWith(*this, owner, nullptr, nullptr, index, types) : nullptr;
+    }
+
     void FunctionsManager::Destroy(ISource2ModFunction* function)
     {
+        dynamichooks::dynamicHooksManager.ForgetFunction(function);
         created_.erase(std::remove_if(created_.begin(), created_.end(),
                                       [function](const std::unique_ptr<CFunction>& f) { return f.get() == function; }),
                        created_.end());
@@ -345,6 +420,9 @@ namespace functions
 
     void FunctionsManager::RemoveAllForPlugin(PluginId id)
     {
+        for (const auto& f : created_)
+            if (f->owner == id)
+                dynamichooks::dynamicHooksManager.ForgetFunction(f.get());
         created_.erase(std::remove_if(created_.begin(), created_.end(),
                                       [id](const std::unique_ptr<CFunction>& f) { return f->owner == id; }),
                        created_.end());

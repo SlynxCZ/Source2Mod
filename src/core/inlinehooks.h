@@ -63,5 +63,4 @@ namespace inlinehooks {
     };
 
     extern Inlines inlines;
-    extern std::unordered_map<OutputKey, EntityIOCallbackPair, OutputKeyHash> entityIOListenerStack;
 }

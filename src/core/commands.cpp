@@ -35,7 +35,7 @@
  */
 #include "commands.h"
 
-#include "gamehooks.h"
+#include "hooks.h"
 #include "hookid.h"
 #include "menus.h"
 #include "permissions.h"
@@ -387,13 +387,13 @@ namespace commands {
             // answer, the outcome and the return value (gamehooks.cpp).
             if (argc < 3)
             {
-                REPLY_INFO(C_LABEL "hookdebug: " C_NAME "%s", gamehooks::GetHookDebug());
+                REPLY_INFO(C_LABEL "hookdebug: " C_NAME "%s", hooks::GetHookDebug());
                 REPLY_INFO(C_DIM "Usage: s2m hookdebug <part of a game hook name, e.g. TakeDamage|all|off>");
                 return;
             }
 
-            gamehooks::SetHookDebug(args.Arg(2));
-            REPLY_OK("hookdebug: " C_NAME "%s", gamehooks::GetHookDebug());
+            hooks::SetHookDebug(args.Arg(2));
+            REPLY_OK("hookdebug: " C_NAME "%s", hooks::GetHookDebug());
         }
 
         else if (strcmp(cmd, "admins") == 0)

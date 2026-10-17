@@ -35,9 +35,9 @@
  */
 
 /*
- * Game hooks and transmit of the SourcePawn API mirroring the C++ one
- * (source2mod/gamehooks.inc, source2mod/transmit.inc), on the core's game
- * hooks and transmit managers.
+ * Hooks (source2mod/hooks.inc: HookPoint, the contexts) and transmit
+ * (source2mod/transmit.inc) of the SourcePawn API mirroring the C++ one, on
+ * the core's ISource2ModHooks and transmit managers.
  *
  * A handler's context (TakeDamageContext, MovementContext, ..., and what
  * it lends: the damage info, the move data; the CheckTransmit viewer list)
@@ -49,7 +49,7 @@
 #include "handles.h"
 #include "scriptplugin.h"
 
-#include "core/gamehooks.h"
+#include "core/hooks.h"
 #include "core/transmit.h"
 
 #include <source2mod/schema/movedata.h>
@@ -195,6 +195,15 @@ namespace sourcepawn
         S2M_CTX(TryPlayerMoveContext, false)
         S2M_CTX(LegacyJumpContext, false)
         S2M_CTX(ModernJumpContext, false)
+        S2M_CTX(GameFrameContext, false)
+        S2M_CTX(StartupServerContext, false)
+        S2M_CTX(ClientConnectContext, true)
+        S2M_CTX(ClientConnectedContext, false)
+        S2M_CTX(ClientPutInServerContext, false)
+        S2M_CTX(ClientDisconnectContext, false)
+        S2M_CTX(ClientSlotContext, false)
+        S2M_CTX(EmptyContext, false)
+        S2M_CTX(LoadEventsFromFileContext, false)
 #undef S2M_CTX
 
         template <typename C>
@@ -205,7 +214,7 @@ namespace sourcepawn
         }
 
         template <typename C>
-        GameHookReturn<typename C::Return> RunHandler(IPluginFunction* fn, PluginId owner, C& c, bool post)
+        HookReturn<typename C::Return> RunHandler(IPluginFunction* fn, PluginId owner, C& c, bool post)
         {
             using R = typename C::Return;
             Frame frame{ &c, owner, {} };
@@ -237,66 +246,159 @@ namespace sourcepawn
                 if (action == Action::Ignore)
                     return action;
                 if constexpr (std::is_same_v<R, bool>)
-                    return GameHookReturn<R>(action, result != 0);
+                    return HookReturn<R>(action, result != 0);
                 else
-                    return GameHookReturn<R>(action, static_cast<R>(result));
+                    return HookReturn<R>(action, static_cast<R>(result));
             }
             else
                 return action;      // the value stays what ctx.result holds
         }
 
-        struct ScriptGameHook
-        {
-            PluginId owner;
-            bool (*unhook)(Source2ModGameHookId);
-        };
-        std::map<Source2ModGameHookId, ScriptGameHook> g_gameHooks;
+        // The hooks a script made: the core sees their handlers as its own
+        // code, so the owner is remembered here and checked on Unhook.
+        std::map<Source2ModHookId, PluginId> g_hooks;
 
-        ISource2ModGameHooks& GH()
+        template <typename C>
+        Source2ModHookId AddScriptHook(IPluginFunction* fn, PluginId owner, HookPointId point, const HookTarget& target,
+                                       const HookFilter& filter, bool post)
         {
-            return gamehooks::gameHooksManager;
+            HookHandler<C> handler([fn, owner](C& c, bool p) -> HookReturn<typename C::Return>
+            {
+                return RunHandler(fn, owner, c, p);
+            });
+            return hooks::hooksManager.AddHookFor(owner, point, nullptr, target, filter, &handler, post);
         }
 
-        template <typename C, Source2ModGameHookId (ISource2ModGameHooks::*HOOK)(GameHookHandler<C>, bool), bool (ISource2ModGameHooks::*UNHOOK)(Source2ModGameHookId)>
-        cell_t N_Hook(IPluginContext* ctx, const cell_t* params)
+        Source2ModHookId AddForPoint(IPluginFunction* fn, PluginId owner, HookPointId point, const HookTarget& target,
+                                     const HookFilter& filter, bool post)
         {
-            IPluginFunction* fn = Function(ctx, params[1]);
+            switch (point)
+            {
+#define S2M_POINT(P, C) case HookPointId::P: return AddScriptHook<C>(fn, owner, point, target, filter, post);
+                S2M_POINT(TakeDamage, TakeDamageContext)
+                S2M_POINT(CanAcquire, CanAcquireContext)
+                S2M_POINT(CanMove, CanMoveContext)
+                S2M_POINT(CanUse, CanUseContext)
+                S2M_POINT(PostThink, PostThinkContext)
+                S2M_POINT(ProcessUsercmds, ProcessUsercmdsContext)
+                S2M_POINT(SimulateUserCommands, SimulateUserCommandsContext)
+                S2M_POINT(RunCommand, RunCommandContext)
+                S2M_POINT(AcceptInput, AcceptInputContext)
+                S2M_POINT(Touch, TouchContext)
+                S2M_POINT(DropWeapon, DropWeaponContext)
+                S2M_POINT(AirAccelerate, AirAccelerateContext)
+                S2M_POINT(AirMove, MovementContext)
+                S2M_POINT(CanUnduck, MovementContext)
+                S2M_POINT(CategorizePosition, CategorizePositionContext)
+                S2M_POINT(CheckFalling, MovementContext)
+                S2M_POINT(CheckParameters, MovementContext)
+                S2M_POINT(CheckVelocity, CheckVelocityContext)
+                S2M_POINT(CheckWater, MovementContext)
+                S2M_POINT(Duck, MovementContext)
+                S2M_POINT(Friction, MovementContext)
+                S2M_POINT(FullWalkMove, FullWalkMoveContext)
+                S2M_POINT(GroundAccelerate, GroundAccelerateContext)
+                S2M_POINT(LadderMove, MovementContext)
+                S2M_POINT(MoveInit, MovementContext)
+                S2M_POINT(PlayerMove, MovementContext)
+                S2M_POINT(ProcessMovement, MovementContext)
+                S2M_POINT(SetupMove, SetupMoveContext)
+                S2M_POINT(TryPlayerMove, TryPlayerMoveContext)
+                S2M_POINT(WalkMove, MovementContext)
+                S2M_POINT(WaterMove, MovementContext)
+                S2M_POINT(OnJumpLegacy, LegacyJumpContext)
+                S2M_POINT(OnJumpModern, ModernJumpContext)
+                S2M_POINT(CheckJumpButtonLegacy, LegacyJumpContext)
+                S2M_POINT(CheckJumpButtonModern, ModernJumpContext)
+                S2M_POINT(GameFrame, GameFrameContext)
+                S2M_POINT(StartupServer, StartupServerContext)
+                S2M_POINT(ClientConnect, ClientConnectContext)
+                S2M_POINT(ClientConnected, ClientConnectedContext)
+                S2M_POINT(ClientPutInServer, ClientPutInServerContext)
+                S2M_POINT(ClientDisconnect, ClientDisconnectContext)
+                S2M_POINT(ClientVoice, ClientSlotContext)
+                S2M_POINT(ClientSettingsChanged, ClientSlotContext)
+                S2M_POINT(GameServerSteamAPIActivated, EmptyContext)
+                S2M_POINT(GameServerSteamAPIDeactivated, EmptyContext)
+                S2M_POINT(LoadEventsFromFile, LoadEventsFromFileContext)
+#undef S2M_POINT
+            default:
+                return 0;
+            }
+        }
+
+        // The object behind an instance argument: an entity (handle) or a
+        // SchemaObject (services, game rules, ...).
+        void* InstanceArg(IPluginContext* ctx, cell_t value)
+        {
+            if (IsEntityCell(value))
+                return EntityArg(ctx, value);
+            return value ? SchemaObjectPointer(ctx, value) : nullptr;
+        }
+
+        HookFilter FilterArgs(IPluginContext* ctx, const cell_t* params, int first)
+        {
+            HookFilter f;
+            f.designerName = params[0] >= first ? LocalString(ctx, params[first]) : "";
+            f.name = params[0] >= first + 1 ? LocalString(ctx, params[first + 1]) : "";
+            return f;
+        }
+
+        cell_t AddNative(IPluginContext* ctx, cell_t point, cell_t fnId, bool post, const HookTarget& target, const HookFilter& filter)
+        {
+            IPluginFunction* fn = Function(ctx, fnId);
             if (!fn)
                 return 0;
+            if (point == static_cast<cell_t>(HookPointId::Function))
+                return ctx->ThrowNativeError("HookPoint_Function: use Source2ModHooks.HookFunction");
             const PluginId owner = CallerId(ctx);
-            GameHookHandler<C> handler([fn, owner](C& c, bool post) -> GameHookReturn<typename C::Return>
-            {
-                return RunHandler(fn, owner, c, post);
-            });
-            const Source2ModGameHookId id = (GH().*HOOK)(std::move(handler), params[2] != 0);
-            if (id)
-                g_gameHooks[id] = { owner, [](Source2ModGameHookId i) { return (GH().*UNHOOK)(i); } };
+            const Source2ModHookId id = AddForPoint(fn, owner, static_cast<HookPointId>(point), target, filter, post);
+            if (!id)
+                return ctx->ThrowNativeError("Hook point %d cannot be hooked this way (unknown point, or a target it does not take)", point);
+            g_hooks[id] = owner;
             return id;
         }
 
-        bool Unhook(Source2ModGameHookId id)
+        // Hook(HookPoint point, handler, bool post = false, const char[] designerName = "", const char[] name = "")
+        cell_t N_HooksHook(IPluginContext* ctx, const cell_t* params)
         {
-            auto it = g_gameHooks.find(id);
-            if (it == g_gameHooks.end())
-                return false;
-            auto unhook = it->second.unhook;
-            g_gameHooks.erase(it);
-            return unhook(id);
+            return AddNative(ctx, params[1], params[2], params[3] != 0, HookTarget::All(), FilterArgs(ctx, params, 4));
         }
 
-        cell_t N_UnhookGameHook(IPluginContext* ctx, const cell_t* params)
+        // HookInstance(HookPoint point, any instance, handler, bool post = false, designerName = "", name = "")
+        cell_t N_HooksHookInstance(IPluginContext* ctx, const cell_t* params)
         {
-            auto it = g_gameHooks.find(params[1]);
-            if (it == g_gameHooks.end() || it->second.owner != CallerId(ctx))
+            void* instance = InstanceArg(ctx, params[2]);
+            if (!instance)
+                return ctx->ThrowNativeError("Null instance");
+            return AddNative(ctx, params[1], params[3], params[4] != 0, HookTarget::Instance(instance), FilterArgs(ctx, params, 5));
+        }
+
+        // HookClass(HookPoint point, const char[] className, handler, bool post = false, designerName = "", name = "")
+        cell_t N_HooksHookClass(IPluginContext* ctx, const cell_t* params)
+        {
+            return AddNative(ctx, params[1], params[3], params[4] != 0, HookTarget::Class(LocalString(ctx, params[2])), FilterArgs(ctx, params, 5));
+        }
+
+        bool UnhookScript(Source2ModHookId id)
+        {
+            g_hooks.erase(id);
+            return hooks::hooksManager.Unhook(id);
+        }
+
+        cell_t N_HooksUnhook(IPluginContext* ctx, const cell_t* params)
+        {
+            auto it = g_hooks.find(params[1]);
+            if (it == g_hooks.end())
+                return UnhookFunctionHook(CallerId(ctx), params[1]);
+            if (it->second != CallerId(ctx))
                 return 0;
-            return Unhook(params[1]);
+            return UnhookScript(params[1]);
         }
 
-        cell_t N_IsAvailable(IPluginContext* ctx, const cell_t* params)
+        cell_t N_HooksIsAvailable(IPluginContext* ctx, const cell_t* params)
         {
-            if (params[1] < 0 || params[1] >= static_cast<cell_t>(GameHook::Count))
-                return ctx->ThrowNativeError("Invalid game hook %d", params[1]);
-            return GH().IsAvailable(static_cast<GameHook>(params[1]));
+            return hooks::hooksManager.IsAvailable(static_cast<HookPointId>(params[1]));
         }
 
         template <typename C>
@@ -383,6 +485,75 @@ namespace sourcepawn
         S2M_CTX_OBJECT(C, services, c->services)                                \
         S2M_CTX_ENTITY(C, pawn, PawnOf(c->services))                            \
         S2M_CTX_LENT(C, moveData, MoveDataType, c->moveData)
+
+#define S2M_CTX_STRING(C, prop, expr)                                           \
+        cell_t N_##C##_##prop(IPluginContext* ctx, const cell_t* params)        \
+        {                                                                       \
+            C* c = Ctx<C>(ctx, params[1]);                                      \
+            if (!c)                                                             \
+                return 0;                                                       \
+            const char* value = (expr);                                         \
+            size_t written = 0;                                                 \
+            ctx->StringToLocalUTF8(params[2], params[3], value ? value : "", &written); \
+            return static_cast<cell_t>(written);                                \
+        }
+#define S2M_CTX_XUID(C)                                                         \
+        cell_t N_##C##_GetXuid(IPluginContext* ctx, const cell_t* params)       \
+        {                                                                       \
+            C* c = Ctx<C>(ctx, params[1]);                                      \
+            if (!c)                                                             \
+                return 0;                                                       \
+            size_t written = 0;                                                 \
+            ctx->StringToLocalUTF8(params[2], params[3], std::to_string(c->xuid).c_str(), &written); \
+            return static_cast<cell_t>(written);                                \
+        }
+
+        S2M_CTX_CELL(GameFrameContext, simulating, c->simulating)
+        S2M_CTX_CELL(GameFrameContext, firstTick, c->firstTick)
+        S2M_CTX_CELL(GameFrameContext, lastTick, c->lastTick)
+
+        S2M_CTX_STRING(StartupServerContext, GetMapName, c->mapName)
+
+        S2M_CTX_CELL(ClientConnectContext, slot, c->slot.Get())
+        S2M_CTX_STRING(ClientConnectContext, GetName, c->name)
+        S2M_CTX_XUID(ClientConnectContext)
+        S2M_CTX_STRING(ClientConnectContext, GetNetworkId, c->networkId)
+
+        // SetRejectReason(const char[] reason): what the client is told.
+        cell_t N_ClientConnectContext_SetRejectReason(IPluginContext* ctx, const cell_t* params)
+        {
+            ClientConnectContext* c = Ctx<ClientConnectContext>(ctx, params[1]);
+            if (c && c->rejectReason)
+            {
+                c->rejectReason->Clear();
+                c->rejectReason->Insert(0, LocalString(ctx, params[2]));
+            }
+            return 0;
+        }
+
+        S2M_CTX_CELL(ClientConnectedContext, slot, c->slot.Get())
+        S2M_CTX_STRING(ClientConnectedContext, GetName, c->name)
+        S2M_CTX_XUID(ClientConnectedContext)
+        S2M_CTX_STRING(ClientConnectedContext, GetNetworkId, c->networkId)
+        S2M_CTX_STRING(ClientConnectedContext, GetAddress, c->address)
+        S2M_CTX_CELL(ClientConnectedContext, fakePlayer, c->fakePlayer)
+
+        S2M_CTX_CELL(ClientPutInServerContext, slot, c->slot.Get())
+        S2M_CTX_STRING(ClientPutInServerContext, GetName, c->name)
+        S2M_CTX_CELL(ClientPutInServerContext, type, c->type)
+        S2M_CTX_XUID(ClientPutInServerContext)
+
+        S2M_CTX_CELL(ClientDisconnectContext, slot, c->slot.Get())
+        S2M_CTX_CELL(ClientDisconnectContext, reason, c->reason)
+        S2M_CTX_STRING(ClientDisconnectContext, GetName, c->name)
+        S2M_CTX_XUID(ClientDisconnectContext)
+        S2M_CTX_STRING(ClientDisconnectContext, GetNetworkId, c->networkId)
+
+        S2M_CTX_CELL(ClientSlotContext, slot, c->slot.Get())
+
+        S2M_CTX_STRING(LoadEventsFromFileContext, GetFilename, c->filename)
+        S2M_CTX_CELL(LoadEventsFromFileContext, searchAll, c->searchAll)
+
 
         S2M_CTX_ENTITY(TakeDamageContext, entity, c->entity)
         S2M_CTX_LENT(TakeDamageContext, info, DamageInfoType, c->info)
@@ -1053,78 +1224,39 @@ namespace sourcepawn
         }
 
         const sp_nativeinfo_t g_gameHookNatives[] = {
-            // source2mod/gamehooks.inc
-            { "Source2ModGameHooks.HookTakeDamage", N_Hook<TakeDamageContext, &ISource2ModGameHooks::HookTakeDamage, &ISource2ModGameHooks::UnhookTakeDamage> },
-            { "Source2ModGameHooks.UnhookTakeDamage", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookCanAcquire", N_Hook<CanAcquireContext, &ISource2ModGameHooks::HookCanAcquire, &ISource2ModGameHooks::UnhookCanAcquire> },
-            { "Source2ModGameHooks.UnhookCanAcquire", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookCanMove", N_Hook<CanMoveContext, &ISource2ModGameHooks::HookCanMove, &ISource2ModGameHooks::UnhookCanMove> },
-            { "Source2ModGameHooks.UnhookCanMove", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookCanUse", N_Hook<CanUseContext, &ISource2ModGameHooks::HookCanUse, &ISource2ModGameHooks::UnhookCanUse> },
-            { "Source2ModGameHooks.UnhookCanUse", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookPostThink", N_Hook<PostThinkContext, &ISource2ModGameHooks::HookPostThink, &ISource2ModGameHooks::UnhookPostThink> },
-            { "Source2ModGameHooks.UnhookPostThink", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookProcessUsercmds", N_Hook<ProcessUsercmdsContext, &ISource2ModGameHooks::HookProcessUsercmds, &ISource2ModGameHooks::UnhookProcessUsercmds> },
-            { "Source2ModGameHooks.UnhookProcessUsercmds", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookSimulateUserCommands", N_Hook<SimulateUserCommandsContext, &ISource2ModGameHooks::HookSimulateUserCommands, &ISource2ModGameHooks::UnhookSimulateUserCommands> },
-            { "Source2ModGameHooks.UnhookSimulateUserCommands", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookRunCommand", N_Hook<RunCommandContext, &ISource2ModGameHooks::HookRunCommand, &ISource2ModGameHooks::UnhookRunCommand> },
-            { "Source2ModGameHooks.UnhookRunCommand", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookAcceptInput", N_Hook<AcceptInputContext, &ISource2ModGameHooks::HookAcceptInput, &ISource2ModGameHooks::UnhookAcceptInput> },
-            { "Source2ModGameHooks.UnhookAcceptInput", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookTouch", N_Hook<TouchContext, &ISource2ModGameHooks::HookTouch, &ISource2ModGameHooks::UnhookTouch> },
-            { "Source2ModGameHooks.UnhookTouch", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookDropWeapon", N_Hook<DropWeaponContext, &ISource2ModGameHooks::HookDropWeapon, &ISource2ModGameHooks::UnhookDropWeapon> },
-            { "Source2ModGameHooks.UnhookDropWeapon", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookAirAccelerate", N_Hook<AirAccelerateContext, &ISource2ModGameHooks::HookAirAccelerate, &ISource2ModGameHooks::UnhookAirAccelerate> },
-            { "Source2ModGameHooks.UnhookAirAccelerate", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookAirMove", N_Hook<MovementContext, &ISource2ModGameHooks::HookAirMove, &ISource2ModGameHooks::UnhookAirMove> },
-            { "Source2ModGameHooks.UnhookAirMove", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookCanUnduck", N_Hook<MovementContext, &ISource2ModGameHooks::HookCanUnduck, &ISource2ModGameHooks::UnhookCanUnduck> },
-            { "Source2ModGameHooks.UnhookCanUnduck", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookCategorizePosition", N_Hook<CategorizePositionContext, &ISource2ModGameHooks::HookCategorizePosition, &ISource2ModGameHooks::UnhookCategorizePosition> },
-            { "Source2ModGameHooks.UnhookCategorizePosition", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookCheckFalling", N_Hook<MovementContext, &ISource2ModGameHooks::HookCheckFalling, &ISource2ModGameHooks::UnhookCheckFalling> },
-            { "Source2ModGameHooks.UnhookCheckFalling", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookCheckParameters", N_Hook<MovementContext, &ISource2ModGameHooks::HookCheckParameters, &ISource2ModGameHooks::UnhookCheckParameters> },
-            { "Source2ModGameHooks.UnhookCheckParameters", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookCheckVelocity", N_Hook<CheckVelocityContext, &ISource2ModGameHooks::HookCheckVelocity, &ISource2ModGameHooks::UnhookCheckVelocity> },
-            { "Source2ModGameHooks.UnhookCheckVelocity", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookCheckWater", N_Hook<MovementContext, &ISource2ModGameHooks::HookCheckWater, &ISource2ModGameHooks::UnhookCheckWater> },
-            { "Source2ModGameHooks.UnhookCheckWater", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookDuck", N_Hook<MovementContext, &ISource2ModGameHooks::HookDuck, &ISource2ModGameHooks::UnhookDuck> },
-            { "Source2ModGameHooks.UnhookDuck", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookFriction", N_Hook<MovementContext, &ISource2ModGameHooks::HookFriction, &ISource2ModGameHooks::UnhookFriction> },
-            { "Source2ModGameHooks.UnhookFriction", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookFullWalkMove", N_Hook<FullWalkMoveContext, &ISource2ModGameHooks::HookFullWalkMove, &ISource2ModGameHooks::UnhookFullWalkMove> },
-            { "Source2ModGameHooks.UnhookFullWalkMove", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookGroundAccelerate", N_Hook<GroundAccelerateContext, &ISource2ModGameHooks::HookGroundAccelerate, &ISource2ModGameHooks::UnhookGroundAccelerate> },
-            { "Source2ModGameHooks.UnhookGroundAccelerate", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookLadderMove", N_Hook<MovementContext, &ISource2ModGameHooks::HookLadderMove, &ISource2ModGameHooks::UnhookLadderMove> },
-            { "Source2ModGameHooks.UnhookLadderMove", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookMoveInit", N_Hook<MovementContext, &ISource2ModGameHooks::HookMoveInit, &ISource2ModGameHooks::UnhookMoveInit> },
-            { "Source2ModGameHooks.UnhookMoveInit", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookPlayerMove", N_Hook<MovementContext, &ISource2ModGameHooks::HookPlayerMove, &ISource2ModGameHooks::UnhookPlayerMove> },
-            { "Source2ModGameHooks.UnhookPlayerMove", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookProcessMovement", N_Hook<MovementContext, &ISource2ModGameHooks::HookProcessMovement, &ISource2ModGameHooks::UnhookProcessMovement> },
-            { "Source2ModGameHooks.UnhookProcessMovement", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookSetupMove", N_Hook<SetupMoveContext, &ISource2ModGameHooks::HookSetupMove, &ISource2ModGameHooks::UnhookSetupMove> },
-            { "Source2ModGameHooks.UnhookSetupMove", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookTryPlayerMove", N_Hook<TryPlayerMoveContext, &ISource2ModGameHooks::HookTryPlayerMove, &ISource2ModGameHooks::UnhookTryPlayerMove> },
-            { "Source2ModGameHooks.UnhookTryPlayerMove", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookWalkMove", N_Hook<MovementContext, &ISource2ModGameHooks::HookWalkMove, &ISource2ModGameHooks::UnhookWalkMove> },
-            { "Source2ModGameHooks.UnhookWalkMove", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookWaterMove", N_Hook<MovementContext, &ISource2ModGameHooks::HookWaterMove, &ISource2ModGameHooks::UnhookWaterMove> },
-            { "Source2ModGameHooks.UnhookWaterMove", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookOnJumpLegacy", N_Hook<LegacyJumpContext, &ISource2ModGameHooks::HookOnJumpLegacy, &ISource2ModGameHooks::UnhookOnJumpLegacy> },
-            { "Source2ModGameHooks.UnhookOnJumpLegacy", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookOnJumpModern", N_Hook<ModernJumpContext, &ISource2ModGameHooks::HookOnJumpModern, &ISource2ModGameHooks::UnhookOnJumpModern> },
-            { "Source2ModGameHooks.UnhookOnJumpModern", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookCheckJumpButtonLegacy", N_Hook<LegacyJumpContext, &ISource2ModGameHooks::HookCheckJumpButtonLegacy, &ISource2ModGameHooks::UnhookCheckJumpButtonLegacy> },
-            { "Source2ModGameHooks.UnhookCheckJumpButtonLegacy", N_UnhookGameHook },
-            { "Source2ModGameHooks.HookCheckJumpButtonModern", N_Hook<ModernJumpContext, &ISource2ModGameHooks::HookCheckJumpButtonModern, &ISource2ModGameHooks::UnhookCheckJumpButtonModern> },
-            { "Source2ModGameHooks.UnhookCheckJumpButtonModern", N_UnhookGameHook },
-            { "Source2ModGameHooks.IsAvailable", N_IsAvailable },
+            // source2mod/hooks.inc
+            { "Source2ModHooks.Hook", N_HooksHook },
+            { "Source2ModHooks.HookInstance", N_HooksHookInstance },
+            { "Source2ModHooks.HookClass", N_HooksHookClass },
+            { "Source2ModHooks.Unhook", N_HooksUnhook },
+            { "Source2ModHooks.IsAvailable", N_HooksIsAvailable },
+            { "GameFrameContext.simulating.get", N_GameFrameContext_simulating },
+            { "GameFrameContext.firstTick.get", N_GameFrameContext_firstTick },
+            { "GameFrameContext.lastTick.get", N_GameFrameContext_lastTick },
+            { "StartupServerContext.GetMapName", N_StartupServerContext_GetMapName },
+            { "ClientConnectContext.slot.get", N_ClientConnectContext_slot },
+            { "ClientConnectContext.GetName", N_ClientConnectContext_GetName },
+            { "ClientConnectContext.GetXuid", N_ClientConnectContext_GetXuid },
+            { "ClientConnectContext.GetNetworkId", N_ClientConnectContext_GetNetworkId },
+            { "ClientConnectContext.SetRejectReason", N_ClientConnectContext_SetRejectReason },
+            { "ClientConnectedContext.slot.get", N_ClientConnectedContext_slot },
+            { "ClientConnectedContext.GetName", N_ClientConnectedContext_GetName },
+            { "ClientConnectedContext.GetXuid", N_ClientConnectedContext_GetXuid },
+            { "ClientConnectedContext.GetNetworkId", N_ClientConnectedContext_GetNetworkId },
+            { "ClientConnectedContext.GetAddress", N_ClientConnectedContext_GetAddress },
+            { "ClientConnectedContext.fakePlayer.get", N_ClientConnectedContext_fakePlayer },
+            { "ClientPutInServerContext.slot.get", N_ClientPutInServerContext_slot },
+            { "ClientPutInServerContext.GetName", N_ClientPutInServerContext_GetName },
+            { "ClientPutInServerContext.type.get", N_ClientPutInServerContext_type },
+            { "ClientPutInServerContext.GetXuid", N_ClientPutInServerContext_GetXuid },
+            { "ClientDisconnectContext.slot.get", N_ClientDisconnectContext_slot },
+            { "ClientDisconnectContext.reason.get", N_ClientDisconnectContext_reason },
+            { "ClientDisconnectContext.GetName", N_ClientDisconnectContext_GetName },
+            { "ClientDisconnectContext.GetXuid", N_ClientDisconnectContext_GetXuid },
+            { "ClientDisconnectContext.GetNetworkId", N_ClientDisconnectContext_GetNetworkId },
+            { "ClientSlotContext.slot.get", N_ClientSlotContext_slot },
+            { "LoadEventsFromFileContext.GetFilename", N_LoadEventsFromFileContext_GetFilename },
+            { "LoadEventsFromFileContext.searchAll.get", N_LoadEventsFromFileContext_searchAll },
             { "TakeDamageContext.entity.get", N_TakeDamageContext_entity },
             { "TakeDamageContext.info.get", N_TakeDamageContext_info },
             { "TakeDamageContext.damageResult.get", N_TakeDamageContext_damageResult },
@@ -1384,12 +1516,12 @@ namespace sourcepawn
 
     void ForgetGameHooks(PluginId id)
     {
-        std::vector<Source2ModGameHookId> ids;
-        for (const auto& [hookId, hook] : g_gameHooks)
-            if (hook.owner == id)
+        std::vector<Source2ModHookId> ids;
+        for (const auto& [hookId, owner] : g_hooks)
+            if (owner == id)
                 ids.push_back(hookId);
-        for (Source2ModGameHookId hookId : ids)
-            Unhook(hookId);
+        for (Source2ModHookId hookId : ids)
+            UnhookScript(hookId);
     }
 
     const sp_nativeinfo_t* GetGameHookNatives()

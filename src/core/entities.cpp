@@ -49,6 +49,7 @@
 #include <source2mod/utils/virtual.h>
 
 #include <algorithm>
+#include <cstring>
 
 namespace entities
 {
@@ -90,48 +91,6 @@ namespace entities
         return addresses::source2modAddresses.CBaseEntity_CreateEntityByName()(pszClassName, -1);
     }
 
-    void EntitiesManager::AddEntityListener(PluginId owner, IEntityListener* pListener)
-    {
-        if (!pListener)
-            return;
-
-        auto known = std::find_if(m_Listeners.begin(), m_Listeners.end(),
-                                  [pListener](const ListenerEntry& e) { return e.listener == pListener; });
-
-        if (known != m_Listeners.end())
-            return;
-
-        m_Listeners.push_back(ListenerEntry{ owner, pListener });
-
-        // Null while a plugin is still loading -- the engine has not made the
-        // entity system yet. AttachEntityListeners() picks it up on
-        // StartupServer.
-        if (shared::g_pEntitySystem)
-            shared::g_pEntitySystem->AddListenerEntity(pListener);
-    }
-
-    void EntitiesManager::RemoveEntityListener(IEntityListener* pListener)
-    {
-        if (!pListener)
-            return;
-
-        std::erase_if(m_Listeners, [pListener](const ListenerEntry& e) { return e.listener == pListener; });
-
-        if (shared::g_pEntitySystem)
-            shared::g_pEntitySystem->RemoveListenerEntity(pListener);
-    }
-
-    void EntitiesManager::AttachEntityListeners()
-    {
-        if (!shared::g_pEntitySystem)
-            return;
-
-        // The list is kept, not consumed: a new map can mean a new entity
-        // system, and every listener has to be put on that one too.
-        for (const ListenerEntry& entry : m_Listeners)
-            shared::g_pEntitySystem->AddListenerEntity(entry.listener);
-    }
-
     void EntitiesManager::AcceptInput(CEntityInstance* pTarget, const char* pszInput, CEntityInstance* pActivator, CEntityInstance* pCaller, const char* pszValue)
     {
         addresses::source2modAddresses.CEntityInstance_AcceptInput()(pTarget, pszInput, pActivator, pCaller, variant_t(pszValue));
@@ -145,109 +104,140 @@ namespace entities
         addresses::source2modAddresses.CEntitySystem_AddEntityIOEvent()(shared::g_pEntitySystem, pTarget, pszInput, pActivator, pCaller, variant_t(pszValue), flDelay, nullptr, nullptr);
     }
 
-    void EntitiesManager::AddEntityIOListener(PluginId owner, IEntityIOListener* pListener, const char* pchClassName, const char* pchOutputName, bool post)
+    namespace
     {
-        OutputKey key{
-            pchClassName ? pchClassName : "*",
-            pchOutputName ? pchOutputName : "*"
-        };
-
-        if (post)
-            inlinehooks::entityIOListenerStack[key].m_vecPost.push_back(pListener);
-        else
-            inlinehooks::entityIOListenerStack[key].m_vecPre.push_back(pListener);
-
-        m_IOListeners.push_back(IOListenerEntry{ owner, pListener });
+        bool DesignerMatches(const std::string& wanted, CEntityInstance* pEntity)
+        {
+            if (wanted.empty())
+                return true;
+            const char* designer = pEntity ? pEntity->GetClassname() : nullptr;
+            return designer && wanted == designer;
+        }
     }
 
-    void EntitiesManager::RemoveEntityIOListener(IEntityIOListener* pListener, const char* pchClassName, const char* pchOutputName, bool post)
+    void EntitiesManager::AddEntityListener(PluginId owner, IEntityListener* pListener, const char* pszDesignerName, CEntityInstance* pEntity)
     {
-        if (!pchClassName && !pchOutputName)
-        {
-            for (auto it = inlinehooks::entityIOListenerStack.begin(); it != inlinehooks::entityIOListenerStack.end(); )
-            {
-                auto& vec = post ? it->second.m_vecPost : it->second.m_vecPre;
-
-                std::erase(vec, pListener);
-
-                if (it->second.m_vecPre.empty() && it->second.m_vecPost.empty())
-                    it = inlinehooks::entityIOListenerStack.erase(it);
-                else
-                    ++it;
-            }
-
-            DropIOListenerRecord(pListener);
+        if (!pListener)
             return;
-        }
-
-        OutputKey key{
-            pchClassName ? pchClassName : "*",
-            pchOutputName ? pchOutputName : "*"
-        };
-
-        auto it = inlinehooks::entityIOListenerStack.find(key);
-        if (it == inlinehooks::entityIOListenerStack.end())
-            return;
-
-        auto& vec = post ? it->second.m_vecPost : it->second.m_vecPre;
-
-        std::erase(vec, pListener);
-
-        if (it->second.m_vecPre.empty() && it->second.m_vecPost.empty())
-            inlinehooks::entityIOListenerStack.erase(it);
-
-        DropIOListenerRecord(pListener);
+        m_EntityListeners.push_back(EntityListenerEntry{ owner, pListener, pszDesignerName ? pszDesignerName : "", pEntity });
     }
 
-    void EntitiesManager::DropIOListenerRecord(IEntityIOListener* pListener)
+    void EntitiesManager::RemoveEntityListener(IEntityListener* pListener)
     {
-        // Only once the listener is gone from every output it watched -- the
-        // same object can be registered for several, and the record is what
-        // says a plugin still has one.
-        for (const auto& [key, pair] : inlinehooks::entityIOListenerStack)
-        {
-            if (std::find(pair.m_vecPre.begin(), pair.m_vecPre.end(), pListener) != pair.m_vecPre.end())
-                return;
+        for (auto& e : m_EntityListeners)
+            if (e.listener == pListener)
+                e.removed = true;
+        Compact();
+    }
 
-            if (std::find(pair.m_vecPost.begin(), pair.m_vecPost.end(), pListener) != pair.m_vecPost.end())
-                return;
-        }
+    void EntitiesManager::AddEntityOutputListener(PluginId owner, IEntityOutputListener* pListener, const char* pszDesignerName, const char* pszOutput, CEntityInstance* pEntity)
+    {
+        if (!pListener)
+            return;
+        m_OutputListeners.push_back(OutputListenerEntry{ owner, pListener, pszDesignerName ? pszDesignerName : "", pszOutput ? pszOutput : "", pEntity });
+    }
 
-        std::erase_if(m_IOListeners, [pListener](const IOListenerEntry& e) { return e.listener == pListener; });
+    void EntitiesManager::RemoveEntityOutputListener(IEntityOutputListener* pListener)
+    {
+        for (auto& e : m_OutputListeners)
+            if (e.listener == pListener)
+                e.removed = true;
+        Compact();
     }
 
     void EntitiesManager::RemoveAllForPlugin(PluginId id)
     {
-        for (auto it = m_Listeners.begin(); it != m_Listeners.end(); )
+        for (auto& e : m_EntityListeners)
+            if (e.owner == id)
+                e.removed = true;
+        for (auto& e : m_OutputListeners)
+            if (e.owner == id)
+                e.removed = true;
+        Compact();
+    }
+
+    void EntitiesManager::Compact()
+    {
+        if (m_nDispatchDepth > 0)
+            return;
+        std::erase_if(m_EntityListeners, [](const EntityListenerEntry& e) { return e.removed; });
+        std::erase_if(m_OutputListeners, [](const OutputListenerEntry& e) { return e.removed; });
+    }
+
+    template <typename FN>
+    void EntitiesManager::ForEachEntityListener(CEntityInstance* pEntity, FN&& fn)
+    {
+        if (m_EntityListeners.empty())
+            return;
+
+        ++m_nDispatchDepth;
+        // By index and up to the count at the start: one added meanwhile waits
+        // for the next event, and a push_back may move the vector.
+        const size_t count = m_EntityListeners.size();
+        for (size_t i = 0; i < count; ++i)
         {
-            if (it->owner != id)
-            {
-                ++it;
+            const EntityListenerEntry& e = m_EntityListeners[i];
+            if (e.removed || (e.entity && e.entity != pEntity) || !DesignerMatches(e.designerName, pEntity))
                 continue;
-            }
-
-            if (shared::g_pEntitySystem)
-                shared::g_pEntitySystem->RemoveListenerEntity(it->listener);
-
-            it = m_Listeners.erase(it);
+            fn(e.listener);
         }
+        --m_nDispatchDepth;
+        Compact();
+    }
 
-        std::vector<IEntityIOListener*> going;
+    void EntitiesManager::NotifyCreated(CEntityInstance* pEntity)
+    {
+        ForEachEntityListener(pEntity, [pEntity](IEntityListener* l) { l->OnEntityCreated(pEntity); });
+    }
 
-        for (const auto& entry : m_IOListeners)
+    void EntitiesManager::NotifySpawned(CEntityInstance* pEntity)
+    {
+        ForEachEntityListener(pEntity, [pEntity](IEntityListener* l) { l->OnEntitySpawned(pEntity); });
+    }
+
+    void EntitiesManager::NotifyDeleted(CEntityInstance* pEntity)
+    {
+        ForEachEntityListener(pEntity, [pEntity](IEntityListener* l) { l->OnEntityDeleted(pEntity); });
+
+        // A registration for this one entity goes with it: the pointer may
+        // be another entity's next.
+        for (auto& e : m_EntityListeners)
+            if (e.entity == pEntity)
+                e.removed = true;
+        for (auto& e : m_OutputListeners)
+            if (e.entity == pEntity)
+                e.removed = true;
+        Compact();
+    }
+
+    void EntitiesManager::NotifyParentChanged(CEntityInstance* pEntity, CEntityInstance* pNewParent)
+    {
+        ForEachEntityListener(pEntity, [pEntity, pNewParent](IEntityListener* l) { l->OnEntityParentChanged(pEntity, pNewParent); });
+    }
+
+    Action EntitiesManager::NotifyOutput(CEntityInstance* pCaller, const char* pszOutput, CEntityInstance* pActivator, float flDelay, bool post)
+    {
+        Action strongest = Action::Ignore;
+        if (m_OutputListeners.empty())
+            return strongest;
+
+        ++m_nDispatchDepth;
+        const size_t count = m_OutputListeners.size();
+        for (size_t i = 0; i < count; ++i)
         {
-            if (entry.owner == id)
-                going.push_back(entry.listener);
-        }
+            const OutputListenerEntry& e = m_OutputListeners[i];
+            if (e.removed || (e.entity && e.entity != pCaller) || !DesignerMatches(e.designerName, pCaller))
+                continue;
+            if (!e.output.empty() && (!pszOutput || e.output != pszOutput))
+                continue;
 
-        for (auto* pListener : going)
-        {
-            RemoveEntityIOListener(pListener, nullptr, nullptr, false);
-            RemoveEntityIOListener(pListener, nullptr, nullptr, true);
+            const Action action = e.listener->OnEntityOutput(pCaller, pszOutput, pActivator, flDelay, post);
+            if (static_cast<int>(action) > static_cast<int>(strongest))
+                strongest = action;
         }
+        --m_nDispatchDepth;
+        Compact();
 
-        // Anything the two passes above could not reach, so a plugin never
-        // leaves a record behind pointing into its closed library.
-        std::erase_if(m_IOListeners, [id](const IOListenerEntry& e) { return e.owner == id; });
+        return strongest;
     }
 }

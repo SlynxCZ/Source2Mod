@@ -36,6 +36,7 @@
 #include "gamehooks.h"
 
 #include "hookid.h"
+#include "hooks.h"
 
 #include <algorithm>
 #include <tuple>
@@ -54,6 +55,11 @@
 
 #include "source2mod/schema/takedamageinfo.h"
 #include "source2mod/schema/entity/classes/CBaseEntity.h"
+#include "source2mod/schema/entity/classes/CBasePlayerController.h"
+#include "source2mod/schema/entity/classes/CCSPlayerController.h"
+#include "source2mod/schema/entity/classes/CCSPlayerPawnBase.h"
+#include <entity2/entityidentity.h>
+#include <tier0/utlsymbollarge.h>
 
 #include <cstring>
 #include <string>
@@ -67,40 +73,6 @@ namespace gamehooks
 
     namespace
     {
-        // "s2m hookdebug": part of the hook names whose calls are logged
-        // ("TakeDamage" matches CBaseEntity::TakeDamageOld), "all", or empty.
-        std::string s_hookDebug;
-
-        bool DebugOn(const char* pszName)
-        {
-            return !s_hookDebug.empty() && (s_hookDebug == "all" || strstr(pszName, s_hookDebug.c_str()));
-        }
-
-        const char* ActionName(Action a)
-        {
-            switch (a)
-            {
-            case Action::Ignore: return "Ignore";
-            case Action::Override: return "Override";
-            case Action::Supersede: return "Supersede";
-            default: return "?";
-            }
-        }
-
-        // The plugin's file name, for the log.
-        std::string OwnerName(PluginId owner)
-        {
-            for (const auto& p : pluginManager.m_plugins)
-            {
-                if (p && p->id == owner)
-                {
-                    const size_t slash = p->path.find_last_of("/\\");
-                    return slash == std::string::npos ? p->path : p->path.substr(slash + 1);
-                }
-            }
-            return "plugin " + std::to_string(owner);
-        }
-
         // What a call is about, for the log; the damage hook says who and how much.
         template <typename CONTEXT>
         std::string Describe(const CONTEXT&)
@@ -126,106 +98,39 @@ namespace gamehooks
                 return "-";
         }
 
-        // Ids are unique across every hook, so a wrong UnhookX() finds nothing.
-        Source2ModGameHookId s_lastHookId = 0;
+        using hooks::DebugOn;
+        using hooks::ActionName;
 
         template <typename CONTEXT>
-        struct Listener
+        using Listeners = hooks::PointList<CONTEXT>;
+
+        // What a call is about for the targets and filters: the hooked object,
+        // the entity whose designer name a filter compares, the input name.
+        hooks::Subject SubjectOf(const TakeDamageContext& c) { return { c.entity, c.entity, nullptr }; }
+        hooks::Subject SubjectOf(const CanAcquireContext& c) { return { c.services, nullptr, nullptr }; }
+        hooks::Subject SubjectOf(const CanMoveContext& c) { return { c.pawn, c.pawn, nullptr }; }
+        hooks::Subject SubjectOf(const CanUseContext& c) { return { c.services, nullptr, nullptr }; }
+        hooks::Subject SubjectOf(const PostThinkContext& c) { return { c.pawn, c.pawn, nullptr }; }
+        hooks::Subject SubjectOf(const ProcessUsercmdsContext& c) { return { c.controller, c.controller, nullptr }; }
+        hooks::Subject SubjectOf(const SimulateUserCommandsContext& c) { return { c.controller, c.controller, nullptr }; }
+        hooks::Subject SubjectOf(const RunCommandContext& c) { return { c.services, nullptr, nullptr }; }
+        hooks::Subject SubjectOf(const AcceptInputContext& c)
         {
-            PluginId owner;
-            GameHookHandler<CONTEXT> handler;
-            Source2ModGameHookId id;
-        };
-
-        // The listeners of one hook, pre and post, and the dispatch over them:
-        // Supersede stops the chain, otherwise the strongest answer wins --
-        // the same rule as the command listeners.
-        template <typename CONTEXT>
-        class Listeners
-        {
-        public:
-            Source2ModGameHookId Add(PluginId owner, GameHookHandler<CONTEXT> handler, bool post)
-            {
-                const Source2ModGameHookId id = ++s_lastHookId;
-                (post ? m_post : m_pre).push_back({ owner, std::move(handler), id });
-                return id;
-            }
-
-            bool Remove(Source2ModGameHookId id)
-            {
-                const auto match = [id](const Listener<CONTEXT>& l) { return l.id == id; };
-                return std::erase_if(m_pre, match) + std::erase_if(m_post, match) > 0;
-            }
-
-            void RemoveOwner(PluginId owner)
-            {
-                const auto match = [owner](const Listener<CONTEXT>& l) { return l.owner == owner; };
-                std::erase_if(m_pre, match);
-                std::erase_if(m_post, match);
-            }
-
-            bool Empty() const
-            {
-                return m_pre.empty() && m_post.empty();
-            }
-
-            bool Has(bool post) const
-            {
-                return !(post ? m_post : m_pre).empty();
-            }
-
-            bool RemoveHandler(PluginId owner, const GameHookHandler<CONTEXT>& handler, bool post)
-            {
-                if (!handler.HasIdentity())
-                    return false;
-
-                return std::erase_if(post ? m_post : m_pre, [owner, &handler](const Listener<CONTEXT>& l)
-                {
-                    return l.owner == owner && handler.SameAs(l.handler);
-                }) > 0;
-            }
-
-            // APPLY(ctx, value) takes a value a handler returned with its action
-            // (GameHookReturn), into ctx.result, before the next handler runs.
-            template <typename APPLY>
-            Action Dispatch(CONTEXT& ctx, bool post, const char* pszName, APPLY&& apply) const
-            {
-                // A copy: a handler may unhook from inside itself.
-                const auto list = post ? m_post : m_pre;
-                Action result = Action::Ignore;
-
-                for (const auto& l : list)
-                {
-                    Action a;
-                    {
-                        ::slow::Guard slowGuard("game hook handler", pszName, l.owner);
-                        const auto answer = l.handler(ctx, post);
-                        a = answer.action;
-
-                        if constexpr (!std::is_void_v<typename CONTEXT::Return>)
-                        {
-                            if (answer.hasValue && a != Action::Ignore)
-                                apply(ctx, answer.value);
-                        }
-                    }
-
-                    if (DebugOn(pszName))
-                        FP_INFO("hookdebug {} {}: {} -> {}", pszName, post ? "post" : "pre", OwnerName(l.owner), ActionName(a));
-
-                    if (a == Action::Supersede)
-                        return a;
-
-                    if (static_cast<int>(a) > static_cast<int>(result))
-                        result = a;
-                }
-
-                return result;
-            }
-
-        private:
-            std::vector<Listener<CONTEXT>> m_pre;
-            std::vector<Listener<CONTEXT>> m_post;
-        };
+            CEntityInstance* entity = c.identity ? c.identity->m_pInstance : nullptr;
+            return { entity, entity, c.inputName ? c.inputName->String() : nullptr };
+        }
+        hooks::Subject SubjectOf(const TouchContext& c) { return { c.entity, c.entity, nullptr }; }
+        hooks::Subject SubjectOf(const DropWeaponContext& c) { return { c.services, nullptr, nullptr }; }
+        hooks::Subject SubjectOf(const MovementContext& c) { return { c.services, nullptr, nullptr }; }
+        hooks::Subject SubjectOf(const AirAccelerateContext& c) { return { c.services, nullptr, nullptr }; }
+        hooks::Subject SubjectOf(const GroundAccelerateContext& c) { return { c.services, nullptr, nullptr }; }
+        hooks::Subject SubjectOf(const CategorizePositionContext& c) { return { c.services, nullptr, nullptr }; }
+        hooks::Subject SubjectOf(const CheckVelocityContext& c) { return { c.services, nullptr, nullptr }; }
+        hooks::Subject SubjectOf(const FullWalkMoveContext& c) { return { c.services, nullptr, nullptr }; }
+        hooks::Subject SubjectOf(const SetupMoveContext& c) { return { c.services, nullptr, nullptr }; }
+        hooks::Subject SubjectOf(const TryPlayerMoveContext& c) { return { c.services, nullptr, nullptr }; }
+        hooks::Subject SubjectOf(const LegacyJumpContext& c) { return { c.jump, nullptr, nullptr }; }
+        hooks::Subject SubjectOf(const ModernJumpContext& c) { return { c.jump, nullptr, nullptr }; }
 
         // The context member the return value lives in; nothing for void.
         template <typename CONTEXT, typename RETURN>
@@ -240,9 +145,9 @@ namespace gamehooks
             using type = std::nullptr_t;
         };
 
-        // What every kind shares: listeners, the "install on first listener,
-        // uninstall on the next Tick() after the last one left" rule, and the
-        // pre/post dispatch that builds the context and applies its result.
+        // What every kind shares: listeners, "install on the first listener"
+        // (kept until shutdown, see gamehooks.h), and the pre/post dispatch
+        // that builds the context and applies its result.
         template <typename CONTEXT, typename RETURN, typename CLASS, typename... ARGS>
         class GameHookBase : public IGameHook
         {
@@ -257,21 +162,23 @@ namespace gamehooks
 
             const char* Name() const override { return m_pszName; }
 
-            Source2ModGameHookId Add(PluginId owner, GameHookHandler<CONTEXT> handler, bool post)
+            Source2ModHookId Add(PluginId owner, const void* handler, bool post, const HookTarget& target, const HookFilter& filter) override
             {
-                const Source2ModGameHookId id = m_listeners.Add(owner, std::move(handler), post);
+                const Source2ModHookId id = m_listeners.Add(owner, *static_cast<const HookHandler<CONTEXT>*>(handler), post, target, filter);
                 Install();
                 return id;
             }
 
-            bool Remove(Source2ModGameHookId id) override { return m_listeners.Remove(id); }
-
-            bool RemoveHandler(PluginId owner, const void* handler, bool post) override
+            PluginId OwnerOf(const void* handler) const override
             {
-                return m_listeners.RemoveHandler(owner, *static_cast<const GameHookHandler<CONTEXT>*>(handler), post);
+                return hookid::OwnerOfHandler(*static_cast<const HookHandler<CONTEXT>*>(handler));
             }
 
+            bool Remove(Source2ModHookId id) override { return m_listeners.Remove(id); }
+
             void RemoveAll(PluginId owner) override { m_listeners.RemoveOwner(owner); }
+
+            void RemoveInstance(const void* instance) override { m_listeners.RemoveInstance(instance); }
 
             bool Empty() const override { return m_listeners.Empty(); }
 
@@ -285,7 +192,7 @@ namespace gamehooks
                 CONTEXT ctx = m_make(pThis, args...);
                 const CallData call{ this, pThis, std::tuple<ARGS...>(args...) };
                 BindCallOriginal(ctx, call);
-                const Action action = m_listeners.Dispatch(ctx, false, m_pszName, ApplyValue());
+                const Action action = m_listeners.Dispatch(ctx, false, SubjectOf(ctx), m_pszName, ApplyValue());
 
                 if (DebugOn(m_pszName))
                 {
@@ -325,7 +232,7 @@ namespace gamehooks
                         ctx.*m_result = *original;
                 }
 
-                const Action action = m_listeners.Dispatch(ctx, true, m_pszName, ApplyValue());
+                const Action action = m_listeners.Dispatch(ctx, true, SubjectOf(ctx), m_pszName, ApplyValue());
 
                 if (DebugOn(m_pszName))
                 {
@@ -432,8 +339,8 @@ namespace gamehooks
 
             void Uninstall() override
             {
-                // Synchronous: only from Tick() and Shutdown(), never from a
-                // callback of this hook.
+                // Synchronous: only from Shutdown(), never from a callback of
+                // this hook.
                 delete m_pHook;
                 m_pHook = nullptr;
             }
@@ -600,74 +507,74 @@ namespace gamehooks
 
     GameHooksManager::GameHooksManager()
     {
-        m_hooks.resize(static_cast<size_t>(GameHook::Count));
-        auto slot = [this](GameHook h, IGameHook* hook) { m_hooks[static_cast<size_t>(h)].reset(hook); };
+        m_hooks.resize(kGameHookCount);
+        auto slot = [this](HookPointId h, IGameHook* hook) { m_hooks[static_cast<size_t>(h)].reset(hook); };
 
-        slot(GameHook::TakeDamage, new TakeDamageHook("CBaseEntity::TakeDamageOld",
+        slot(HookPointId::TakeDamage, new TakeDamageHook("CBaseEntity::TakeDamageOld",
             [](CBaseEntity* e, CTakeDamageInfo* info, CTakeDamageResult* result) { return TakeDamageContext{ e, info, result, 0 }; },
             &TakeDamageContext::result));
-        slot(GameHook::CanAcquire, new CanAcquireHook("CCSPlayer_ItemServices::CanAcquire",
+        slot(HookPointId::CanAcquire, new CanAcquireHook("CCSPlayer_ItemServices::CanAcquire",
             [](CCSPlayer_ItemServices* s, CEconItemView* item, AcquireMethod method, void* unk) { return CanAcquireContext{ s, item, method, unk, AcquireResult::Allowed }; },
             &CanAcquireContext::result));
-        slot(GameHook::CanMove, new CanMoveHook("CCSPlayerPawnBase::CanMove",
+        slot(HookPointId::CanMove, new CanMoveHook("CCSPlayerPawnBase::CanMove",
             [](CCSPlayerPawnBase* pawn) { return CanMoveContext{ pawn, false }; }, &CanMoveContext::result));
-        slot(GameHook::CanUse, new CanUseHook("CCSPlayer_WeaponServices::CanUse", "CCSPlayer_WeaponServices",
+        slot(HookPointId::CanUse, new CanUseHook("CCSPlayer_WeaponServices::CanUse", "CCSPlayer_WeaponServices",
             [](CCSPlayer_WeaponServices* s, CBasePlayerWeapon* w) { return CanUseContext{ s, w, false }; }, &CanUseContext::result));
-        slot(GameHook::PostThink, new PostThinkHook("CCSPlayerPawn::PostThink",
+        slot(HookPointId::PostThink, new PostThinkHook("CCSPlayerPawn::PostThink",
             [](CCSPlayerPawnBase* pawn) { return PostThinkContext{ pawn }; }, nullptr));
-        slot(GameHook::ProcessUsercmds, new ProcessUsercmdsHook("CCSPlayerController::ProcessUserCmd",
+        slot(HookPointId::ProcessUsercmds, new ProcessUsercmdsHook("CCSPlayerController::ProcessUserCmd",
             [](CCSPlayerController* c, void* cmds, int count, bool paused, float margin) { return ProcessUsercmdsContext{ c, cmds, count, paused, margin, nullptr }; },
             &ProcessUsercmdsContext::result));
-        slot(GameHook::SimulateUserCommands, new SimulateUserCommandsHook("CBasePlayerController::OnSimulateUserCommands",
+        slot(HookPointId::SimulateUserCommands, new SimulateUserCommandsHook("CBasePlayerController::OnSimulateUserCommands",
             [](CBasePlayerController* c) { return SimulateUserCommandsContext{ c }; }, nullptr));
-        slot(GameHook::RunCommand, new RunCommandHook("CPlayer_MovementServices::RunCommand", "CCSPlayer_MovementServices",
+        slot(HookPointId::RunCommand, new RunCommandHook("CPlayer_MovementServices::RunCommand", "CCSPlayer_MovementServices",
             [](MoveServices* s, void* cmd) { return RunCommandContext{ s, cmd }; }, nullptr));
-        slot(GameHook::AcceptInput, new AcceptInputHook("CEntityIdentity::AcceptInput",
+        slot(HookPointId::AcceptInput, new AcceptInputHook("CEntityIdentity::AcceptInput",
             [](CEntityIdentity* i, CUtlSymbolLarge* name, CEntityInstance* activator, CEntityInstance* caller, variant_t* value, void*, void*) { return AcceptInputContext{ i, name, activator, caller, value, false }; },
             &AcceptInputContext::result));
-        slot(GameHook::Touch, new TouchHook("CBaseEntity::Touch", "CBaseEntity",
+        slot(HookPointId::Touch, new TouchHook("CBaseEntity::Touch", "CBaseEntity",
             [](CBaseEntity* e, CBaseEntity* other) { return TouchContext{ e, other }; }, nullptr));
-        slot(GameHook::DropWeapon, new DropWeaponHook("CCSPlayer_WeaponServices::DropWeapon", "CCSPlayer_WeaponServices",
+        slot(HookPointId::DropWeapon, new DropWeaponHook("CCSPlayer_WeaponServices::DropWeapon", "CCSPlayer_WeaponServices",
             [](CCSPlayer_WeaponServices* s, CBasePlayerWeapon* w, Vector* target, Vector* velocity) { return DropWeaponContext{ s, w, target, velocity }; }, nullptr));
-        slot(GameHook::AirAccelerate, new AirAccelerateHook("CCSPlayer_MovementServices::AirAccelerate",
+        slot(HookPointId::AirAccelerate, new AirAccelerateHook("CCSPlayer_MovementServices::AirAccelerate",
             [](MoveServices* s, CMoveData* mv, Vector* dir, float speed, float accel) { return AirAccelerateContext{ s, mv, dir, speed, accel }; }, nullptr));
-        slot(GameHook::AirMove, new MoveVoidHook("CCSPlayer_MovementServices::AirMove", &MakeMovement, nullptr));
-        slot(GameHook::CanUnduck, new MoveBoolHook("CCSPlayer_MovementServices::CanUnduck", &MakeMovement, &MovementContext::result));
-        slot(GameHook::CategorizePosition, new CategorizePositionHook("CCSPlayer_MovementServices::CategorizePosition",
+        slot(HookPointId::AirMove, new MoveVoidHook("CCSPlayer_MovementServices::AirMove", &MakeMovement, nullptr));
+        slot(HookPointId::CanUnduck, new MoveBoolHook("CCSPlayer_MovementServices::CanUnduck", &MakeMovement, &MovementContext::result));
+        slot(HookPointId::CategorizePosition, new CategorizePositionHook("CCSPlayer_MovementServices::CategorizePosition",
             [](MoveServices* s, CMoveData* mv, bool stayOnGround) { return CategorizePositionContext{ s, mv, stayOnGround }; }, nullptr));
-        slot(GameHook::CheckFalling, new MoveVoidHook("CCSPlayer_MovementServices::CheckFalling", &MakeMovement, nullptr));
-        slot(GameHook::CheckParameters, new MoveVoidHook("CCSPlayer_MovementServices::CheckParameters", &MakeMovement, nullptr));
-        slot(GameHook::CheckVelocity, new CheckVelocityHook("CCSPlayer_MovementServices::CheckVelocity",
+        slot(HookPointId::CheckFalling, new MoveVoidHook("CCSPlayer_MovementServices::CheckFalling", &MakeMovement, nullptr));
+        slot(HookPointId::CheckParameters, new MoveVoidHook("CCSPlayer_MovementServices::CheckParameters", &MakeMovement, nullptr));
+        slot(HookPointId::CheckVelocity, new CheckVelocityHook("CCSPlayer_MovementServices::CheckVelocity",
             [](MoveServices* s, CMoveData* mv, void* unk) { return CheckVelocityContext{ s, mv, unk }; }, nullptr));
-        slot(GameHook::CheckWater, new MoveBoolHook("CCSPlayer_MovementServices::CheckWater", &MakeMovement, &MovementContext::result));
-        slot(GameHook::Duck, new MoveVoidHook("CCSPlayer_MovementServices::Duck", &MakeMovement, nullptr));
-        slot(GameHook::Friction, new MoveVoidHook("CCSPlayer_MovementServices::Friction", &MakeMovement, nullptr));
-        slot(GameHook::FullWalkMove, new FullWalkMoveHook("CCSPlayer_MovementServices::FullWalkMove",
+        slot(HookPointId::CheckWater, new MoveBoolHook("CCSPlayer_MovementServices::CheckWater", &MakeMovement, &MovementContext::result));
+        slot(HookPointId::Duck, new MoveVoidHook("CCSPlayer_MovementServices::Duck", &MakeMovement, nullptr));
+        slot(HookPointId::Friction, new MoveVoidHook("CCSPlayer_MovementServices::Friction", &MakeMovement, nullptr));
+        slot(HookPointId::FullWalkMove, new FullWalkMoveHook("CCSPlayer_MovementServices::FullWalkMove",
             [](MoveServices* s, CMoveData* mv, bool onGround) { return FullWalkMoveContext{ s, mv, onGround }; }, nullptr));
 #ifdef _WIN32
-        slot(GameHook::GroundAccelerate, new GroundAccelerateHook("CCSPlayer_MovementServices::GroundAccelerate",
+        slot(HookPointId::GroundAccelerate, new GroundAccelerateHook("CCSPlayer_MovementServices::GroundAccelerate",
             [](MoveServices* s, CMoveData* mv, float frameTime, Vector* dir, float speed, float accel) { return GroundAccelerateContext{ s, mv, dir, frameTime, speed, accel }; }, nullptr));
 #else
-        slot(GameHook::GroundAccelerate, new GroundAccelerateHook("CCSPlayer_MovementServices::GroundAccelerate",
+        slot(HookPointId::GroundAccelerate, new GroundAccelerateHook("CCSPlayer_MovementServices::GroundAccelerate",
             [](MoveServices* s, CMoveData* mv, Vector* dir, float frameTime, float speed, float accel) { return GroundAccelerateContext{ s, mv, dir, frameTime, speed, accel }; }, nullptr));
 #endif
-        slot(GameHook::LadderMove, new MoveBoolHook("CCSPlayer_MovementServices::LadderMove", &MakeMovement, &MovementContext::result));
-        slot(GameHook::MoveInit, new MoveBoolHook("CCSPlayer_MovementServices::MoveInit", &MakeMovement, &MovementContext::result));
-        slot(GameHook::PlayerMove, new MoveVoidHook("CCSPlayer_MovementServices::PlayerMove", &MakeMovement, nullptr));
-        slot(GameHook::ProcessMovement, new MoveVoidHook("CCSPlayer_MovementServices::ProcessMovement", &MakeMovement, nullptr));
-        slot(GameHook::SetupMove, new SetupMoveHook("CCSPlayer_MovementServices::SetupMove",
+        slot(HookPointId::LadderMove, new MoveBoolHook("CCSPlayer_MovementServices::LadderMove", &MakeMovement, &MovementContext::result));
+        slot(HookPointId::MoveInit, new MoveBoolHook("CCSPlayer_MovementServices::MoveInit", &MakeMovement, &MovementContext::result));
+        slot(HookPointId::PlayerMove, new MoveVoidHook("CCSPlayer_MovementServices::PlayerMove", &MakeMovement, nullptr));
+        slot(HookPointId::ProcessMovement, new MoveVoidHook("CCSPlayer_MovementServices::ProcessMovement", &MakeMovement, nullptr));
+        slot(HookPointId::SetupMove, new SetupMoveHook("CCSPlayer_MovementServices::SetupMove",
             [](MoveServices* s, CUserCmd* cmd, CMoveData* mv) { return SetupMoveContext{ s, cmd, mv }; }, nullptr));
-        slot(GameHook::TryPlayerMove, new TryPlayerMoveHook("CCSPlayer_MovementServices::TryPlayerMove",
+        slot(HookPointId::TryPlayerMove, new TryPlayerMoveHook("CCSPlayer_MovementServices::TryPlayerMove",
             [](MoveServices* s, CMoveData* mv, Vector* dest, CGameTrace* trace, bool* surfing) { return TryPlayerMoveContext{ s, mv, dest, trace, surfing }; }, nullptr));
-        slot(GameHook::WalkMove, new MoveVoidHook("CCSPlayer_MovementServices::WalkMove", &MakeMovement, nullptr));
-        slot(GameHook::WaterMove, new MoveVoidHook("CCSPlayer_MovementServices::WaterMove", &MakeMovement, nullptr));
-        slot(GameHook::OnJumpLegacy, new LegacyJumpHook("CCSPlayerLegacyJump::OnJump",
+        slot(HookPointId::WalkMove, new MoveVoidHook("CCSPlayer_MovementServices::WalkMove", &MakeMovement, nullptr));
+        slot(HookPointId::WaterMove, new MoveVoidHook("CCSPlayer_MovementServices::WaterMove", &MakeMovement, nullptr));
+        slot(HookPointId::OnJumpLegacy, new LegacyJumpHook("CCSPlayerLegacyJump::OnJump",
             [](CCSPlayerLegacyJump* j, CMoveData* mv) { return LegacyJumpContext{ j, mv }; }, nullptr));
-        slot(GameHook::OnJumpModern, new ModernJumpHook("CCSPlayerModernJump::OnJump",
+        slot(HookPointId::OnJumpModern, new ModernJumpHook("CCSPlayerModernJump::OnJump",
             [](CCSPlayerModernJump* j, CMoveData* mv) { return ModernJumpContext{ j, mv }; }, nullptr));
-        slot(GameHook::CheckJumpButtonLegacy, new LegacyJumpHook("CCSPlayerLegacyJump::CheckJumpButton",
+        slot(HookPointId::CheckJumpButtonLegacy, new LegacyJumpHook("CCSPlayerLegacyJump::CheckJumpButton",
             [](CCSPlayerLegacyJump* j, CMoveData* mv) { return LegacyJumpContext{ j, mv }; }, nullptr));
-        slot(GameHook::CheckJumpButtonModern, new ModernJumpHook("CCSPlayerModernJump::CheckJumpButton",
+        slot(HookPointId::CheckJumpButtonModern, new ModernJumpHook("CCSPlayerModernJump::CheckJumpButton",
             [](CCSPlayerModernJump* j, CMoveData* mv) { return ModernJumpContext{ j, mv }; }, nullptr));
     }
 
@@ -679,131 +586,52 @@ namespace gamehooks
             hook->Uninstall();
     }
 
-    void GameHooksManager::Tick()
-    {
-        for (auto& hook : m_hooks)
-        {
-            if (hook->Empty())
-                hook->Uninstall();
-        }
-    }
-
     void GameHooksManager::RemoveAllForPlugin(PluginId id)
     {
-        // The detour itself waits for Tick(): this can run from inside a
-        // console command, and a plugin may be unloading from a handler.
+        // Only the handlers go; the detour stays (gamehooks.h).
         for (auto& hook : m_hooks)
             hook->RemoveAll(id);
     }
 
-// The owner is the plugin the handler's code lies in (Source2ModCallback::Origin).
-#define GAMEHOOK_ADD(Method, HookType, Ctx, Which) \
-    Source2ModGameHookId GameHooksManager::Method(GameHookHandler<Ctx> handler, bool post) \
-    { \
-        const PluginId owner = hookid::OwnerOfHandler(handler); \
-        return As<HookType>(m_hooks[static_cast<size_t>(GameHook::Which)]).Add(owner, std::move(handler), post); \
-    }
-
-    GAMEHOOK_ADD(HookTakeDamage, TakeDamageHook, TakeDamageContext, TakeDamage)
-    GAMEHOOK_ADD(HookCanAcquire, CanAcquireHook, CanAcquireContext, CanAcquire)
-    GAMEHOOK_ADD(HookCanMove, CanMoveHook, CanMoveContext, CanMove)
-    GAMEHOOK_ADD(HookCanUse, CanUseHook, CanUseContext, CanUse)
-    GAMEHOOK_ADD(HookPostThink, PostThinkHook, PostThinkContext, PostThink)
-    GAMEHOOK_ADD(HookProcessUsercmds, ProcessUsercmdsHook, ProcessUsercmdsContext, ProcessUsercmds)
-    GAMEHOOK_ADD(HookSimulateUserCommands, SimulateUserCommandsHook, SimulateUserCommandsContext, SimulateUserCommands)
-    GAMEHOOK_ADD(HookRunCommand, RunCommandHook, RunCommandContext, RunCommand)
-    GAMEHOOK_ADD(HookAcceptInput, AcceptInputHook, AcceptInputContext, AcceptInput)
-    GAMEHOOK_ADD(HookTouch, TouchHook, TouchContext, Touch)
-    GAMEHOOK_ADD(HookDropWeapon, DropWeaponHook, DropWeaponContext, DropWeapon)
-    GAMEHOOK_ADD(HookAirAccelerate, AirAccelerateHook, AirAccelerateContext, AirAccelerate)
-    GAMEHOOK_ADD(HookAirMove, MoveVoidHook, MovementContext, AirMove)
-    GAMEHOOK_ADD(HookCanUnduck, MoveBoolHook, MovementContext, CanUnduck)
-    GAMEHOOK_ADD(HookCategorizePosition, CategorizePositionHook, CategorizePositionContext, CategorizePosition)
-    GAMEHOOK_ADD(HookCheckFalling, MoveVoidHook, MovementContext, CheckFalling)
-    GAMEHOOK_ADD(HookCheckParameters, MoveVoidHook, MovementContext, CheckParameters)
-    GAMEHOOK_ADD(HookCheckVelocity, CheckVelocityHook, CheckVelocityContext, CheckVelocity)
-    GAMEHOOK_ADD(HookCheckWater, MoveBoolHook, MovementContext, CheckWater)
-    GAMEHOOK_ADD(HookDuck, MoveVoidHook, MovementContext, Duck)
-    GAMEHOOK_ADD(HookFriction, MoveVoidHook, MovementContext, Friction)
-    GAMEHOOK_ADD(HookFullWalkMove, FullWalkMoveHook, FullWalkMoveContext, FullWalkMove)
-    GAMEHOOK_ADD(HookGroundAccelerate, GroundAccelerateHook, GroundAccelerateContext, GroundAccelerate)
-    GAMEHOOK_ADD(HookLadderMove, MoveBoolHook, MovementContext, LadderMove)
-    GAMEHOOK_ADD(HookMoveInit, MoveBoolHook, MovementContext, MoveInit)
-    GAMEHOOK_ADD(HookPlayerMove, MoveVoidHook, MovementContext, PlayerMove)
-    GAMEHOOK_ADD(HookProcessMovement, MoveVoidHook, MovementContext, ProcessMovement)
-    GAMEHOOK_ADD(HookSetupMove, SetupMoveHook, SetupMoveContext, SetupMove)
-    GAMEHOOK_ADD(HookTryPlayerMove, TryPlayerMoveHook, TryPlayerMoveContext, TryPlayerMove)
-    GAMEHOOK_ADD(HookWalkMove, MoveVoidHook, MovementContext, WalkMove)
-    GAMEHOOK_ADD(HookWaterMove, MoveVoidHook, MovementContext, WaterMove)
-    GAMEHOOK_ADD(HookOnJumpLegacy, LegacyJumpHook, LegacyJumpContext, OnJumpLegacy)
-    GAMEHOOK_ADD(HookOnJumpModern, ModernJumpHook, ModernJumpContext, OnJumpModern)
-    GAMEHOOK_ADD(HookCheckJumpButtonLegacy, LegacyJumpHook, LegacyJumpContext, CheckJumpButtonLegacy)
-    GAMEHOOK_ADD(HookCheckJumpButtonModern, ModernJumpHook, ModernJumpContext, CheckJumpButtonModern)
-
-#undef GAMEHOOK_ADD
-
-    // The detour stays until Tick(): an UnhookX() may come from inside the
-    // hook's own dispatch.
-#define GAMEHOOK_REMOVE(Method, Ctx, Which) \
-    bool GameHooksManager::Method(Source2ModGameHookId id) \
-    { \
-        return m_hooks[static_cast<size_t>(GameHook::Which)]->Remove(id); \
-    } \
-    bool GameHooksManager::Method(const GameHookHandler<Ctx>& handler, bool post) \
-    { \
-        return m_hooks[static_cast<size_t>(GameHook::Which)]->RemoveHandler(hookid::OwnerOfHandler(handler), &handler, post); \
-    }
-
-    GAMEHOOK_REMOVE(UnhookTakeDamage, TakeDamageContext, TakeDamage)
-    GAMEHOOK_REMOVE(UnhookCanAcquire, CanAcquireContext, CanAcquire)
-    GAMEHOOK_REMOVE(UnhookCanMove, CanMoveContext, CanMove)
-    GAMEHOOK_REMOVE(UnhookCanUse, CanUseContext, CanUse)
-    GAMEHOOK_REMOVE(UnhookPostThink, PostThinkContext, PostThink)
-    GAMEHOOK_REMOVE(UnhookProcessUsercmds, ProcessUsercmdsContext, ProcessUsercmds)
-    GAMEHOOK_REMOVE(UnhookSimulateUserCommands, SimulateUserCommandsContext, SimulateUserCommands)
-    GAMEHOOK_REMOVE(UnhookRunCommand, RunCommandContext, RunCommand)
-    GAMEHOOK_REMOVE(UnhookAcceptInput, AcceptInputContext, AcceptInput)
-    GAMEHOOK_REMOVE(UnhookTouch, TouchContext, Touch)
-    GAMEHOOK_REMOVE(UnhookDropWeapon, DropWeaponContext, DropWeapon)
-    GAMEHOOK_REMOVE(UnhookAirAccelerate, AirAccelerateContext, AirAccelerate)
-    GAMEHOOK_REMOVE(UnhookAirMove, MovementContext, AirMove)
-    GAMEHOOK_REMOVE(UnhookCanUnduck, MovementContext, CanUnduck)
-    GAMEHOOK_REMOVE(UnhookCategorizePosition, CategorizePositionContext, CategorizePosition)
-    GAMEHOOK_REMOVE(UnhookCheckFalling, MovementContext, CheckFalling)
-    GAMEHOOK_REMOVE(UnhookCheckParameters, MovementContext, CheckParameters)
-    GAMEHOOK_REMOVE(UnhookCheckVelocity, CheckVelocityContext, CheckVelocity)
-    GAMEHOOK_REMOVE(UnhookCheckWater, MovementContext, CheckWater)
-    GAMEHOOK_REMOVE(UnhookDuck, MovementContext, Duck)
-    GAMEHOOK_REMOVE(UnhookFriction, MovementContext, Friction)
-    GAMEHOOK_REMOVE(UnhookFullWalkMove, FullWalkMoveContext, FullWalkMove)
-    GAMEHOOK_REMOVE(UnhookGroundAccelerate, GroundAccelerateContext, GroundAccelerate)
-    GAMEHOOK_REMOVE(UnhookLadderMove, MovementContext, LadderMove)
-    GAMEHOOK_REMOVE(UnhookMoveInit, MovementContext, MoveInit)
-    GAMEHOOK_REMOVE(UnhookPlayerMove, MovementContext, PlayerMove)
-    GAMEHOOK_REMOVE(UnhookProcessMovement, MovementContext, ProcessMovement)
-    GAMEHOOK_REMOVE(UnhookSetupMove, SetupMoveContext, SetupMove)
-    GAMEHOOK_REMOVE(UnhookTryPlayerMove, TryPlayerMoveContext, TryPlayerMove)
-    GAMEHOOK_REMOVE(UnhookWalkMove, MovementContext, WalkMove)
-    GAMEHOOK_REMOVE(UnhookWaterMove, MovementContext, WaterMove)
-    GAMEHOOK_REMOVE(UnhookOnJumpLegacy, LegacyJumpContext, OnJumpLegacy)
-    GAMEHOOK_REMOVE(UnhookOnJumpModern, ModernJumpContext, OnJumpModern)
-    GAMEHOOK_REMOVE(UnhookCheckJumpButtonLegacy, LegacyJumpContext, CheckJumpButtonLegacy)
-    GAMEHOOK_REMOVE(UnhookCheckJumpButtonModern, ModernJumpContext, CheckJumpButtonModern)
-
-#undef GAMEHOOK_REMOVE
-
-    bool GameHooksManager::IsAvailable(GameHook hook)
+    namespace
     {
-        return hook < GameHook::Count && m_hooks[static_cast<size_t>(hook)]->IsAvailable();
+        bool InTable(HookPointId point)
+        {
+            return static_cast<int>(point) >= 0 && static_cast<size_t>(point) < kGameHookCount;
+        }
     }
 
-    void SetHookDebug(const char* name)
+    Source2ModHookId GameHooksManager::Add(HookPointId point, PluginId owner, const void* handler, bool post,
+                                           const HookTarget& target, const HookFilter& filter)
     {
-        s_hookDebug = (!name || !strcmp(name, "off")) ? "" : name;
+        if (!InTable(point))
+            return 0;
+        return m_hooks[static_cast<size_t>(point)]->Add(owner, handler, post, target, filter);
     }
 
-    const char* GetHookDebug()
+    PluginId GameHooksManager::OwnerOfHandler(HookPointId point, const void* handler) const
     {
-        return s_hookDebug.empty() ? "off" : s_hookDebug.c_str();
+        return InTable(point) ? m_hooks[static_cast<size_t>(point)]->OwnerOf(handler) : 0;
+    }
+
+    // The detour stays (gamehooks.h); an Unhook() may come from inside the
+    // hook's own dispatch, which iterates a copy of the list.
+    bool GameHooksManager::Remove(Source2ModHookId id)
+    {
+        for (auto& hook : m_hooks)
+            if (hook->Remove(id))
+                return true;
+        return false;
+    }
+
+    void GameHooksManager::RemoveInstance(const void* instance)
+    {
+        for (auto& hook : m_hooks)
+            hook->RemoveInstance(instance);
+    }
+
+    bool GameHooksManager::IsAvailable(HookPointId point)
+    {
+        return InTable(point) && m_hooks[static_cast<size_t>(point)]->IsAvailable();
     }
 }

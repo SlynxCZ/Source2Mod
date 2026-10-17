@@ -87,7 +87,7 @@ public:
     ISource2ModSounds* Sounds() override;
     ISource2ModTrace* Trace() override;
     ISource2ModTransmit* Transmit() override;
-    ISource2ModGameHooks* GameHooks() override;
+    ISource2ModHooks* Hooks() override;
     ISource2ModPaths* Paths() override;
 
     ISource2ModModule* LoadModule(const char* name) override;

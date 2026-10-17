@@ -42,7 +42,10 @@
 #include "crashhandler.h"
 #include "customhud.h"
 #include "events.h"
+#include "dynamichooks.h"
 #include "gamehooks.h"
+#include "entities.h"
+#include "hooks.h"
 #include "http.h"
 #include "mysql.h"
 #include "networkmessages.h"
@@ -78,24 +81,34 @@ namespace virtualhooks
 
     static std::vector<IGameEvent*> eventStack;
 
+    namespace
+    {
+        // What a pre hook point's answer does to the engine call: Supersede
+        // skips it, anything else lets it run.
+        KHook::Action PreAction(Action action)
+        {
+            return action == Action::Supersede ? KHook::Action::Supersede : KHook::Action::Ignore;
+        }
+    }
+
     Virtuals::Virtuals() :
         KHOOK_NEW(m_hGameFrame, &ISource2Server::GameFrame, this, &Virtuals::Hook_GameFramePre, &Virtuals::Hook_GameFrame),
-        KHOOK_NEW(m_hStartupServer, &INetworkServerService::StartupServer, this, nullptr, &Virtuals::Hook_StartupServer),
+        KHOOK_NEW(m_hStartupServer, &INetworkServerService::StartupServer, this, &Virtuals::Hook_StartupServerPre, &Virtuals::Hook_StartupServer),
         KHOOK_NEW(m_hDispatchConCommand, &ICvar::DispatchConCommand, this, &Virtuals::Hook_DispatchConCommand, nullptr),
         KHOOK_NEW(m_hClientCommand, &ISource2GameClients::ClientCommand, this, &Virtuals::Hook_ClientCommand, nullptr),
-        KHOOK_NEW(m_hClientPutInServer, &ISource2GameClients::ClientPutInServer, this, nullptr, &Virtuals::Hook_ClientPutInServer),
-        KHOOK_NEW(m_hClientVoice, &ISource2GameClients::ClientVoice, this, nullptr, &Virtuals::Hook_ClientVoice),
-        KHOOK_NEW(m_hClientSettingsChanged, &ISource2GameClients::ClientSettingsChanged, this, nullptr, &Virtuals::Hook_ClientSettingsChanged),
+        KHOOK_NEW(m_hClientPutInServer, &ISource2GameClients::ClientPutInServer, this, &Virtuals::Hook_ClientPutInServerPre, &Virtuals::Hook_ClientPutInServer),
+        KHOOK_NEW(m_hClientVoice, &ISource2GameClients::ClientVoice, this, &Virtuals::Hook_ClientVoicePre, &Virtuals::Hook_ClientVoice),
+        KHOOK_NEW(m_hClientSettingsChanged, &ISource2GameClients::ClientSettingsChanged, this, &Virtuals::Hook_ClientSettingsChangedPre, &Virtuals::Hook_ClientSettingsChanged),
         KHOOK_NEW(m_hClientSvcUserMessage, &ISource2GameClients::ClientSvcUserMessage, this, &Virtuals::Hook_ClientSvcUserMessage, nullptr),
         KHOOK_NEW(m_hClientDisconnect, &ISource2GameClients::ClientDisconnect, this, &Virtuals::Hook_ClientDisconnect, &Virtuals::Hook_ClientDisconnectPost),
-        KHOOK_NEW(m_hClientConnect, &ISource2GameClients::ClientConnect, this, &Virtuals::Hook_ClientConnect, nullptr),
-        KHOOK_NEW(m_hOnClientConnected, &ISource2GameClients::OnClientConnected, this, nullptr, &Virtuals::Hook_OnClientConnected),
-        KHOOK_NEW(m_hSteamAPIActivated, &ISource2Server::GameServerSteamAPIActivated, this, nullptr, &Virtuals::Hook_GameServerSteamAPIActivated),
-        KHOOK_NEW(m_hSteamAPIDeactivated, &ISource2Server::GameServerSteamAPIDeactivated, this, &Virtuals::Hook_GameServerSteamAPIDeactivated, nullptr),
+        KHOOK_NEW(m_hClientConnect, &ISource2GameClients::ClientConnect, this, &Virtuals::Hook_ClientConnect, &Virtuals::Hook_ClientConnectPost),
+        KHOOK_NEW(m_hOnClientConnected, &ISource2GameClients::OnClientConnected, this, &Virtuals::Hook_OnClientConnectedPre, &Virtuals::Hook_OnClientConnected),
+        KHOOK_NEW(m_hSteamAPIActivated, &ISource2Server::GameServerSteamAPIActivated, this, &Virtuals::Hook_GameServerSteamAPIActivatedPre, &Virtuals::Hook_GameServerSteamAPIActivated),
+        KHOOK_NEW(m_hSteamAPIDeactivated, &ISource2Server::GameServerSteamAPIDeactivated, this, &Virtuals::Hook_GameServerSteamAPIDeactivated, &Virtuals::Hook_GameServerSteamAPIDeactivatedPost),
         // PostEventAbstract is overloaded, so the member function pointer has to be disambiguated explicitly.
         KHOOK_NEW(m_hPostEventAbstract, static_cast<void (IGameEventSystem::*)(CSplitScreenSlot, bool, int, const uint64*, INetworkMessageInternal*, const CNetMessage*, unsigned long, NetChannelBufType_t)>(&IGameEventSystem::PostEventAbstract), this, &Virtuals::Hook_PostEventAbstract, nullptr),
         KHOOK_NEW(m_hOnServerGamePostSimulate, &IGameSystem::OnServerGamePostSimulate, this, nullptr, &Virtuals::Hook_OnServerGamePostSimulate),
-        KHOOK_NEW(m_hLoadEventsFromFile, &IGameEventManager2::LoadEventsFromFile, this, nullptr, &Virtuals::Hook_LoadEventsFromFile),
+        KHOOK_NEW(m_hLoadEventsFromFile, &IGameEventManager2::LoadEventsFromFile, this, &Virtuals::Hook_LoadEventsFromFilePre, &Virtuals::Hook_LoadEventsFromFile),
         KHOOK_NEW(m_hFireEvent, &IGameEventManager2::FireEvent, this, &Virtuals::Hook_FireEvent, &Virtuals::Hook_FireEventPost),
         KHOOK_NEW(m_hSendNetMessage, &CServerSideClientBase::SendNetMessage, this, &Virtuals::Hook_SendNetMessage, nullptr),
         KHOOK_NEW(m_hFilterMessage, &INetworkMessageProcessingPreFilter::FilterMessage, this, &Virtuals::Hook_FilterMessage, nullptr),
@@ -272,7 +285,9 @@ namespace virtualhooks
     KHook::Return<void> Virtuals::Hook_GameFramePre(ISource2Server* pThis, bool simulating, bool bFirstTick, bool bLastTick)
     {
         slotinput::Eject();
-        return { KHook::Action::Ignore };
+
+        GameFrameContext ctx{ simulating, bFirstTick, bLastTick };
+        return { PreAction(hooks::hooksManager.Dispatch(HookPointId::GameFrame, ctx, false)) };
     }
 
     KHook::Return<void> Virtuals::Hook_GameFrame(ISource2Server* pThis, bool simulating, bool bFirstTick, bool bLastTick)
@@ -304,12 +319,15 @@ namespace virtualhooks
         // that were held back to be announced from here.
         permissions::permissionsManager.OnGameFrame();
 
-        pluginManager.OnGameFrame(simulating, bFirstTick, bLastTick);
+        {
+            GameFrameContext ctx{ simulating, bFirstTick, bLastTick };
+            hooks::hooksManager.Dispatch(HookPointId::GameFrame, ctx, true);
+        }
 
-        // Detours that lost their last listener come out here, outside their
-        // own dispatch. Plugin unloads never run from here: see
+        // Function-point detours that lost their last handler come out here,
+        // outside their own dispatch. Plugin unloads never run from here: see
         // PluginManager::RequestUnload.
-        gamehooks::gameHooksManager.Tick();
+        dynamichooks::dynamicHooksManager.Tick();
 
         if (m_bSelfUnloadPending)
         {
@@ -349,10 +367,6 @@ namespace virtualhooks
             shared::g_pEntitySystem = pEntitySystem;
             pEntitySystem->AddListenerEntity(&entityListener);
 
-            // Plugins register their listeners while they load, which is
-            // before the first entity system exists at all.
-            entities::entitiesManager.AttachEntityListeners();
-
             shared::g_bDetoursLoaded = true;
         }
 
@@ -363,9 +377,16 @@ namespace virtualhooks
 
         g_bHasTicked = false;
 
-        pluginManager.OnStartupServer(config, pWorldSession, pszMapName);
+        StartupServerContext ctx{ &config, pWorldSession, pszMapName };
+        hooks::hooksManager.Dispatch(HookPointId::StartupServer, ctx, true);
 
         return { KHook::Action::Ignore };
+    }
+
+    KHook::Return<void> Virtuals::Hook_StartupServerPre(INetworkServerService* pThis, const GameSessionConfiguration_t& config, ISource2WorldSession* pWorldSession, const char* pszMapName)
+    {
+        StartupServerContext ctx{ &config, pWorldSession, pszMapName };
+        return { PreAction(hooks::hooksManager.Dispatch(HookPointId::StartupServer, ctx, false)) };
     }
 
     KHook::Return<void> Virtuals::Hook_ClientPutInServer(ISource2GameClients* pThis, CPlayerSlot slot, const char* pszName, int type, uint64 xuid)
@@ -377,27 +398,48 @@ namespace virtualhooks
         // First: a plugin's OnClientPutInServer may already check permissions.
         permissions::permissionsManager.OnClientPutInServer(slot, type, xuid);
 
-        pluginManager.OnClientPutInServer(slot, pszName, type, xuid);
+        ClientPutInServerContext ctx{ slot, pszName, type, xuid };
+        hooks::hooksManager.Dispatch(HookPointId::ClientPutInServer, ctx, true);
 
         return { KHook::Action::Ignore };
+    }
+
+    KHook::Return<void> Virtuals::Hook_ClientPutInServerPre(ISource2GameClients* pThis, CPlayerSlot slot, const char* pszName, int type, uint64 xuid)
+    {
+        ClientPutInServerContext ctx{ slot, pszName, type, xuid };
+        return { PreAction(hooks::hooksManager.Dispatch(HookPointId::ClientPutInServer, ctx, false)) };
     }
 
     KHook::Return<void> Virtuals::Hook_ClientVoice(ISource2GameClients* pThis, CPlayerSlot slot)
     {
         TK_VPROF("Source2Mod::ClientVoice");
 
-        pluginManager.OnClientVoice(slot);
+        ClientSlotContext ctx{ slot };
+        hooks::hooksManager.Dispatch(HookPointId::ClientVoice, ctx, true);
 
         return { KHook::Action::Ignore };
+    }
+
+    KHook::Return<void> Virtuals::Hook_ClientVoicePre(ISource2GameClients* pThis, CPlayerSlot slot)
+    {
+        ClientSlotContext ctx{ slot };
+        return { PreAction(hooks::hooksManager.Dispatch(HookPointId::ClientVoice, ctx, false)) };
     }
 
     KHook::Return<void> Virtuals::Hook_ClientSettingsChanged(ISource2GameClients* pThis, CPlayerSlot slot)
     {
         TK_VPROF("Source2Mod::ClientSettingsChanged");
 
-        pluginManager.OnClientSettingsChanged(slot);
+        ClientSlotContext ctx{ slot };
+        hooks::hooksManager.Dispatch(HookPointId::ClientSettingsChanged, ctx, true);
 
         return { KHook::Action::Ignore };
+    }
+
+    KHook::Return<void> Virtuals::Hook_ClientSettingsChangedPre(ISource2GameClients* pThis, CPlayerSlot slot)
+    {
+        ClientSlotContext ctx{ slot };
+        return { PreAction(hooks::hooksManager.Dispatch(HookPointId::ClientSettingsChanged, ctx, false)) };
     }
 
     KHook::Return<void> Virtuals::Hook_DispatchConCommand(ICvar* pThis, ConCommandRef cmd, const CCommandContext& ctx, const CCommand& args)
@@ -523,9 +565,16 @@ namespace virtualhooks
 
         permissions::permissionsManager.OnSteamAPIActivated();
 
-        pluginManager.OnGameServerSteamAPIActivated();
+        EmptyContext ctx;
+        hooks::hooksManager.Dispatch(HookPointId::GameServerSteamAPIActivated, ctx, true);
 
         return { KHook::Action::Ignore };
+    }
+
+    KHook::Return<void> Virtuals::Hook_GameServerSteamAPIActivatedPre(ISource2Server* pThis)
+    {
+        EmptyContext ctx;
+        return { PreAction(hooks::hooksManager.Dispatch(HookPointId::GameServerSteamAPIActivated, ctx, false)) };
     }
 
     KHook::Return<void> Virtuals::Hook_GameServerSteamAPIDeactivated(ISource2Server* pThis)
@@ -536,8 +585,14 @@ namespace virtualhooks
 
         permissions::permissionsManager.OnSteamAPIDeactivated();
 
-        pluginManager.OnGameServerSteamAPIDeactivated();
+        EmptyContext ctx;
+        return { PreAction(hooks::hooksManager.Dispatch(HookPointId::GameServerSteamAPIDeactivated, ctx, false)) };
+    }
 
+    KHook::Return<void> Virtuals::Hook_GameServerSteamAPIDeactivatedPost(ISource2Server* pThis)
+    {
+        EmptyContext ctx;
+        hooks::hooksManager.Dispatch(HookPointId::GameServerSteamAPIDeactivated, ctx, true);
         return { KHook::Action::Ignore };
     }
 
@@ -572,21 +627,41 @@ namespace virtualhooks
     {
         TK_VPROF("Source2Mod::ClientConnect");
 
-        // A plugin that refuses has written the reason; the engine never
-        // sees the connection.
-        if (!pluginManager.OnClientConnect(slot, pszName, xuid, pszNetworkID, unk1, pRejectReason))
-            return { KHook::Action::Supersede, false };
+        // A handler that refuses (result false, Supersede) has written the
+        // reason; the engine never sees the connection.
+        ClientConnectContext ctx{ slot, pszName, xuid, pszNetworkID, unk1, pRejectReason, true };
+        const Action action = hooks::hooksManager.Dispatch(HookPointId::ClientConnect, ctx, false);
+        if (action == Action::Ignore)
+            return { KHook::Action::Ignore, true };
+        return { action, ctx.result };
+    }
 
-        return { KHook::Action::Ignore };
+    KHook::Return<bool> Virtuals::Hook_ClientConnectPost(ISource2GameClients* pThis, CPlayerSlot slot, const char* pszName, uint64 xuid, const char* pszNetworkID, bool unk1, CBufferString* pRejectReason)
+    {
+        bool original = true;
+        if (auto* value = static_cast<bool*>(KHook::GetOriginalValuePtr()))
+            original = *value;
+        ClientConnectContext ctx{ slot, pszName, xuid, pszNetworkID, unk1, pRejectReason, original };
+        const Action action = hooks::hooksManager.Dispatch(HookPointId::ClientConnect, ctx, true);
+        if (action == Action::Ignore)
+            return { KHook::Action::Ignore, original };
+        return { KHook::Action::Override, ctx.result };
     }
 
     KHook::Return<void> Virtuals::Hook_OnClientConnected(ISource2GameClients* pThis, CPlayerSlot slot, const char* pszName, uint64 xuid, const char* pszNetworkID, const char* pszAddress, bool bFakePlayer)
     {
         TK_VPROF("Source2Mod::OnClientConnected");
 
-        pluginManager.OnClientConnected(slot, pszName, xuid, pszNetworkID, pszAddress, bFakePlayer);
+        ClientConnectedContext ctx{ slot, pszName, xuid, pszNetworkID, pszAddress, bFakePlayer };
+        hooks::hooksManager.Dispatch(HookPointId::ClientConnected, ctx, true);
 
         return { KHook::Action::Ignore };
+    }
+
+    KHook::Return<void> Virtuals::Hook_OnClientConnectedPre(ISource2GameClients* pThis, CPlayerSlot slot, const char* pszName, uint64 xuid, const char* pszNetworkID, const char* pszAddress, bool bFakePlayer)
+    {
+        ClientConnectedContext ctx{ slot, pszName, xuid, pszNetworkID, pszAddress, bFakePlayer };
+        return { PreAction(hooks::hooksManager.Dispatch(HookPointId::ClientConnected, ctx, false)) };
     }
 
     KHook::Return<void> Virtuals::Hook_ClientDisconnect(ISource2GameClients* pThis, CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* pszName, uint64 xuid, const char* pszNetworkID)
@@ -594,9 +669,8 @@ namespace virtualhooks
         TK_VPROF("Source2Mod::ClientDisconnect");
 
         // Pre: the plugins see the player while everything is still there.
-        pluginManager.OnClientDisconnect(slot, reason, pszName, xuid, pszNetworkID);
-
-        return { KHook::Action::Ignore };
+        ClientDisconnectContext ctx{ slot, reason, pszName, xuid, pszNetworkID };
+        return { PreAction(hooks::hooksManager.Dispatch(HookPointId::ClientDisconnect, ctx, false)) };
     }
 
     KHook::Return<void> Virtuals::Hook_ClientDisconnectPost(ISource2GameClients* pThis, CPlayerSlot slot, ENetworkDisconnectionReason reason, const char* pszName, uint64 xuid, const char* pszNetworkID)
@@ -607,7 +681,10 @@ namespace virtualhooks
         transmit::transmitManager.OnClientDisconnect(slot);
         menus::menuManager.OnClientDisconnect(slot);
 
-        pluginManager.OnClientDisconnectPost(slot, reason, pszName, xuid, pszNetworkID);
+        {
+            ClientDisconnectContext ctx{ slot, reason, pszName, xuid, pszNetworkID };
+            hooks::hooksManager.Dispatch(HookPointId::ClientDisconnect, ctx, true);
+        }
 
         // After the plugins: theirs is the last look at who the player was.
         permissions::permissionsManager.OnClientDisconnect(slot);
@@ -648,9 +725,17 @@ namespace virtualhooks
             events::InitEvents();
         )
 
-        pluginManager.OnLoadEventsFromFile(pThis, filename, bSearchAll);
+        LoadEventsFromFileContext ctx{ pThis, filename, bSearchAll };
+        hooks::hooksManager.Dispatch(HookPointId::LoadEventsFromFile, ctx, true);
 
         return { KHook::Action::Ignore, 0 };
+    }
+
+    KHook::Return<int> Virtuals::Hook_LoadEventsFromFilePre(IGameEventManager2* pThis, const char* filename, bool bSearchAll)
+    {
+        LoadEventsFromFileContext ctx{ pThis, filename, bSearchAll };
+        const Action action = hooks::hooksManager.Dispatch(HookPointId::LoadEventsFromFile, ctx, false);
+        return { action == Action::Supersede ? KHook::Action::Supersede : KHook::Action::Ignore, 0 };
     }
 
     KHook::Return<bool> Virtuals::Hook_FireEvent(IGameEventManager2* pThis, IGameEvent* event, bool bDontBroadcast)
@@ -762,6 +847,7 @@ namespace virtualhooks
 
     void CEntityListener::OnEntitySpawned(CEntityInstance* pEntity)
     {
+        entities::entitiesManager.NotifySpawned(pEntity);
     }
 
     void CEntityListener::OnEntityCreated(CEntityInstance* pEntity)
@@ -770,11 +856,17 @@ namespace virtualhooks
 
         if (!V_strcmp("cs_gamerules", pEntity->GetClassname()))
             shared::g_pGameRules = static_cast<CCSGameRulesProxy*>(pEntity)->m_pGameRules;
+
+        entities::entitiesManager.NotifyCreated(pEntity);
     }
 
     void CEntityListener::OnEntityDeleted(CEntityInstance* pEntity)
     {
         TK_VPROF("Source2Mod::OnEntityDeleted");
+
+        // The plugins first, while the entity is whole; then the core forgets it.
+        entities::entitiesManager.NotifyDeleted(pEntity);
+        hooks::ForgetInstance(pEntity);
 
         transmit::transmitManager.OnEntityDeleted(pEntity);
         scripts::scriptsManager.OnEntityDeleted(pEntity);
@@ -788,5 +880,6 @@ namespace virtualhooks
 
     void CEntityListener::OnEntityParentChanged(CEntityInstance* pEntity, CEntityInstance* pNewParent)
     {
+        entities::entitiesManager.NotifyParentChanged(pEntity, pNewParent);
     }
 }

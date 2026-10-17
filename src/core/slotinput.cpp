@@ -36,7 +36,7 @@
 #include "slotinput.h"
 
 #include "gameconfig.h"
-#include "gamehooks.h"
+#include "hooks.h"
 #include "menus.h"
 #include "pluginapi.h"
 #include "shared.h"
@@ -161,7 +161,7 @@ namespace slotinput {
         Learned g_Learned[ABSOLUTE_PLAYER_LIMIT];
         std::vector<PendingKey> g_Pending;
         bool g_bAnyInjected = false;
-        Source2ModGameHookId g_RunCommandHook = 0;
+        Source2ModHookId g_RunCommandHook = 0;
 
         int TickCount()
         {
@@ -604,7 +604,7 @@ namespace slotinput {
             return true;
         }
 
-        GameHookReturn<void> OnRunCommand(RunCommandContext& ctx, bool post)
+        HookReturn<void> OnRunCommand(RunCommandContext& ctx, bool post)
         {
             Eject();
 
@@ -628,13 +628,13 @@ namespace slotinput {
 
     void Init()
     {
-        g_RunCommandHook = gamehooks::gameHooksManager.HookRunCommand(OnRunCommand, false);
+        g_RunCommandHook = hooks::hooksManager.Hook(HookPoint::RunCommand, HookTarget::All(), OnRunCommand, false);
     }
 
     void Shutdown()
     {
         if (g_RunCommandHook)
-            gamehooks::gameHooksManager.UnhookRunCommand(g_RunCommandHook);
+            hooks::hooksManager.Unhook(g_RunCommandHook);
         g_RunCommandHook = 0;
         g_Pending.clear();
 

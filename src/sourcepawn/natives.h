@@ -41,6 +41,7 @@
 #pragma once
 
 #include <source2mod/ISource2ModTypes.h>
+#include <source2mod/ISource2ModFunctions.h>
 
 #include <entityhandle.h>
 
@@ -89,7 +90,15 @@ namespace sourcepawn
     const sp_nativeinfo_t* GetGameHookNatives();     // natives_gamehooks.cpp
     const sp_nativeinfo_t* GetEventNatives();        // natives_events.cpp
     const sp_nativeinfo_t* GetGameConfigNatives();   // natives_gameconfig.cpp
-    const sp_nativeinfo_t* GetRawHookNatives();      // natives_rawhooks.cpp
+    const sp_nativeinfo_t* GetRawHookNatives();      // natives_rawhooks.cpp: HookFunction, FunctionContext
+
+    /// The core function behind a Source2ModFunction handle (natives_gameconfig.cpp).
+    ISource2ModFunction* DescribedFunction(SourcePawn::IPluginContext* ctx, cell_t handle);
+
+    /// Drops the function hooks a script made (natives_rawhooks.cpp).
+    void ForgetFunctionHooks(PluginId id);
+    void ForgetEntityListeners(PluginId id);
+    bool UnhookFunctionHook(PluginId owner, Source2ModHookId id);
     const sp_nativeinfo_t* GetWorldNatives();        // natives_world.cpp
     const sp_nativeinfo_t* GetNetNatives();          // natives_net.cpp
     const sp_nativeinfo_t* GetUiNatives();           // natives_ui.cpp
@@ -131,7 +140,6 @@ namespace sourcepawn
     // Per-area cleanup when a plugin goes (RemoveAllForPlugin calls these).
     void ForgetEventHooks(PluginId id);     // natives.cpp
     void ForgetConVarHooks(PluginId id);    // natives_convars.cpp
-    void ForgetEntityListeners(PluginId id); // natives_entities.cpp
     void ForgetGameHooks(PluginId id);       // natives_gamehooks.cpp
     void ForgetWorldHooks(PluginId id);      // natives_world.cpp
     void ForgetUiHooks(PluginId id);         // natives_ui.cpp

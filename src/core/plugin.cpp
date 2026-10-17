@@ -45,6 +45,7 @@
 #include "customhud.h"
 #include "events.h"
 #include "gameconfig.h"
+#include "dynamichooks.h"
 #include "gamehooks.h"
 #include "gamesystems.h"
 #include "geoip.h"
@@ -232,6 +233,7 @@ bool Source2ModCore::Unload(char* error, size_t maxlen)
     // None of the hooked game functions is on the stack here, so these come
     // out synchronously like the rest.
     gamehooks::gameHooksManager.Shutdown();
+    dynamichooks::dynamicHooksManager.Shutdown();
     inlinehooks::inlines.DestructListeners();
     virtualhooks::virtuals.DestructListeners();
     scripts::scriptsManager.Shutdown();
