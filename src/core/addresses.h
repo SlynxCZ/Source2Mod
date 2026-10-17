@@ -56,8 +56,6 @@
     }                                                                 \
                                                                       \
     variable = addr;                                                  \
-                                                                      \
-    FP_DEBUG("Found '{}' at {}", name, fmt::ptr(variable.GetPtr()));  \
 }
 
 /// Same as RESOLVE_SIG, but a miss is not fatal: the address is left null and
@@ -74,7 +72,6 @@
     else                                                              \
     {                                                                 \
         variable = addr;                                              \
-        FP_DEBUG("Found '{}' at {}", name, fmt::ptr(variable.GetPtr())); \
     }                                                                 \
 }
 
