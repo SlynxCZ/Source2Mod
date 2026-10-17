@@ -87,7 +87,7 @@ if ($S2SDK_REF) {
 Write-Host "s2sdk: $(git -C $S2SDK_DIR log -1 --format='%h %s')"
 
 Write-Host "=== Downloading Metamod-Source ==="
-git clone --recursive --branch master --single-branch https://github.com/alliedmodders/metamod-source.git $MMSOURCE_DIR
+git clone --recursive --branch master --single-branch https://github.com/Source2Mod/metamod-source.git $MMSOURCE_DIR
 
 # Hooking plugins refuse to load on a core built with a different khook.hpp
 # than the SDK's. A KHook bump that only touched its src/ is fine.
