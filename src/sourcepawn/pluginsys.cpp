@@ -23,6 +23,7 @@
 #include "handles.h"
 #include "scriptplugin.h"
 
+#include "core/hookid.h"
 #include "core/pluginmanager.h"
 #include "core/scheduler.h"
 #include "utils/log.h"
@@ -35,6 +36,7 @@
 #include <algorithm>
 #include <cstring>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -54,13 +56,34 @@ namespace sourcepawn
         // ---- natives made by plugins ----------------------------------------------
 
         // The native call being served by a script (Source2ModNatives.GetCell & co. read it).
+        // A C++ caller (ISource2ModScriptNative) has no context: `caller` is
+        // null, `params` holds each argument's cell (0 for the ones passed by
+        // address) and `host` the arguments themselves.
         struct NativeFrame
         {
             IPluginContext* caller;
             const cell_t* params;
             IPluginContext* owner;
+            const Source2ModScriptArg* host = nullptr;
         };
         std::vector<NativeFrame> g_nativeFrames;
+
+        // The cell a script reads with GetCell for a C++ argument.
+        cell_t HostArgCell(const Source2ModScriptArg& arg)
+        {
+            switch (arg.type)
+            {
+            case Source2ModScriptArgType::Cell:
+            case Source2ModScriptArgType::Bool:
+                return arg.cell;
+            case Source2ModScriptArgType::Float:
+                return sp_ftoc(arg.flt);
+            case Source2ModScriptArgType::Entity:
+                return EntityCell(arg.entity);
+            default:
+                return 0;
+            }
+        }
 
         class DynamicNative final : public INativeCallback
         {
@@ -97,9 +120,52 @@ namespace sourcepawn
                 return result;
             }
 
+            // From C++: the script's NativeCall with `plugin` INVALID_HANDLE;
+            // an error in it stops there (reported on the console).
+            bool InvokeFromHost(const Source2ModScriptArg* hostArgs, int count, cell_t* result, std::string& error)
+            {
+                if (!m_owner)
+                {
+                    error = "native \"" + m_name + "\" is not available (no plugin serves it)";
+                    return false;
+                }
+                if (!m_scriptFn)
+                {
+                    error = "native \"" + m_name + "\" belongs to a native plugin; call its code directly";
+                    return false;
+                }
+                if (count < 0 || (count > 0 && !hostArgs) || static_cast<size_t>(count) >= SP_MAX_EXEC_PARAMS)
+                {
+                    error = "bad argument list";
+                    return false;
+                }
+
+                std::vector<cell_t> params(static_cast<size_t>(count) + 1);
+                params[0] = count;
+                for (int i = 0; i < count; i++)
+                    params[i + 1] = HostArgCell(hostArgs[i]);
+
+                sp::CallArgs args;
+                args.PushCell(0);
+                args.PushCell(count);
+
+                IPluginFunction* fn = m_scriptFn;
+                g_nativeFrames.push_back({ nullptr, params.data(), fn->GetParentRuntime()->GetDefaultContext(), hostArgs });
+                cell_t res = 0;
+                const bool ok = sourcepawn::Invoke(fn, args, &res);
+                g_nativeFrames.pop_back();
+
+                if (result)
+                    *result = ok ? res : 0;
+                if (!ok)
+                    error = "native \"" + m_name + "\" raised an error (see the server console)";
+                return ok;
+            }
+
             const std::string& Name() const { return m_name; }
             PluginId Owner() const { return m_owner; }
             bool Alive() const { return m_owner != 0; }
+            bool IsScript() const { return m_scriptFn != nullptr; }
 
             void SetScript(PluginId owner, IPluginFunction* fn)
             {
@@ -217,6 +283,17 @@ namespace sourcepawn
             return frame;
         }
 
+        // A C++ caller's argument `param` (checked by NativeParam).
+        const Source2ModScriptArg& HostArg(const NativeFrame* frame, cell_t param)
+        {
+            return frame->host[param - 1];
+        }
+
+        cell_t WrongHostArg(IPluginContext* ctx, cell_t param, const char* wanted)
+        {
+            return ctx->ThrowNativeError("Parameter %d from the C++ caller is not %s", param, wanted);
+        }
+
         // Source2ModNatives.CreateNative(const char[] name, NativeCall func)
         cell_t N_CreateNative(IPluginContext* ctx, const cell_t* params)
         {
@@ -256,10 +333,22 @@ namespace sourcepawn
             NativeFrame* frame = NativeParam(ctx, params[1]);
             if (!frame)
                 return 0;
-            char* str = nullptr;
-            const int err = frame->caller->LocalToString(frame->params[params[1]], &str);
-            if (err != SP_ERROR_NONE)
-                return err;
+            const char* str = nullptr;
+            if (frame->host)
+            {
+                const Source2ModScriptArg& arg = HostArg(frame, params[1]);
+                if (arg.type != Source2ModScriptArgType::String && arg.type != Source2ModScriptArgType::StringBuffer)
+                    return WrongHostArg(ctx, params[1], "a string");
+                str = arg.AsString();
+            }
+            else
+            {
+                char* local = nullptr;
+                const int err = frame->caller->LocalToString(frame->params[params[1]], &local);
+                if (err != SP_ERROR_NONE)
+                    return err;
+                str = local;
+            }
             cell_t* out;
             ctx->LocalToPhysAddr(params[2], &out);
             *out = static_cast<cell_t>(strlen(str));
@@ -272,10 +361,22 @@ namespace sourcepawn
             NativeFrame* frame = NativeParam(ctx, params[1]);
             if (!frame)
                 return 0;
-            char* str = nullptr;
-            const int err = frame->caller->LocalToString(frame->params[params[1]], &str);
-            if (err != SP_ERROR_NONE)
-                return err;
+            const char* str = nullptr;
+            if (frame->host)
+            {
+                const Source2ModScriptArg& arg = HostArg(frame, params[1]);
+                if (arg.type != Source2ModScriptArgType::String && arg.type != Source2ModScriptArgType::StringBuffer)
+                    return WrongHostArg(ctx, params[1], "a string");
+                str = arg.AsString();
+            }
+            else
+            {
+                char* local = nullptr;
+                const int err = frame->caller->LocalToString(frame->params[params[1]], &local);
+                if (err != SP_ERROR_NONE)
+                    return err;
+                str = local;
+            }
             size_t written = 0;
             ctx->StringToLocalUTF8(params[2], params[3], str, &written);
             cell_t* bytes;
@@ -292,8 +393,24 @@ namespace sourcepawn
                 return 0;
             const char* source = LocalString(ctx, params[2]);
             size_t written = 0;
-            int err;
-            if (params[0] < 4 || params[4])
+            int err = SP_ERROR_NONE;
+            if (frame->host)
+            {
+                const Source2ModScriptArg& arg = HostArg(frame, params[1]);
+                if (arg.type != Source2ModScriptArgType::StringBuffer || !arg.buffer || arg.size == 0)
+                    return WrongHostArg(ctx, params[1], "a string buffer");
+                const size_t room = std::min<size_t>(arg.size, params[3] > 0 ? static_cast<size_t>(params[3]) : 0);
+                if (room > 0)
+                {
+                    // UTF-8 safe like StringToLocalUTF8: no sequence cut in half.
+                    written = std::min(strlen(source), room - 1);
+                    while (written > 0 && written < strlen(source) && (static_cast<unsigned char>(source[written]) & 0xC0) == 0x80)
+                        written--;
+                    memcpy(arg.buffer, source, written);
+                    arg.buffer[written] = '\0';
+                }
+            }
+            else if (params[0] < 4 || params[4])
                 err = frame->caller->StringToLocalUTF8(frame->params[params[1]], params[3], source, &written);
             else
             {
@@ -315,10 +432,11 @@ namespace sourcepawn
         }
 
         // A Function is only an id; it means the same in the caller's plugin.
+        // A C++ caller has no functions to pass: INVALID_FUNCTION.
         cell_t N_GetNativeFunction(IPluginContext* ctx, const cell_t* params)
         {
             NativeFrame* frame = NativeParam(ctx, params[1]);
-            return frame ? frame->params[params[1]] : 0;
+            return frame && !frame->host ? frame->params[params[1]] : 0;
         }
 
         cell_t N_GetNativeCellRef(IPluginContext* ctx, const cell_t* params)
@@ -326,6 +444,15 @@ namespace sourcepawn
             NativeFrame* frame = NativeParam(ctx, params[1]);
             if (!frame)
                 return 0;
+            if (frame->host)
+            {
+                const Source2ModScriptArg& arg = HostArg(frame, params[1]);
+                if (arg.type == Source2ModScriptArgType::CellRef && arg.cellRef)
+                    return *arg.cellRef;
+                if (arg.type == Source2ModScriptArgType::FloatRef && arg.floatRef)
+                    return sp_ftoc(*arg.floatRef);
+                return WrongHostArg(ctx, params[1], "a reference");
+            }
             cell_t* addr;
             if (const int err = frame->caller->LocalToPhysAddr(frame->params[params[1]], &addr); err != SP_ERROR_NONE)
                 return ctx->ThrowNativeErrorEx(err, "Could not read argument");
@@ -337,6 +464,17 @@ namespace sourcepawn
             NativeFrame* frame = NativeParam(ctx, params[1]);
             if (!frame)
                 return 0;
+            if (frame->host)
+            {
+                const Source2ModScriptArg& arg = HostArg(frame, params[1]);
+                if (arg.type == Source2ModScriptArgType::CellRef && arg.cellRef)
+                    *arg.cellRef = params[2];
+                else if (arg.type == Source2ModScriptArgType::FloatRef && arg.floatRef)
+                    *arg.floatRef = sp_ctof(params[2]);
+                else
+                    return WrongHostArg(ctx, params[1], "a reference");
+                return 0;
+            }
             cell_t* addr;
             if (const int err = frame->caller->LocalToPhysAddr(frame->params[params[1]], &addr); err != SP_ERROR_NONE)
                 return ctx->ThrowNativeErrorEx(err, "Could not read argument");
@@ -352,10 +490,19 @@ namespace sourcepawn
                 return 0;
             cell_t* src;
             cell_t* dest;
-            if (int err = frame->caller->LocalToPhysAddr(frame->params[params[1]], &src); err != SP_ERROR_NONE)
+            size_t count = static_cast<size_t>(std::max(params[3], 0));
+            if (frame->host)
+            {
+                const Source2ModScriptArg& arg = HostArg(frame, params[1]);
+                if (arg.type != Source2ModScriptArgType::Array || !arg.array)
+                    return WrongHostArg(ctx, params[1], "an array");
+                src = arg.array;
+                count = std::min<size_t>(count, arg.size);
+            }
+            else if (int err = frame->caller->LocalToPhysAddr(frame->params[params[1]], &src); err != SP_ERROR_NONE)
                 return err;
             ctx->LocalToPhysAddr(params[2], &dest);
-            memcpy(dest, src, static_cast<size_t>(std::max(params[3], 0)) * sizeof(cell_t));
+            memcpy(dest, src, count * sizeof(cell_t));
             return SP_ERROR_NONE;
         }
 
@@ -367,10 +514,20 @@ namespace sourcepawn
                 return 0;
             cell_t* src;
             cell_t* dest;
-            if (int err = frame->caller->LocalToPhysAddr(frame->params[params[1]], &dest); err != SP_ERROR_NONE)
+            size_t count = static_cast<size_t>(std::max(params[3], 0));
+            if (frame->host)
+            {
+                // Only an array the C++ caller passed with copyback takes writes.
+                const Source2ModScriptArg& arg = HostArg(frame, params[1]);
+                if (arg.type != Source2ModScriptArgType::Array || !arg.array || !arg.copyback)
+                    return WrongHostArg(ctx, params[1], "an array passed with copyback");
+                dest = arg.array;
+                count = std::min<size_t>(count, arg.size);
+            }
+            else if (int err = frame->caller->LocalToPhysAddr(frame->params[params[1]], &dest); err != SP_ERROR_NONE)
                 return err;
             ctx->LocalToPhysAddr(params[2], &src);
-            memcpy(dest, src, static_cast<size_t>(std::max(params[3], 0)) * sizeof(cell_t));
+            memcpy(dest, src, count * sizeof(cell_t));
             return SP_ERROR_NONE;
         }
 
@@ -379,6 +536,8 @@ namespace sourcepawn
             NativeFrame* frame = NativeParam(ctx, params[1]);
             if (!frame)
                 return 0;
+            if (frame->host)
+                return HostArg(frame, params[1]).type == Source2ModScriptArgType::NullVector;
             cell_t* addr = nullptr;
             frame->caller->LocalToPhysAddr(frame->params[params[1]], &addr);
             return addr == frame->caller->GetNullRef(SP_NULL_VECTOR);
@@ -389,6 +548,8 @@ namespace sourcepawn
             NativeFrame* frame = NativeParam(ctx, params[1]);
             if (!frame)
                 return 0;
+            if (frame->host)
+                return HostArg(frame, params[1]).type == Source2ModScriptArgType::NullString;
             char* str = nullptr;
             frame->caller->LocalToStringNULL(frame->params[params[1]], &str);
             return str == nullptr;
@@ -404,6 +565,8 @@ namespace sourcepawn
             NativeFrame* frame = CurrentNative(ctx);
             if (!frame)
                 return 0;
+            if (frame->host)
+                return ctx->ThrowNativeError("Source2ModNatives.FormatString: the native was called from C++, there is no format to read");
 
             const cell_t outParam = params[1];
             const cell_t fmtParam = params[2];
@@ -447,10 +610,15 @@ namespace sourcepawn
         // Registered during a load, announced once it is done.
         std::map<PluginId, std::vector<std::string>> g_unannounced;
 
+        // C++ plugins' AddLibraryListener().
+        hookid::HookList<Source2ModLibraryHandler> g_libraryListeners;
+
         void Announce(const std::string& name, bool added)
         {
             for (ScriptPlugin* script : ScriptPlugin::Running())
                 script->CallForwardString(added ? "OnLibraryAdded" : "OnLibraryRemoved", name.c_str());
+            for (const Source2ModLibraryHandler& handler : g_libraryListeners.Snapshot())
+                handler(name.c_str(), added);
         }
 
         // A library's first owner announces it.
@@ -492,6 +660,11 @@ namespace sourcepawn
         constexpr cell_t ET_Event = 2;
         constexpr cell_t ET_Hook = 3;
         constexpr cell_t ET_LowEvent = 4;
+
+        // ParamType (functions.inc) as far as a C++ hook tells them apart.
+        constexpr cell_t kParamAny = 0;
+        constexpr cell_t kParamFloat = 2 << 1;
+        constexpr cell_t kParamFloatByRef = (2 << 1) | 1;
 
         constexpr size_t kMaxCallParams = 32;
         // INVALID_FUNCTION: the compiler makes it null, 0; no function has that id.
@@ -537,6 +710,66 @@ namespace sourcepawn
                 return out;
             }
         };
+
+        // A forward's result over its functions, by ExecType.
+        struct ResultCombiner
+        {
+            explicit ResultCombiner(cell_t type)
+                : execType(type), result(type == ET_LowEvent ? kPluginStop : kPluginContinue)
+            {
+            }
+
+            // false: ET_Hook got Plugin_Stop, the rest are not called.
+            bool Add(cell_t res)
+            {
+                if (execType == ET_Single || !any)
+                    result = (execType == ET_Ignore) ? 0 : res;
+                else if (execType == ET_Event || execType == ET_Hook)
+                    result = std::max(result, res);
+                else if (execType == ET_LowEvent)
+                    result = std::min(result, res);
+                any = true;
+                return !(execType == ET_Hook && res == kPluginStop);
+            }
+
+            cell_t Result() const { return execType == ET_Ignore ? 0 : result; }
+
+            cell_t execType;
+            cell_t result;
+            bool any = false;
+        };
+
+        // C++ HookScriptForward(), by forward name.
+        std::map<std::string, hookid::HookList<Source2ModScriptForwardHandler>> g_forwardHooks;
+
+        // Runs the C++ hooks of a global forward; false when one stopped it.
+        bool RunForwardHooks(const std::string& name, Source2ModScriptArg* args, int count, ResultCombiner& combiner)
+        {
+            auto it = g_forwardHooks.find(name);
+            if (it == g_forwardHooks.end())
+                return true;
+            for (const Source2ModScriptForwardHandler& handler : it->second.Snapshot())
+            {
+                if (!combiner.Add(handler(name.c_str(), args, count)))
+                    return false;
+            }
+            return true;
+        }
+
+        size_t ForwardHookCount(const std::string& name)
+        {
+            auto it = g_forwardHooks.find(name);
+            return it == g_forwardHooks.end() ? 0 : it->second.size();
+        }
+
+        // The ExecType of a script's GlobalForward by this name; ET_Event without one.
+        cell_t GlobalExecType(const std::string& name)
+        {
+            for (const Forward* fwd : g_forwardObjects)
+                if (fwd->Global() && fwd->name == name)
+                    return fwd->execType;
+            return ET_Event;
+        }
 
         Forward* ForwardOf(IPluginContext* ctx, cell_t handle)
         {
@@ -854,8 +1087,8 @@ namespace sourcepawn
             else
                 targets.push_back(call.fn);
 
-            cell_t result = (execType == ET_LowEvent) ? kPluginStop : kPluginContinue;
-            bool any = false;
+            ResultCombiner combiner(execType);
+            bool go = true;
             int error = SP_ERROR_NONE;
             for (IPluginFunction* fn : targets)
             {
@@ -892,19 +1125,45 @@ namespace sourcepawn
                     continue;
                 }
 
-                if (execType == ET_Single || !any)
-                    result = (execType == ET_Ignore) ? 0 : res;
-                else if (execType == ET_Event || execType == ET_Hook)
-                    result = std::max(result, res);
-                else if (execType == ET_LowEvent)
-                    result = std::min(result, res);
-                any = true;
-
-                if (execType == ET_Hook && res == kPluginStop)
+                if (!(go = combiner.Add(res)))
                     break;
             }
-            if (execType == ET_Ignore)
-                result = 0;
+
+            // A global forward reaches C++ hooks too, over the same buffers.
+            if (go && call.fwd && call.fwd->Global() && ForwardHookCount(call.fwd->name))
+            {
+                std::vector<Source2ModScriptArg> hostArgs;
+                for (size_t i = 0; i < call.params.size(); i++)
+                {
+                    CallParam& p = call.params[i];
+                    const cell_t type = i < call.fwd->paramTypes.size() ? call.fwd->paramTypes[i] : kParamAny;
+                    switch (p.kind)
+                    {
+                    case CallParam::Cell:
+                        hostArgs.push_back(type == kParamFloat ? Source2ModScriptArg::Float(sp_ctof(p.value)) : Source2ModScriptArg::Int(p.value));
+                        break;
+                    case CallParam::Ref:
+                        hostArgs.push_back(type == kParamFloatByRef ? Source2ModScriptArg::FloatRef(reinterpret_cast<float*>(p.cells.data()))
+                                                                    : Source2ModScriptArg::CellRef(p.cells.data()));
+                        break;
+                    case CallParam::Array:
+                        hostArgs.push_back(Source2ModScriptArg::Array(p.cells.data(), p.cells.size(), true));
+                        break;
+                    case CallParam::String:
+                        hostArgs.push_back(p.copyback ? Source2ModScriptArg::Buffer(p.chars.data(), p.chars.size())
+                                                      : Source2ModScriptArg::String(p.chars.data()));
+                        break;
+                    case CallParam::NullVector:
+                        hostArgs.push_back(Source2ModScriptArg::Null(Source2ModScriptArgType::NullVector));
+                        break;
+                    case CallParam::NullString:
+                        hostArgs.push_back(Source2ModScriptArg::Null(Source2ModScriptArgType::NullString));
+                        break;
+                    }
+                }
+                RunForwardHooks(call.fwd->name, hostArgs.data(), static_cast<int>(hostArgs.size()), combiner);
+            }
+            const cell_t result = combiner.Result();
 
             // What the functions changed goes back to the caller.
             for (CallParam& p : call.params)
@@ -975,6 +1234,176 @@ namespace sourcepawn
             { nullptr, nullptr },
         };
 
+        // ---- scripts from C++ (ISource2ModNatives002) ---------------------------
+
+        // A plugin-made native by name, looked up at each call: it outlives
+        // the script, a call after it unloaded is refused.
+        class ScriptNativeRef final : public ISource2ModScriptNative
+        {
+        public:
+            explicit ScriptNativeRef(std::string name) : m_name(std::move(name)) {}
+
+            const char* GetName() const override { return m_name.c_str(); }
+
+            bool IsAvailable() const override
+            {
+                const DynamicNative* native = Slot();
+                return native && native->Alive() && native->IsScript();
+            }
+
+            PluginId GetOwner() const override
+            {
+                const DynamicNative* native = Slot();
+                return native ? native->Owner() : 0;
+            }
+
+            bool Invoke(const Source2ModScriptArg* args, int count, cell_t* result) override
+            {
+                m_error.clear();
+                if (result)
+                    *result = 0;
+                DynamicNative* native = Slot();
+                if (!native)
+                {
+                    m_error = "native \"" + m_name + "\" was never registered";
+                    return false;
+                }
+                return native->InvokeFromHost(args, count, result, m_error);
+            }
+
+            const char* GetLastError() const override { return m_error.c_str(); }
+
+            CEntityInstance* EntityFromCell(cell_t value) const override { return sourcepawn::EntityFromCell(value); }
+
+        private:
+            DynamicNative* Slot() const
+            {
+                auto it = g_dynamicNatives.find(m_name);
+                return it == g_dynamicNatives.end() ? nullptr : it->second;
+            }
+
+            std::string m_name;
+            std::string m_error;
+        };
+
+        // A global forward by name: the running scripts' publics, then the C++ hooks.
+        class ScriptForwardRef final : public ISource2ModScriptForward
+        {
+        public:
+            explicit ScriptForwardRef(std::string name) : m_name(std::move(name)) {}
+
+            const char* GetName() const override { return m_name.c_str(); }
+
+            bool IsAvailable() const override { return GetFunctionCount() > 0; }
+
+            int GetFunctionCount() const override
+            {
+                size_t count = ForwardHookCount(m_name);
+                for (ScriptPlugin* script : ScriptPlugin::Running())
+                    if (script->Runtime()->GetFunctionByName(m_name.c_str()))
+                        count++;
+                return static_cast<int>(count);
+            }
+
+            bool Invoke(const Source2ModScriptArg* args, int count, cell_t* result) override
+            {
+                m_error.clear();
+                if (result)
+                    *result = 0;
+                if (count < 0 || (count > 0 && !args) || static_cast<size_t>(count) > kMaxCallParams)
+                {
+                    m_error = "bad argument list";
+                    return false;
+                }
+
+                // The hooks get a copy that points at the same buffers, with
+                // entities as the script cells a script firing it would pass.
+                std::vector<Source2ModScriptArg> hostArgs(args, args + count);
+                sp::CallArgs callArgs;
+                for (Source2ModScriptArg& arg : hostArgs)
+                {
+                    switch (arg.type)
+                    {
+                    case Source2ModScriptArgType::Cell:
+                    case Source2ModScriptArgType::Bool:
+                        callArgs.PushCell(arg.cell);
+                        break;
+                    case Source2ModScriptArgType::Float:
+                        callArgs.PushFloat(arg.flt);
+                        break;
+                    case Source2ModScriptArgType::Entity:
+                        arg = Source2ModScriptArg::Int(EntityCell(arg.entity));
+                        callArgs.PushCell(arg.cell);
+                        break;
+                    case Source2ModScriptArgType::String:
+                        callArgs.PushString(arg.string ? arg.string : "");
+                        break;
+                    case Source2ModScriptArgType::StringBuffer:
+                        if (!arg.buffer || arg.size == 0)
+                        {
+                            m_error = "a string buffer argument without room";
+                            return false;
+                        }
+                        callArgs.PushString(arg.buffer, arg.size, SM_PARAM_STRING_COPY | SM_PARAM_STRING_UTF8 | SM_PARAM_COPYBACK);
+                        break;
+                    case Source2ModScriptArgType::Array:
+                        callArgs.PushArray(arg.array, arg.size, arg.copyback ? SM_PARAM_COPYBACK : 0);
+                        break;
+                    case Source2ModScriptArgType::CellRef:
+                        callArgs.PushCellByRef(arg.cellRef);
+                        break;
+                    case Source2ModScriptArgType::FloatRef:
+                        callArgs.PushFloatByRef(arg.floatRef);
+                        break;
+                    case Source2ModScriptArgType::NullString:
+                        callArgs.PushNullString();
+                        break;
+                    case Source2ModScriptArgType::NullVector:
+                        callArgs.PushNullVector();
+                        break;
+                    }
+                }
+
+                ResultCombiner combiner(GlobalExecType(m_name));
+                bool go = true;
+                bool failed = false;
+                for (ScriptPlugin* script : ScriptPlugin::Running())
+                {
+                    IPluginFunction* fn = script->Runtime()->GetFunctionByName(m_name.c_str());
+                    if (!fn)
+                        continue;
+                    cell_t res = 0;
+                    if (!sourcepawn::Invoke(fn, callArgs, &res))
+                    {
+                        failed = true;
+                        continue;
+                    }
+                    if (!(go = combiner.Add(res)))
+                        break;
+                }
+                if (go)
+                    RunForwardHooks(m_name, hostArgs.data(), count, combiner);
+
+                if (result)
+                    *result = combiner.Result();
+                if (failed)
+                    m_error = "a script function of forward \"" + m_name + "\" raised an error (see the server console)";
+                return !failed;
+            }
+
+            const char* GetLastError() const override { return m_error.c_str(); }
+
+            CEntityInstance* EntityFromCell(cell_t value) const override { return sourcepawn::EntityFromCell(value); }
+
+        private:
+            std::string m_name;
+            std::string m_error;
+        };
+
+        // For the life of the core: plugins keep the pointers.
+        std::unordered_map<std::string, std::unique_ptr<ScriptNativeRef>> g_scriptNativeRefs;
+        std::unordered_map<std::string, std::unique_ptr<ScriptForwardRef>> g_scriptForwardRefs;
+
         // ---- ISource2ModNatives ---------------------------------------------------
 
         class NativesApi final : public ISource2ModNatives
@@ -1035,6 +1464,76 @@ namespace sourcepawn
             bool CloseHandle(cell_t handle) override
             {
                 return Handles().Free(handle, 0, true) == HandleError::None;
+            }
+
+            ISource2ModScriptNative* FindScriptNative(const char* name) override
+            {
+                if (!name || !*name)
+                    return nullptr;
+                auto& ref = g_scriptNativeRefs[name];
+                if (!ref)
+                    ref = std::make_unique<ScriptNativeRef>(name);
+                return ref.get();
+            }
+
+            ISource2ModScriptForward* FindScriptForward(const char* name) override
+            {
+                if (!name || !*name)
+                    return nullptr;
+                auto& ref = g_scriptForwardRefs[name];
+                if (!ref)
+                    ref = std::make_unique<ScriptForwardRef>(name);
+                return ref.get();
+            }
+
+            Source2ModHookId HookScriptForward(const char* name, Source2ModScriptForwardHandler handler) override
+            {
+                if (!name || !*name || !handler)
+                    return 0;
+                const PluginId owner = hookid::OwnerOfHandler(handler);
+                return g_forwardHooks[name].Add(owner, std::move(handler));
+            }
+
+            bool UnhookScriptForward(Source2ModHookId id) override
+            {
+                for (auto& [name, hooks] : g_forwardHooks)
+                    if (hooks.RemoveId(id))
+                        return true;
+                return false;
+            }
+
+            Source2ModHookId AddLibraryListener(Source2ModLibraryHandler handler, bool replay) override
+            {
+                if (!handler)
+                    return 0;
+                const PluginId owner = hookid::OwnerOfHandler(handler);
+                const Source2ModLibraryHandler first = handler;
+                const Source2ModHookId id = g_libraryListeners.Add(owner, std::move(handler));
+                if (replay)
+                {
+                    std::vector<std::string> names;
+                    for (const auto& [name, lib] : g_libraries)
+                        if (!lib.owners.empty())
+                            names.push_back(name);
+                    for (const std::string& name : names)
+                        first(name.c_str(), true);
+                }
+                return id;
+            }
+
+            bool RemoveLibraryListener(Source2ModHookId id) override
+            {
+                return g_libraryListeners.RemoveId(id);
+            }
+
+            CEntityInstance* EntityFromScriptCell(cell_t value) override
+            {
+                return sourcepawn::EntityFromCell(value);
+            }
+
+            cell_t ScriptCellFromEntity(CEntityInstance* entity) override
+            {
+                return EntityCell(entity);
             }
         };
 
@@ -1114,6 +1613,11 @@ namespace sourcepawn
 
         void RemoveAllForPlugin(PluginId id)
         {
+            // Its own C++ listeners first: it hears nothing of its own going.
+            g_libraryListeners.RemoveOwner(id);
+            for (auto& [name, hooks] : g_forwardHooks)
+                hooks.RemoveOwner(id);
+
             for (auto& [name, native] : g_dynamicNatives)
                 if (native->Owner() == id)
                     native->Kill();
