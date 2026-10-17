@@ -52,6 +52,7 @@
 
 #include "http.h"
 #include "shared.h"
+#include "sourcepawn/crashinfo.h"
 #include "utils/log.h"
 #include "utils/paths.h"
 
@@ -176,6 +177,58 @@ namespace crashhandler
             }
         }
 
+        // The SOURCEPAWN section of the .txt: which script was running. Script
+        // code is JIT in anonymous memory, so the native stack alone only says
+        // source2mod. The crashed thread's stack comes from the dump.
+        char s_szSourcePawn[16384];
+
+        size_t DescribeSourcePawn(google_breakpad::Minidump* dump)
+        {
+            sourcepawn::crashinfo::StackCopy copy{};
+            const sourcepawn::crashinfo::StackCopy* stack = nullptr;
+
+            google_breakpad::MinidumpException* exception = dump ? dump->GetException() : nullptr;
+            google_breakpad::MinidumpThreadList* threads = dump ? dump->GetThreadList() : nullptr;
+            uint32_t threadId = 0;
+            if (exception && threads && exception->GetThreadID(&threadId))
+            {
+                google_breakpad::MinidumpThread* thread = threads->GetThreadByID(threadId);
+                google_breakpad::MinidumpMemoryRegion* memory = thread ? thread->GetMemory() : nullptr;
+                google_breakpad::MinidumpContext* context = exception->GetContext();
+                uint64_t sp = 0;
+                const uint8_t* bytes = memory ? memory->GetMemory() : nullptr;
+                if (bytes && context && context->GetStackPointer(&sp))
+                {
+                    copy = { bytes, memory->GetBase(), memory->GetSize(), sp };
+                    stack = &copy;
+                }
+            }
+
+            return sourcepawn::crashinfo::Describe(s_szSourcePawn, sizeof(s_szSourcePawn), stack);
+        }
+
+        // What the crash callback wrote between the SOURCEPAWN markers.
+        std::string ReadSourcePawnSection(const char* pszTxtPath)
+        {
+            std::string txt;
+            FILE* file = fopen(pszTxtPath, "rb");
+            if (!file)
+                return {};
+
+            char buffer[4096];
+            size_t bytes;
+            while ((bytes = fread(buffer, 1, sizeof(buffer), file)) > 0)
+                txt.append(buffer, bytes);
+            fclose(file);
+
+            constexpr std::string_view kBegin = "-------- SOURCEPAWN BEGIN --------\n";
+            const size_t begin = txt.find(kBegin);
+            const size_t end = txt.find("-------- SOURCEPAWN END --------");
+            if (begin == std::string::npos || end == std::string::npos || end < begin)
+                return {};
+            return txt.substr(begin + kBegin.size(), end - begin - kBegin.size());
+        }
+
         // The metadata that goes next to every dump, written with plain stdio.
         // Only the Windows callback uses this directly -- the Linux one runs
         // inside a signal handler and has to stay on raw syscalls.
@@ -271,7 +324,14 @@ namespace crashhandler
             google_breakpad::MinidumpMemoryList::set_max_regions(std::numeric_limits<uint32_t>::max());
             // Process the minidump.
             google_breakpad::Minidump miniDump(descriptor.path());
-            if (!miniDump.Read())
+            const bool dumpRead = miniDump.Read();
+
+            const size_t spLength = DescribeSourcePawn(dumpRead ? &miniDump : nullptr);
+            sys_write(extra, s_szSourcePawn, spLength);
+            sys_write(extra, "\n", 1);
+            sys_write(STDOUT_FILENO, s_szSourcePawn, spLength);
+
+            if (!dumpRead)
             {
                 sys_write(STDOUT_FILENO, "Failed to read minidump\n", 24);
             }
@@ -575,7 +635,14 @@ namespace crashhandler
             google_breakpad::MinidumpMemoryList::set_max_regions(std::numeric_limits<uint32_t>::max());
             // Process the minidump.
             google_breakpad::Minidump miniDump(szDumpPath);
-            if (!miniDump.Read())
+            const bool dumpRead = miniDump.Read();
+
+            const size_t spLength = DescribeSourcePawn(dumpRead ? &miniDump : nullptr);
+            fwrite(s_szSourcePawn, 1, spLength, extra);
+            fputs("\n", extra);
+            fwrite(s_szSourcePawn, 1, spLength, stdout);
+
+            if (!dumpRead)
             {
                 printf("Failed to read minidump\n");
             }
@@ -984,6 +1051,24 @@ namespace crashhandler
                 strncat(szReport, szLine, sizeof(szReport) - strlen(szReport) - 1);
             }
 
+            char szTxtPath[560];
+            snprintf(szTxtPath, sizeof(szTxtPath), "%s.txt", szDumpPath);
+
+            // A script running when it crashed is the better culprit than the
+            // native it called in source2mod -- or than nothing at all, when
+            // the crash is in the JIT code itself.
+            const std::string sourcePawn = ReadSourcePawnSection(szTxtPath);
+            constexpr std::string_view kBlaming = "Blaming: ";
+            if (sourcePawn.starts_with(kBlaming) && sourcePawn.compare(kBlaming.size(), 6, "<none>") != 0)
+            {
+                const std::string blame = sourcePawn.substr(kBlaming.size(), sourcePawn.find('\n') - kBlaming.size());
+                if (!szCulprit[0] || strstr(szCulprit, "source2mod") == szCulprit)
+                    snprintf(szCulprit, sizeof(szCulprit), "SourcePawn %s", blame.c_str());
+
+                strncat(szReport, "\nSourcePawn:\n", sizeof(szReport) - strlen(szReport) - 1);
+                strncat(szReport, sourcePawn.c_str(), sizeof(szReport) - strlen(szReport) - 1);
+            }
+
             if (szCulprit[0])
             {
                 strncat(szReport, "\nSuspected culprit: ", sizeof(szReport) - strlen(szReport) - 1);
@@ -995,8 +1080,6 @@ namespace crashhandler
 
             FP_WARN("---- Last crash ----\n{}--------------------", szReport);
 
-            char szTxtPath[560];
-            snprintf(szTxtPath, sizeof(szTxtPath), "%s.txt", szDumpPath);
             SendDiscordReport(szReport, szTxtPath);
         }
 

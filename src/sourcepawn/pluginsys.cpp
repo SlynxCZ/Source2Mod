@@ -20,6 +20,7 @@
  * Project: Source2Mod
  */
 #include "natives.h"
+#include "crashinfo.h"
 #include "handles.h"
 #include "scriptplugin.h"
 
@@ -117,7 +118,10 @@ namespace sourcepawn
                 cell_t result = 0;
                 // No exception handler: an error in the native -- ThrowNativeError
                 // included -- unwinds into the script that called it, as in SourceMod.
-                m_scriptFn->Invoke(args, &result);
+                {
+                    crashinfo::CallScope call(m_scriptFn);
+                    m_scriptFn->Invoke(args, &result);
+                }
                 g_nativeFrames.pop_back();
                 return result;
             }

@@ -14,6 +14,7 @@
  * Project: Source2Mod
  */
 #include "natives.h"
+#include "crashinfo.h"
 #include "handles.h"
 #include "scriptplugin.h"
 
@@ -479,6 +480,7 @@ namespace sourcepawn
                 args.PushCell(handle);
                 args.PushCell(extra);
                 cell_t res = 0;
+                crashinfo::CallScope call(fn);
                 if (!fn->Invoke(args, &res))
                 {
                     failed = true;

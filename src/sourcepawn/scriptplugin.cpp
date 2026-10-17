@@ -12,6 +12,7 @@
  * Project: Source2Mod
  */
 #include "scriptplugin.h"
+#include "crashinfo.h"
 #include "handles.h"
 #include "natives.h"
 
@@ -110,6 +111,7 @@ namespace sourcepawn
         // Invoke() returns; the handler only keeps it from unwinding the
         // script whose native brought us here.
         ExceptionHandler eh(fn->GetParentRuntime()->GetDefaultContext());
+        crashinfo::CallScope call(fn);
         return fn->Invoke(args, result);
     }
 
@@ -185,12 +187,14 @@ namespace sourcepawn
         m_file = std::filesystem::path(m_path).filename().string();
         g_byContext[Context()] = this;
         g_scripts.push_back(this);
+        crashinfo::Track(this);
         ReadMyInfo();
     }
 
     ScriptPlugin::~ScriptPlugin()
     {
         // RemoveAllForPlugin() took the handles, timers and hooks down already.
+        crashinfo::Untrack(this);
         g_byContext.erase(Context());
         std::erase(g_scripts, this);
     }
