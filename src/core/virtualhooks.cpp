@@ -366,8 +366,6 @@ namespace virtualhooks
         {
             shared::g_pEntitySystem = pEntitySystem;
             pEntitySystem->AddListenerEntity(&entityListener);
-
-            shared::g_bDetoursLoaded = true;
         }
 
         if (g_bHasTicked)

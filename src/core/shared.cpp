@@ -57,6 +57,4 @@ namespace shared
         g_pGlobalVars = g_pEngineServer->GetServerGlobals();
         return g_pGlobalVars;
     }
-
-    bool g_bDetoursLoaded = false;
 }

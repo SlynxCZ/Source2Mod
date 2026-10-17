@@ -258,8 +258,6 @@ bool Source2ModCore::Unload(char* error, size_t maxlen)
     if (shared::g_pEntitySystem)
         shared::g_pEntitySystem->RemoveListenerEntity(&virtualhooks::entityListener);
 
-    shared::g_bDetoursLoaded = false;
-
     ConVar_Unregister();
 
     // Last: a crash anywhere in the teardown above is still worth a dump.

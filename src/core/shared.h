@@ -72,6 +72,4 @@ namespace shared
     extern CCSGameRules* g_pGameRules;
 
     CGlobalVars* getGlobalVars();
-
-    extern bool g_bDetoursLoaded;
 }
