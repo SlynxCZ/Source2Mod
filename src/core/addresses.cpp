@@ -55,46 +55,40 @@ namespace addresses
 
     bool Initialize()
     {
-        RESOLVE_SIG("UTIL::CreateEntityByName", source2modAddresses.CreateEntityByName);
+        RESOLVE_SIG("CAttributeList::SetOrAddAttributeValueByName", source2modAddresses.SetOrAddAttributeValueByName);
         RESOLVE_SIG("CBaseEntity::DispatchSpawn", source2modAddresses.DispatchSpawn);
         RESOLVE_SIG("CBaseEntity::TakeDamageOld", source2modAddresses.TakeDamageOld);
         RESOLVE_SIG("CBaseModelEntity::SetModel", source2modAddresses.SetModel);
         RESOLVE_SIG("CBasePlayerController::SetPawn", source2modAddresses.SetPawn);
         RESOLVE_SIG("CBasePlayerPawn::SnapViewAngles", source2modAddresses.SnapViewAngles);
         RESOLVE_SIG("CCSGameRules::TerminateRound", source2modAddresses.TerminateRound);
+        RESOLVE_SIG("CCSPlayer_ItemServices::GiveNamedItem", source2modAddresses.GiveNamedItem);
         RESOLVE_SIG("CCSPlayer_WeaponServices::Destroy", source2modAddresses.Destroy);
-        RESOLVE_SIG("LegacyGameEventListener", source2modAddresses.LegacyGameEventListenerAddr);
         RESOLVE_SIG("CCSPlayerController::SwitchTeam", source2modAddresses.SwitchTeam);
+        RESOLVE_SIG("CCSPlayerPawn::PostThink", source2modAddresses.PostThink);
+        RESOLVE_SIG("CCSPlayerPawnBase::CanMove", source2modAddresses.CanMove);
+        RESOLVE_SIG("CDecoyProjectile::EmitGrenade", source2modAddresses.EmitDecoy);
         RESOLVE_SIG("CEntityInstance::AcceptInput", source2modAddresses.AcceptInput);
         RESOLVE_SIG("CEntityIOOutput::FireOutputInternal", source2modAddresses.FireOutputInternal);
         RESOLVE_SIG("CEntitySystem::AddEntityIOEvent", source2modAddresses.AddEntityIOEvent);
+        RESOLVE_SIG("CFlashbangProjectile::EmitGrenade", source2modAddresses.EmitFlashbang);
         RESOLVE_SIG("CGameEntitySystem::FindEntityByClassName", source2modAddresses.FindEntityByClassName);
         RESOLVE_SIG("CGameEntitySystem::FindEntityByName", source2modAddresses.FindEntityByName);
-        RESOLVE_SIG("CTakeDamageInfo::Constructor", source2modAddresses.CTakeDamageInfo);
-
-        // Called by the SDK's schema helpers (CAttributeList, the grenade
-        // projectiles, CBaseEntity::Remove, ...). The helpers call straight
-        // through, so these must resolve like the ones above.
-        RESOLVE_SIG("CAttributeList::SetOrAddAttributeValueByName", source2modAddresses.SetOrAddAttributeValueByName);
-        RESOLVE_SIG("CDecoyProjectile::EmitGrenade", source2modAddresses.EmitDecoy);
-        RESOLVE_SIG("CFlashbangProjectile::EmitGrenade", source2modAddresses.EmitFlashbang);
         RESOLVE_SIG("CHEGrenadeProjectile::EmitGrenade", source2modAddresses.EmitHEGrenade);
         RESOLVE_SIG("CMolotovProjectile::EmitGrenade", source2modAddresses.EmitMolotov);
         RESOLVE_SIG("CSmokeGrenadeProjectile::EmitGrenade", source2modAddresses.EmitSmoke);
-        RESOLVE_SIG("CCSPlayerPawnBase::CanMove", source2modAddresses.CanMove);
-        RESOLVE_SIG("CCSPlayerPawn::PostThink", source2modAddresses.PostThink);
-        RESOLVE_SIG("UTIL::Remove", source2modAddresses.UTIL_RemoveAddr);
+        RESOLVE_SIG("CTakeDamageInfo::Constructor", source2modAddresses.CTakeDamageInfo);
         RESOLVE_SIG("DispatchParticleEffect", source2modAddresses.DispatchParticleEffectAddr);
         RESOLVE_SIG("GetWeaponCSDataFromKey", source2modAddresses.GetWeaponCSDataFromKeyAddr);
-        RESOLVE_SIG("CCSPlayer_ItemServices::GiveNamedItem", source2modAddresses.GiveNamedItem);
+        RESOLVE_SIG("LegacyGameEventListener", source2modAddresses.LegacyGameEventListenerAddr);
+        RESOLVE_SIG("UTIL::CreateEntityByName", source2modAddresses.CreateEntityByName);
+        RESOLVE_SIG("UTIL::Remove", source2modAddresses.UTIL_RemoveAddr);
 
         // Hook targets exposed for plugins only; nothing in Source2Mod calls
         // them. Resolved optionally so a pattern that stops matching after a
         // game update does not block startup -- the getter returns null.
-        RESOLVE_SIG_OPTIONAL("CEntityIdentity::AcceptInput", source2modAddresses.IdentityAcceptInput);
-        RESOLVE_SIG_OPTIONAL("CCSPlayer_ItemServices::CanAcquire", source2modAddresses.CanAcquire);
-        RESOLVE_SIG_OPTIONAL("CCSPlayerController::ProcessUserCmd", source2modAddresses.ProcessUserCmd);
         RESOLVE_SIG_OPTIONAL("CBasePlayerController::OnSimulateUserCommands", source2modAddresses.OnSimulateUserCommands);
+        RESOLVE_SIG_OPTIONAL("CCSPlayer_ItemServices::CanAcquire", source2modAddresses.CanAcquire);
         RESOLVE_SIG_OPTIONAL("CCSPlayer_MovementServices::AirAccelerate", source2modAddresses.AirAccelerate);
         RESOLVE_SIG_OPTIONAL("CCSPlayer_MovementServices::AirMove", source2modAddresses.AirMove);
         RESOLVE_SIG_OPTIONAL("CCSPlayer_MovementServices::CanUnduck", source2modAddresses.CanUnduck);
@@ -115,14 +109,15 @@ namespace addresses
         RESOLVE_SIG_OPTIONAL("CCSPlayer_MovementServices::TryPlayerMove", source2modAddresses.TryPlayerMove);
         RESOLVE_SIG_OPTIONAL("CCSPlayer_MovementServices::WalkMove", source2modAddresses.WalkMove);
         RESOLVE_SIG_OPTIONAL("CCSPlayer_MovementServices::WaterMove", source2modAddresses.WaterMove);
-        RESOLVE_SIG_OPTIONAL("CCSPlayerLegacyJump::OnJump", source2modAddresses.OnJumpLegacy);
-        RESOLVE_SIG_OPTIONAL("CCSPlayerModernJump::OnJump", source2modAddresses.OnJumpModern);
+        RESOLVE_SIG_OPTIONAL("CCSPlayerController::ProcessUserCmd", source2modAddresses.ProcessUserCmd);
         RESOLVE_SIG_OPTIONAL("CCSPlayerLegacyJump::CheckJumpButton", source2modAddresses.CheckJumpButtonLegacy);
+        RESOLVE_SIG_OPTIONAL("CCSPlayerLegacyJump::OnJump", source2modAddresses.OnJumpLegacy);
         RESOLVE_SIG_OPTIONAL("CCSPlayerModernJump::CheckJumpButton", source2modAddresses.CheckJumpButtonModern);
-        // CCSNavArea resolves this one itself and copes with a miss.
-        RESOLVE_SIG_OPTIONAL("CSource2Server::GetNavMeshData", source2modAddresses.GetNavMeshData);
+        RESOLVE_SIG_OPTIONAL("CCSPlayerModernJump::OnJump", source2modAddresses.OnJumpModern);
+        RESOLVE_SIG_OPTIONAL("CEntityIdentity::AcceptInput", source2modAddresses.IdentityAcceptInput);
         RESOLVE_SIG_OPTIONAL("CLoggingSystem::LogDirect", source2modAddresses.LogDirect);
         RESOLVE_SIG_OPTIONAL("Cmd_ExecuteCommand", source2modAddresses.Cmd_ExecuteCommandAddr);
+        RESOLVE_SIG_OPTIONAL("CSource2Server::GetNavMeshData", source2modAddresses.GetNavMeshData);
 
         return true;
     }
