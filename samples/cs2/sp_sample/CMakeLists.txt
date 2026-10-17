@@ -1,14 +1,17 @@
 cmake_minimum_required(VERSION 3.18)
 project(sp_sample NONE)
 
-# The compiler and the include set come from a Source2Mod build or install:
-# SOURCE2MOD_SCRIPTING is its addons/source2mod/scripting (spcomp + include/),
-# the counterpart of cpp_sample's SOURCE2MOD_SDK.
-if (DEFINED ENV{SOURCE2MOD_SCRIPTING} AND NOT "$ENV{SOURCE2MOD_SCRIPTING}" STREQUAL "")
-    file(TO_CMAKE_PATH "$ENV{SOURCE2MOD_SCRIPTING}" SOURCE2MOD_SCRIPTING)
+# The SDK is resolved from the environment, the same way cpp_sample resolves
+# it: SOURCE2MOD_SDK. Its SdkScripting.cmake gives the include set
+# (SOURCE2MOD_SCRIPTING_INCLUDE) and finds spcomp (SOURCE2MOD_SPCOMP: SPCOMP,
+# else the PATH).
+if (DEFINED ENV{SOURCE2MOD_SDK} AND NOT "$ENV{SOURCE2MOD_SDK}" STREQUAL "")
+    file(TO_CMAKE_PATH "$ENV{SOURCE2MOD_SDK}" SOURCE2MOD_SDK)
 else ()
-    message(FATAL_ERROR "SOURCE2MOD_SCRIPTING env variable not set (a Source2Mod build's addons/source2mod/scripting)")
+    message(FATAL_ERROR "SOURCE2MOD_SDK env variable not set")
 endif ()
+
+include(${SOURCE2MOD_SDK}/SdkScripting.cmake)
 
 # Settings every platform shares, version_gen.inc (makefiles/ambuild/shared.ambuild
 # on the AMBuild side).

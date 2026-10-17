@@ -1,5 +1,4 @@
 # Linux settings -- CMake twin of makefiles/ambuild/linux.ambuild.
 
-# A .smx is the same bytecode on every platform; only the compiler's file name
-# differs.
-set(SPCOMP_EXECUTABLE ${SOURCE2MOD_SCRIPTING}/spcomp)
+# Nothing platform specific: a .smx is the same bytecode everywhere, and the
+# SDK's SdkScripting.cmake finds spcomp (spcomp.exe) by itself.

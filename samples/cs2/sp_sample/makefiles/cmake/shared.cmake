@@ -31,7 +31,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
 # Where the compiler looks: Source2Mod's include set, cpp_sample's .inc (its
 # section 12 natives), version_gen.inc.
 set(SPCOMP_INCLUDE_DIRS
-    ${SOURCE2MOD_SCRIPTING}/include
+    ${SOURCE2MOD_SCRIPTING_INCLUDE}
     ${CMAKE_SOURCE_DIR}/../cpp_sample/scripting/include
     ${VERSION_GEN_DIR}
 )

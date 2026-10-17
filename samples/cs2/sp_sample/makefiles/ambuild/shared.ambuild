@@ -8,7 +8,7 @@ import os
 # section 12 natives), version_gen.inc.
 def IncludePaths(builder, SPPlugin):
   return [
-    os.path.join(SPPlugin.scripting, 'include'),
+    SPPlugin.scripting,
     os.path.join(builder.sourcePath, '..', 'cpp_sample', 'scripting', 'include'),
     os.path.join(builder.buildPath, 'versioning'),
   ]

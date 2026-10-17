@@ -1,13 +1,17 @@
 # vim: set sts=2 ts=8 sw=2 tw=99 et ft=python:
 import os, sys, json, importlib.util
 
-def ResolveScripting():
-  # The compiler and the include set of a Source2Mod build or install: its
-  # addons/source2mod/scripting -- the counterpart of cpp_sample's SOURCE2MOD_SDK.
-  path = builder.options.scripting or os.environ.get('SOURCE2MOD_SCRIPTING')
+def ResolveSource2ModSdk():
+  # The SDK, resolved the same way cpp_sample resolves it: SOURCE2MOD_SDK.
+  path = os.environ.get('SOURCE2MOD_SDK')
   if not path or not os.path.isdir(path):
-    raise Exception('Pass --scripting or set SOURCE2MOD_SCRIPTING to a Source2Mod build\'s addons/source2mod/scripting')
+    raise Exception('SOURCE2MOD_SDK is not set to a valid directory')
   return os.path.abspath(os.path.normpath(path))
+
+# SdkPlugin.ambuild by absolute path (builder.Build() only reaches scripts in
+# this tree). A script plugin takes two things from it: the include set and
+# spcomp (--spcomp, else SPCOMP, else the PATH).
+Source2ModSdk = builder.Eval(os.path.join(ResolveSource2ModSdk(), 'SdkPlugin.ambuild'), {})
 
 # The build settings, split the same way as the CMake side (makefiles/cmake/):
 # shared.ambuild <-> shared.cmake, linux.ambuild <-> linux.cmake,
@@ -37,7 +41,8 @@ version_gen = LoadVersionGen()
 
 class SPPluginConfig(object):
   def __init__(self):
-    self.scripting = ResolveScripting()
+    self.scripting = Source2ModSdk.ScriptingIncludePath()
+    self.spcomp = Source2ModSdk.FindSpcomp(builder.options.spcomp)
     self.binaries = []
     self.version_header_deps = []
 

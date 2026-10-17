@@ -21,7 +21,6 @@ if ambuild_version.startswith('2.1'):
 parser = run.BuildParser(sourcePath=sys.path[0], api='2.2')
 parser.options.add_argument('-n', '--plugin-name', type=str, dest='plugin_name', default=None,
                        help='Plugin name')
-parser.options.add_argument('--scripting', type=str, dest='scripting', default=None,
-                       help='A Source2Mod build\'s addons/source2mod/scripting (spcomp + include/); '
-                            'default: $SOURCE2MOD_SCRIPTING')
+parser.options.add_argument('--spcomp', type=str, dest='spcomp', default=None,
+                       help='The SourcePawn compiler; default: $SPCOMP, else spcomp on the PATH')
 parser.Configure()
