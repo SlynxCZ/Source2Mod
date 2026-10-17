@@ -40,10 +40,6 @@ lists and next map, and feature checks -- in C++ and in SourcePawn.
 
 Still open:
 
-- **Hot reload on Windows** -- the file watcher is Linux-only (inotify).
-  Plugins load from a private copy now, so the file in `plugins/` can be
-  replaced while it is loaded; what is missing is the watch itself
-  (`ReadDirectoryChangesW`).
 - **Menu keys without binds, keys 1, 2, 4 and 5** -- the view flicks for one
   frame when the player has no real weapon in that slot (the fake key weapon
   is then alone in its gear slot). Keys 3 and 6-9 do not flick. No fix found

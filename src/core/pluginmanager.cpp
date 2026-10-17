@@ -66,12 +66,14 @@
 #include <source2mod/ISource2ModPlugin.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <unordered_map>
 
-// Only the file watch is Linux-only; networkmessages.h above is not, every
-// unload path below calls into it.
+// The file watch: inotify here, ReadDirectoryChangesW (Windows.h, via
+// pluginmanager.h) on Windows. networkmessages.h above is not platform
+// specific, every unload path below calls into it.
 #ifndef _WIN32
 #include <sys/inotify.h>
 #include <sys/select.h>
@@ -781,9 +783,92 @@ void PluginManager::UnloadAll()
     ++m_listGeneration;
 }
 
+// ---- hot reload file watch ----------------------------------------------------
+
+namespace
+{
+    // How long an .smx has to stay untouched before it is reloaded. A copy or
+    // a compile writes in several chunks (and a deploy may rename on top), so
+    // every event only pushes the file's deadline back; one reload per file.
+    constexpr auto kHotReloadSettle = std::chrono::milliseconds(250);
+
+    bool IsSmxName(const std::string& name)
+    {
+        return name.size() > 4 && name.compare(name.size() - 4, 4, ".smx") == 0;
+    }
+
+    // True once nobody is writing the file any more. On Windows a share mode
+    // without FILE_SHARE_WRITE fails while a writer still holds it open; on
+    // Linux the open only proves the file is (still) there.
+    bool CanOpenForReading(const std::filesystem::path& path)
+    {
+#ifdef _WIN32
+        HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                               FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (h == INVALID_HANDLE_VALUE)
+            return false;
+        CloseHandle(h);
+        return true;
+#else
+        FILE* file = fopen(path.c_str(), "rb");
+        if (!file)
+            return false;
+        fclose(file);
+        return true;
+#endif
+    }
+
+    // Changed .smx files waiting to settle, keyed by file name. Only touched
+    // from the watcher thread.
+    class HotReloadDebounce
+    {
+    public:
+        void Touch(const std::string& name)
+        {
+            m_pending[name] = std::chrono::steady_clock::now();
+        }
+
+        // Hands every file that has settled to `queue` and forgets it. One
+        // that is gone is dropped (deleted or renamed away again), one that
+        // cannot be opened yet stays and is tried again next round.
+        template <typename F>
+        void Flush(const std::filesystem::path& dir, F&& queue)
+        {
+            const auto now = std::chrono::steady_clock::now();
+            for (auto it = m_pending.begin(); it != m_pending.end();)
+            {
+                if (now - it->second < kHotReloadSettle)
+                {
+                    ++it;
+                    continue;
+                }
+
+                const auto path = dir / it->first;
+                std::error_code ec;
+                if (!std::filesystem::exists(path, ec))
+                {
+                    it = m_pending.erase(it);
+                    continue;
+                }
+
+                if (!CanOpenForReading(path))
+                {
+                    ++it;
+                    continue;
+                }
+
+                queue(it->first, path);
+                it = m_pending.erase(it);
+            }
+        }
+
+    private:
+        std::unordered_map<std::string, std::chrono::steady_clock::time_point> m_pending;
+    };
+}
+
 void PluginManager::StartFileWatcher()
 {
-#ifndef _WIN32
     if (!shared::g_pCoreConfig->PluginHotReloadEnabled)
         return;
 
@@ -792,6 +877,98 @@ void PluginManager::StartFileWatcher()
 
     m_watcherThread = std::thread([this, dir]()
     {
+        const std::filesystem::path dirPath(dir);
+        HotReloadDebounce debounce;
+
+        auto queueReload = [this](const std::string& name, const std::filesystem::path& path)
+        {
+            std::string fullPath = path.string();
+            FP_INFO("Detected change in {}, queuing hot reload...", name);
+            // Owner 0: Source2Mod's own, so the reload it is
+            // about to do does not throw the task away.
+            // Off the watcher thread first, then to the command
+            // buffer: the reload must not run inside GameFrame.
+            scheduler::schedulerManager.NextFrame(0, [this, fullPath]()
+            {
+                RequestReload(fullPath);
+            });
+        };
+
+#ifdef _WIN32
+        // Overlapped, so the wait below can time out and see m_stopWatcher.
+        HANDLE dirHandle = CreateFileW(dirPath.c_str(), FILE_LIST_DIRECTORY,
+                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                       OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, nullptr);
+        if (dirHandle == INVALID_HANDLE_VALUE)
+        {
+            FP_ERROR("Opening {} for change notifications failed ({}), hot reload unavailable", dir, GetLastError());
+            return;
+        }
+
+        OVERLAPPED overlapped{};
+        overlapped.hEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+
+        // LAST_WRITE: overwritten in place (copy, compiler output).
+        // FILE_NAME: created, or renamed into the folder (move, rsync).
+        constexpr DWORD filter = FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_FILE_NAME;
+        alignas(DWORD) char buf[16384];
+        bool armed = false;
+
+        while (!m_stopWatcher)
+        {
+            if (!armed)
+            {
+                ResetEvent(overlapped.hEvent);
+                if (!ReadDirectoryChangesW(dirHandle, buf, sizeof(buf), FALSE, filter, nullptr, &overlapped, nullptr))
+                {
+                    FP_ERROR("ReadDirectoryChangesW failed ({}), hot reload stopped", GetLastError());
+                    break;
+                }
+                armed = true;
+            }
+
+            if (WaitForSingleObject(overlapped.hEvent, 100) == WAIT_OBJECT_0)
+            {
+                armed = false;
+
+                DWORD len = 0;
+                // 0 bytes: the buffer overflowed and the batch is lost; the
+                // next write to the file brings it back.
+                if (GetOverlappedResult(dirHandle, &overlapped, &len, FALSE) && len > 0)
+                {
+                    for (DWORD i = 0;;)
+                    {
+                        auto* info = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buf + i);
+
+                        if (info->Action == FILE_ACTION_ADDED || info->Action == FILE_ACTION_MODIFIED ||
+                            info->Action == FILE_ACTION_RENAMED_NEW_NAME)
+                        {
+                            std::wstring wname(info->FileName, info->FileNameLength / sizeof(WCHAR));
+                            std::string name = std::filesystem::path(wname).string();
+                            if (IsSmxName(name))
+                                debounce.Touch(name);
+                        }
+
+                        if (!info->NextEntryOffset)
+                            break;
+                        i += info->NextEntryOffset;
+                    }
+                }
+            }
+
+            debounce.Flush(dirPath, queueReload);
+        }
+
+        if (armed)
+        {
+            CancelIoEx(dirHandle, &overlapped);
+            DWORD len = 0;
+            GetOverlappedResult(dirHandle, &overlapped, &len, TRUE);
+        }
+
+        CloseHandle(overlapped.hEvent);
+        CloseHandle(dirHandle);
+#else
         int fd = inotify_init1(IN_NONBLOCK);
         if (fd < 0)
         {
@@ -799,7 +976,9 @@ void PluginManager::StartFileWatcher()
             return;
         }
 
-        inotify_add_watch(fd, dir.c_str(), IN_CLOSE_WRITE);
+        // CLOSE_WRITE: overwritten in place (cp, compiler output).
+        // MOVED_TO: renamed into the folder (mv, rsync's temp file).
+        inotify_add_watch(fd, dir.c_str(), IN_CLOSE_WRITE | IN_MOVED_TO);
 
         alignas(struct inotify_event) char buf[4096];
 
@@ -810,51 +989,38 @@ void PluginManager::StartFileWatcher()
             FD_SET(fd, &fds);
 
             timeval tv{0, 100000};
-            if (select(fd + 1, &fds, nullptr, nullptr, &tv) <= 0)
-                continue;
-
-            int len = read(fd, buf, sizeof(buf));
-            if (len <= 0)
-                continue;
-
-            for (int i = 0; i < len;)
+            if (select(fd + 1, &fds, nullptr, nullptr, &tv) > 0)
             {
-                auto* ev = reinterpret_cast<struct inotify_event*>(buf + i);
+                int len = read(fd, buf, sizeof(buf));
 
-                if (ev->len > 0 && (ev->mask & IN_CLOSE_WRITE))
+                for (int i = 0; i < len;)
                 {
-                    std::string name = ev->name;
-                    if (name.size() > 4 && name.substr(name.size() - 4) == ".smx")
-                    {
-                        std::string fullPath = dir + "/" + name;
-                        FP_INFO("Detected change in {}, queuing hot reload...", name);
-                        // Owner 0: Source2Mod's own, so the reload it is
-                        // about to do does not throw the task away.
-                        // Off the watcher thread first, then to the command
-                        // buffer: the reload must not run inside GameFrame.
-                        scheduler::schedulerManager.NextFrame(0, [this, fullPath]()
-                        {
-                            RequestReload(fullPath);
-                        });
-                    }
-                }
+                    auto* ev = reinterpret_cast<struct inotify_event*>(buf + i);
 
-                i += static_cast<int>(sizeof(struct inotify_event)) + ev->len;
+                    if (ev->len > 0 && (ev->mask & (IN_CLOSE_WRITE | IN_MOVED_TO)))
+                    {
+                        std::string name = ev->name;
+                        if (IsSmxName(name))
+                            debounce.Touch(name);
+                    }
+
+                    i += static_cast<int>(sizeof(struct inotify_event)) + ev->len;
+                }
             }
+
+            debounce.Flush(dirPath, queueReload);
         }
 
         close(fd);
-    });
 #endif
+    });
 }
 
 void PluginManager::StopFileWatcher()
 {
-#ifndef _WIN32
     m_stopWatcher = true;
     if (m_watcherThread.joinable())
         m_watcherThread.join();
-#endif
 }
 
 void PluginManager::SetAllLoaded()
