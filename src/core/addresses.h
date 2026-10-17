@@ -120,7 +120,6 @@ namespace addresses
         CGameEntitySystem_FindEntityByClassName_t CGameEntitySystem_FindEntityByClassName() override;
         CGameEntitySystem_FindEntityByName_t CGameEntitySystem_FindEntityByName() override;
         CTakeDamageInfo_CTakeDamageInfo_t CTakeDamageInfo_CTakeDamageInfo() override;
-        INetworkMessageProcessingPreFilter_FilterMessage_t INetworkMessageProcessingPreFilter_FilterMessage() override;
 
         // Ported from SwiftlyS2.
         CEntityIdentity_AcceptInput_t CEntityIdentity_AcceptInput() override;
@@ -190,7 +189,6 @@ namespace addresses
         DynLibUtils::CMemory FindEntityByClassName;
         DynLibUtils::CMemory FindEntityByName;
         DynLibUtils::CMemory CTakeDamageInfo;
-        DynLibUtils::CMemory FilterMessage;
 
         DynLibUtils::CMemory IdentityAcceptInput;
         DynLibUtils::CMemory CanAcquire;

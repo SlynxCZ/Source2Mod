@@ -72,21 +72,6 @@ namespace addresses
         RESOLVE_SIG("CGameEntitySystem::FindEntityByName", source2modAddresses.FindEntityByName);
         RESOLVE_SIG("CTakeDamageInfo::Constructor", source2modAddresses.CTakeDamageInfo);
 
-        // FilterMessage is the only virtual of CServerSideClient's pre-filter
-        // base; the base's offset comes out of the RTTI (+48 Linux, +8 Windows).
-        {
-            DynLibUtils::CModule libengine(g_pEngineServer);
-            auto pVTable = libengine.GetVirtualTableByBase("CServerSideClient", "INetworkMessageProcessingPreFilter");
-            if (!pVTable)
-            {
-                FP_DEBUG("Failed to find '{}'", "CServerSideClient::INetworkMessageProcessingPreFilter");
-                return false;
-            }
-
-            source2modAddresses.FilterMessage = DynLibUtils::CMemory(pVTable.RCast<void**>()[0]);
-        }
-
-
         // Called by the SDK's schema helpers (CAttributeList, the grenade
         // projectiles, CBaseEntity::Remove, ...). The helpers call straight
         // through, so these must resolve like the ones above.
@@ -232,11 +217,6 @@ namespace addresses
     CTakeDamageInfo_CTakeDamageInfo_t Addresses::CTakeDamageInfo_CTakeDamageInfo()
     {
         return CTakeDamageInfo.RCast<CTakeDamageInfo_CTakeDamageInfo_t>();
-    }
-
-    INetworkMessageProcessingPreFilter_FilterMessage_t Addresses::INetworkMessageProcessingPreFilter_FilterMessage()
-    {
-        return FilterMessage.RCast<INetworkMessageProcessingPreFilter_FilterMessage_t>();
     }
 
     CEntityIdentity_AcceptInput_t Addresses::CEntityIdentity_AcceptInput()
