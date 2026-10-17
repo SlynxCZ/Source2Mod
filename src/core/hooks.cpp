@@ -39,6 +39,7 @@
 #include "gamehooks.h"
 #include "hookid.h"
 #include "pluginmanager.h"
+#include "virtualpoints.h"
 #include "utils/log.h"
 
 #include <entity2/entityinstance.h>
@@ -345,7 +346,7 @@ namespace hooks
         case HookPointId::GameServerSteamAPIActivated: return "GameServerSteamAPIActivated";
         case HookPointId::GameServerSteamAPIDeactivated: return "GameServerSteamAPIDeactivated";
         case HookPointId::LoadEventsFromFile: return "LoadEventsFromFile";
-        default: return "?";
+        default: return virtualpoints::Is(point) ? virtualpoints::Name(point) : "?";
         }
     }
 
@@ -405,6 +406,8 @@ namespace hooks
         PluginId owner;
         if (IsGameFunction(point))
             owner = gamehooks::gameHooksManager.OwnerOfHandler(point, handler);
+        else if (virtualpoints::Is(point))
+            owner = virtualpoints::OwnerOf(point, handler);
         else if (point == HookPointId::Function)
             owner = OwnerOf<FunctionContext>(handler);
         else
@@ -420,6 +423,9 @@ namespace hooks
 
         if (IsGameFunction(point))
             return gamehooks::gameHooksManager.Add(point, owner, handler, post, target, filter);
+
+        if (virtualpoints::Is(point))
+            return virtualpoints::Add(point, owner, handler, post, target, filter);
 
         if (point == HookPointId::Function)
         {
@@ -471,6 +477,8 @@ namespace hooks
     {
         if (IsGameFunction(point))
             return gamehooks::gameHooksManager.IsAvailable(point);
+        if (virtualpoints::Is(point))
+            return virtualpoints::IsAvailable(point);
         return point == HookPointId::Function || m_lists.count(point) > 0;
     }
 

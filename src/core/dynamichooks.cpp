@@ -146,9 +146,15 @@ namespace dynamichooks
             Action action = Action::Ignore;
             if (!hook->zombie && hook->list.Has(post))
             {
+                // The object is `this` (a free function's first argument); an
+                // entity one also answers HookFilter::designerName.
                 hooks::Subject subject;
                 if (!hook->params.empty())
+                {
                     subject.object = reinterpret_cast<const void*>(frame.Bits(0));
+                    if (hook->params[0] == Source2ModType::Entity)
+                        subject.entity = reinterpret_cast<CEntityInstance*>(frame.Bits(0));
+                }
                 action = hook->list.Dispatch(frame, post, subject, hook->name.c_str());
             }
 

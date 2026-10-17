@@ -195,6 +195,13 @@ namespace sourcepawn
         S2M_CTX(TryPlayerMoveContext, false)
         S2M_CTX(LegacyJumpContext, false)
         S2M_CTX(ModernJumpContext, false)
+        S2M_CTX(SpawnContext, false)
+        S2M_CTX(UseContext, false)
+        S2M_CTX(EntityOtherContext, false)
+        S2M_CTX(ThinkContext, false)
+        S2M_CTX(KilledContext, true)
+        S2M_CTX(WeaponPickupContext, true)
+        S2M_CTX(WeaponSwitchContext, true)
         S2M_CTX(GameFrameContext, false)
         S2M_CTX(StartupServerContext, false)
         S2M_CTX(ClientConnectContext, true)
@@ -310,6 +317,15 @@ namespace sourcepawn
                 S2M_POINT(OnJumpModern, ModernJumpContext)
                 S2M_POINT(CheckJumpButtonLegacy, LegacyJumpContext)
                 S2M_POINT(CheckJumpButtonModern, ModernJumpContext)
+                S2M_POINT(Spawn, SpawnContext)
+                S2M_POINT(Use, UseContext)
+                S2M_POINT(StartTouch, EntityOtherContext)
+                S2M_POINT(EndTouch, EntityOtherContext)
+                S2M_POINT(Blocked, EntityOtherContext)
+                S2M_POINT(Think, ThinkContext)
+                S2M_POINT(Killed, KilledContext)
+                S2M_POINT(WeaponPickup, WeaponPickupContext)
+                S2M_POINT(WeaponSwitch, WeaponSwitchContext)
                 S2M_POINT(GameFrame, GameFrameContext)
                 S2M_POINT(StartupServer, StartupServerContext)
                 S2M_POINT(ClientConnect, ClientConnectContext)
@@ -590,6 +606,38 @@ namespace sourcepawn
 
         S2M_CTX_ENTITY(TouchContext, entity, c->entity)
         S2M_CTX_ENTITY(TouchContext, other, c->other)
+
+        // Entity virtuals.
+        S2M_CTX_ENTITY(SpawnContext, entity, c->entity)
+        S2M_CTX_ENTITY(UseContext, entity, c->entity)
+        S2M_CTX_ENTITY(UseContext, activator, c->info ? c->info->activator : nullptr)
+        S2M_CTX_ENTITY(UseContext, caller, c->info ? c->info->caller : nullptr)
+        S2M_CTX_CELL(UseContext, useType, c->info ? c->info->useType : 0)
+        S2M_CTX_FLOAT(UseContext, value, c->info ? c->info->value : 0.0f)
+        cell_t N_UseContext_useType_set(IPluginContext* ctx, const cell_t* params)
+        {
+            if (UseContext* c = Ctx<UseContext>(ctx, params[1]); c && c->info)
+                c->info->useType = params[2];
+            return 0;
+        }
+        cell_t N_UseContext_value_set(IPluginContext* ctx, const cell_t* params)
+        {
+            if (UseContext* c = Ctx<UseContext>(ctx, params[1]); c && c->info)
+                c->info->value = sp_ctof(params[2]);
+            return 0;
+        }
+        S2M_CTX_ENTITY(EntityOtherContext, entity, c->entity)
+        S2M_CTX_ENTITY(EntityOtherContext, other, c->other)
+        S2M_CTX_ENTITY(ThinkContext, entity, c->entity)
+        S2M_CTX_ENTITY(KilledContext, entity, c->entity)
+        S2M_CTX_LENT(KilledContext, damage, DamageResultType, const_cast<CTakeDamageResult*>(c->damage))
+        S2M_CTX_OBJECT(WeaponPickupContext, services, c->services)
+        S2M_CTX_ENTITY(WeaponPickupContext, pawn, PawnOf(c->services))
+        S2M_CTX_ENTITY(WeaponPickupContext, weapon, c->weapon)
+        S2M_CTX_OBJECT(WeaponSwitchContext, services, c->services)
+        S2M_CTX_ENTITY(WeaponSwitchContext, pawn, PawnOf(c->services))
+        S2M_CTX_ENTITY(WeaponSwitchContext, weapon, c->weapon)
+        S2M_CTX_CELL(WeaponSwitchContext, viewModelIndex, c->viewModelIndex)
 
         S2M_CTX_OBJECT(DropWeaponContext, services, c->services)
         S2M_CTX_ENTITY(DropWeaponContext, pawn, PawnOf(c->services))
@@ -1296,6 +1344,33 @@ namespace sourcepawn
             { "TouchContext.entity.get", N_TouchContext_entity },
             { "TouchContext.other.get", N_TouchContext_other },
             { "TouchContext.CallOriginal", N_CallOriginal<TouchContext> },
+            { "SpawnContext.entity.get", N_SpawnContext_entity },
+            { "SpawnContext.CallOriginal", N_CallOriginal<SpawnContext> },
+            { "UseContext.entity.get", N_UseContext_entity },
+            { "UseContext.activator.get", N_UseContext_activator },
+            { "UseContext.caller.get", N_UseContext_caller },
+            { "UseContext.useType.get", N_UseContext_useType },
+            { "UseContext.useType.set", N_UseContext_useType_set },
+            { "UseContext.value.get", N_UseContext_value },
+            { "UseContext.value.set", N_UseContext_value_set },
+            { "UseContext.CallOriginal", N_CallOriginal<UseContext> },
+            { "EntityOtherContext.entity.get", N_EntityOtherContext_entity },
+            { "EntityOtherContext.other.get", N_EntityOtherContext_other },
+            { "EntityOtherContext.CallOriginal", N_CallOriginal<EntityOtherContext> },
+            { "ThinkContext.entity.get", N_ThinkContext_entity },
+            { "ThinkContext.CallOriginal", N_CallOriginal<ThinkContext> },
+            { "KilledContext.entity.get", N_KilledContext_entity },
+            { "KilledContext.damage.get", N_KilledContext_damage },
+            { "KilledContext.CallOriginal", N_CallOriginal<KilledContext> },
+            { "WeaponPickupContext.services.get", N_WeaponPickupContext_services },
+            { "WeaponPickupContext.pawn.get", N_WeaponPickupContext_pawn },
+            { "WeaponPickupContext.weapon.get", N_WeaponPickupContext_weapon },
+            { "WeaponPickupContext.CallOriginal", N_CallOriginal<WeaponPickupContext> },
+            { "WeaponSwitchContext.services.get", N_WeaponSwitchContext_services },
+            { "WeaponSwitchContext.pawn.get", N_WeaponSwitchContext_pawn },
+            { "WeaponSwitchContext.weapon.get", N_WeaponSwitchContext_weapon },
+            { "WeaponSwitchContext.viewModelIndex.get", N_WeaponSwitchContext_viewModelIndex },
+            { "WeaponSwitchContext.CallOriginal", N_CallOriginal<WeaponSwitchContext> },
             { "DropWeaponContext.services.get", N_DropWeaponContext_services },
             { "DropWeaponContext.pawn.get", N_DropWeaponContext_pawn },
             { "DropWeaponContext.weapon.get", N_DropWeaponContext_weapon },
