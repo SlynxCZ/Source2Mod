@@ -947,6 +947,12 @@ namespace sourcepawn
         cell_t N_VFormat(IPluginContext* ctx, const cell_t* params)
         {
             auto* runtime = static_cast<sp::BaseRuntime*>(ctx->GetRuntime());
+            // SourcePawn 2 boxes a function's variadic arguments; a native
+            // cannot reach the caller's parameters any more. They are passed
+            // on instead: Source2ModApi.Format(buffer, maxlen, format, ...).
+            if (runtime->AsV2())
+                return ctx->ThrowNativeError("FormatArgs needs a SourcePawn 1 plugin; pass the arguments on instead: "
+                                             "Source2ModApi.Format(buffer, maxlen, format, ...)");
             const cell_t* local = runtime->GetLocalParams();
             const cell_t varpos = params[4];
             if (!local || varpos < 1 || varpos > local[0] + 1)

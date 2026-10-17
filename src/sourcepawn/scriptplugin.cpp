@@ -24,7 +24,8 @@
 
 #include <base-runtime.h>
 #include <environment.h>
-#include <plugin-runtime.h>
+#include <objects.h>
+#include <v2/runtime.h>
 #include <sp_callable.h>
 
 #include <algorithm>
@@ -94,7 +95,7 @@ namespace sourcepawn
                 // A script stuck in a loop takes the server with it; ten
                 // seconds without returning is an error, as in SourceMod.
                 g_pEnv->InstallWatchdogTimer(10000);
-                FP_INFO("SourcePawn VM ready ({})", g_pEnv->IsJitAvailable() ? "JIT" : "interpreter");
+                FP_INFO("SourcePawn VM ready ({})", g_pEnv->IsJitAllowed() ? "JIT" : "interpreter");
             }
             return g_pEnv;
         }
@@ -164,11 +165,12 @@ namespace sourcepawn
             return nullptr;
         }
 
-        char err[256]{};
-        std::unique_ptr<sp::PluginRuntime> runtime(env->LoadBinaryFromFile(path, err, sizeof(err)));
+        // The loader reports why through the environment's exception scope.
+        SourcePawn::ExceptionHandler eh(env);
+        std::unique_ptr<sp::BaseRuntime> runtime(env->LoadBinaryFromFile(path));
         if (!runtime)
         {
-            error = err[0] ? err : "not a valid SourcePawn binary";
+            error = eh.HasException() ? eh.Message() : "not a valid SourcePawn binary";
             return nullptr;
         }
 
@@ -177,7 +179,7 @@ namespace sourcepawn
 
     // ---- ScriptPlugin -----------------------------------------------------------
 
-    ScriptPlugin::ScriptPlugin(std::unique_ptr<sp::PluginRuntime> runtime, std::string path)
+    ScriptPlugin::ScriptPlugin(std::unique_ptr<sp::BaseRuntime> runtime, std::string path)
         : m_runtime(std::move(runtime)), m_path(std::move(path))
     {
         m_file = std::filesystem::path(m_path).filename().string();
@@ -228,8 +230,33 @@ namespace sourcepawn
     void ScriptPlugin::ReadMyInfo()
     {
         // public Plugin myinfo = { name, description, author, version, url }:
-        // five string addresses, in that order.
+        // five strings, in that order.
         m_name = std::filesystem::path(m_path).stem().string();
+
+        // A SourcePawn 2 binary keeps it as a public struct global in the
+        // image (fields by name), not as a pubvar.
+        if (m_runtime->AsV2())
+        {
+            sp::SmxImage* image = m_runtime->image();
+            const sp::smx_pstruct_global* myinfo = image ? image->FindPstructGlobal("myinfo") : nullptr;
+            if (!myinfo)
+                return;
+            auto field = [image, myinfo](const char* name) -> std::string
+            {
+                std::variant<std::string, cell_t> value;
+                if (image->GetPstructValue(myinfo, name, &value) != SP_ERROR_NONE)
+                    return {};
+                const std::string* s = std::get_if<std::string>(&value);
+                return s ? *s : std::string();
+            };
+            if (auto name = field("name"); !name.empty())
+                m_name = name;
+            m_description = field("description");
+            m_author = field("author");
+            m_version = field("version");
+            m_url = field("url");
+            return;
+        }
 
         uint32_t idx;
         if (m_runtime->FindPubvarByName("myinfo", &idx) != SP_ERROR_NONE)

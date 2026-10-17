@@ -52,7 +52,7 @@
 
 namespace sp
 {
-    class PluginRuntime;
+    class BaseRuntime;
     struct CallArgs;
 }
 
@@ -91,7 +91,7 @@ namespace sourcepawn
     class ScriptPlugin : public ISource2ModPlugin, public ISource2ModListener
     {
     public:
-        ScriptPlugin(std::unique_ptr<sp::PluginRuntime> runtime, std::string path);
+        ScriptPlugin(std::unique_ptr<sp::BaseRuntime> runtime, std::string path);
         ~ScriptPlugin() override;
 
         // ISource2ModPlugin
@@ -166,7 +166,7 @@ namespace sourcepawn
         void ApplyConfigFile(const std::filesystem::path& file);
         void ConfigsExecutedSoon();
 
-        std::unique_ptr<sp::PluginRuntime> m_runtime;
+        std::unique_ptr<sp::BaseRuntime> m_runtime;
         std::string m_path;
         std::string m_file;
         PluginId m_id = 0;

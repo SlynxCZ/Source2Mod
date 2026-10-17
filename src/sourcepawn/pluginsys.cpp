@@ -31,6 +31,8 @@
 #include <source2mod/ISource2ModNatives.h>
 
 #include <base-runtime.h>
+#include <objects.h>
+#include <v2/runtime.h>
 #include <sp_callable.h>
 
 #include <algorithm>
@@ -654,6 +656,45 @@ namespace sourcepawn
 
         // ---- forwards ---------------------------------------------------------
 
+        // A null string / vector argument. SourcePawn's CallArgs no longer has
+        // one (upstream c6358600); a script tells NULL_STRING / NULL_VECTOR
+        // from a real argument by its address (IsNullString), so the argument
+        // is that function's own pubvar, passed as its address. 0 for a script
+        // without it.
+        cell_t NullArgAddress(IPluginFunction* fn, const char* pubvar)
+        {
+            IPluginRuntime* runtime = fn ? fn->GetParentRuntime() : nullptr;
+            uint32_t index = 0;
+            cell_t local = 0;
+            cell_t* phys = nullptr;
+            if (!runtime || runtime->FindPubvarByName(pubvar, &index) != SP_ERROR_NONE
+                || runtime->GetPubvarAddrs(index, &local, &phys) != SP_ERROR_NONE)
+                return 0;
+            return local;
+        }
+
+        // Keeps the slices NullStringArg made alive until the call is over.
+        using NullSlices = std::vector<sp::Handle<sp::SpArray>>;
+
+        // A null string argument for fn. A SourcePawn 2 function takes a
+        // string parameter as an array reference, not an address: a slice
+        // over its NULL_STRING, which IsNullString then recognises. A
+        // SourcePawn 1 function takes the address itself.
+        cell_t NullStringArg(IPluginFunction* fn, NullSlices& keep)
+        {
+            const cell_t local = NullArgAddress(fn, "NULL_STRING");
+            auto* runtime = fn ? static_cast<sp::BaseRuntime*>(fn->GetParentRuntime()) : nullptr;
+            sp::v2::Runtime* v2 = runtime ? runtime->AsV2() : nullptr;
+            if (!v2 || !local)
+                return local;
+            sp::Handle<sp::SpArray> slice = v2->NewSliceEs(static_cast<uint32_t>(local), 1);
+            if (!slice)
+                return local;
+            const cell_t ref = static_cast<cell_t>(v2->heap().ToLocalAddr(slice.get()));
+            keep.push_back(std::move(slice));
+            return ref;
+        }
+
         // ExecType
         constexpr cell_t ET_Ignore = 0;
         constexpr cell_t ET_Single = 1;
@@ -1092,6 +1133,7 @@ namespace sourcepawn
             int error = SP_ERROR_NONE;
             for (IPluginFunction* fn : targets)
             {
+                NullSlices nullSlices;
                 sp::CallArgs args;
                 for (CallParam& p : call.params)
                 {
@@ -1110,10 +1152,10 @@ namespace sourcepawn
                         args.PushString(p.chars.data(), p.chars.size(), p.stringFlags | (p.copyback ? SM_PARAM_COPYBACK : 0));
                         break;
                     case CallParam::NullVector:
-                        args.PushNullVector();
+                        args.PushCell(NullArgAddress(fn, "NULL_VECTOR"));
                         break;
                     case CallParam::NullString:
-                        args.PushNullString();
+                        args.PushCell(NullStringArg(fn, nullSlices));
                         break;
                     }
                 }
@@ -1320,6 +1362,8 @@ namespace sourcepawn
                 // entities as the script cells a script firing it would pass.
                 std::vector<Source2ModScriptArg> hostArgs(args, args + count);
                 sp::CallArgs callArgs;
+                // Argument index -> pubvar, for the null arguments (NullArgAddress).
+                std::vector<std::pair<uint32_t, const char*>> nulls;
                 for (Source2ModScriptArg& arg : hostArgs)
                 {
                     switch (arg.type)
@@ -1356,10 +1400,12 @@ namespace sourcepawn
                         callArgs.PushFloatByRef(arg.floatRef);
                         break;
                     case Source2ModScriptArgType::NullString:
-                        callArgs.PushNullString();
+                        nulls.emplace_back(callArgs.argc, "NULL_STRING");
+                        callArgs.PushCell(0);
                         break;
                     case Source2ModScriptArgType::NullVector:
-                        callArgs.PushNullVector();
+                        nulls.emplace_back(callArgs.argc, "NULL_VECTOR");
+                        callArgs.PushCell(0);
                         break;
                     }
                 }
@@ -1372,6 +1418,10 @@ namespace sourcepawn
                     IPluginFunction* fn = script->Runtime()->GetFunctionByName(m_name.c_str());
                     if (!fn)
                         continue;
+                    NullSlices nullSlices;
+                    for (const auto& [index, pubvar] : nulls)
+                        callArgs.argv[index].u.value = !strcmp(pubvar, "NULL_STRING")
+                            ? NullStringArg(fn, nullSlices) : NullArgAddress(fn, pubvar);
                     cell_t res = 0;
                     if (!sourcepawn::Invoke(fn, callArgs, &res))
                     {
